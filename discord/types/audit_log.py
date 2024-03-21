@@ -38,6 +38,7 @@ from .channel import ChannelType, DefaultReaction, PrivacyLevel, VideoQualityMod
 from .threads import Thread
 from .command import ApplicationCommand, ApplicationCommandPermissions
 from .automod import AutoModerationTriggerMetadata
+from .onboarding import PromptOption, Prompt
 
 AuditLogEvent = Literal[
     1,
@@ -112,6 +113,8 @@ class _AuditLogChange_Str(TypedDict):
         'permissions',
         'tags',
         'unicode_emoji',
+        'emoji_name',
+        'title',
     ]
     new_value: str
     old_value: str
@@ -136,6 +139,8 @@ class _AuditLogChange_Snowflake(TypedDict):
         'channel_id',
         'inviter_id',
         'guild_id',
+        'user_id',
+        'sound_id',
     ]
     new_value: Snowflake
     old_value: Snowflake
@@ -157,6 +162,10 @@ class _AuditLogChange_Bool(TypedDict):
         'available',
         'archived',
         'locked',
+        'enabled',
+        'single_select',
+        'required',
+        'in_onboarding',
     ]
     new_value: bool
     old_value: bool
@@ -181,6 +190,12 @@ class _AuditLogChange_Int(TypedDict):
     ]
     new_value: int
     old_value: int
+
+
+class _AuditLogChange_Float(TypedDict):
+    key: Literal['volume']
+    new_value: float
+    old_value: float
 
 
 class _AuditLogChange_ListRole(TypedDict):
@@ -261,8 +276,8 @@ class _AuditLogChange_AppCommandPermissions(TypedDict):
     old_value: ApplicationCommandPermissions
 
 
-class _AuditLogChange_AppliedTags(TypedDict):
-    key: Literal['applied_tags']
+class _AuditLogChange_SnowflakeList(TypedDict):
+    key: Literal['applied_tags', 'default_channel_ids']
     new_value: List[Snowflake]
     old_value: List[Snowflake]
 
@@ -285,11 +300,24 @@ class _AuditLogChange_TriggerMetadata(TypedDict):
     old_value: Optional[AutoModerationTriggerMetadata]
 
 
+class _AuditLogChange_Prompts(TypedDict):
+    key: Literal['prompts']
+    new_value: List[Prompt]
+    old_value: List[Prompt]
+
+
+class _AuditLogChange_Options(TypedDict):
+    key: Literal['options']
+    new_value: List[PromptOption]
+    old_value: List[PromptOption]
+
+
 AuditLogChange = Union[
     _AuditLogChange_Str,
     _AuditLogChange_AssetHash,
     _AuditLogChange_Snowflake,
     _AuditLogChange_Int,
+    _AuditLogChange_Float,
     _AuditLogChange_Bool,
     _AuditLogChange_ListRole,
     _AuditLogChange_MFALevel,
@@ -304,10 +332,12 @@ AuditLogChange = Union[
     _AuditLogChange_Status,
     _AuditLogChange_EntityType,
     _AuditLogChange_AppCommandPermissions,
-    _AuditLogChange_AppliedTags,
+    _AuditLogChange_SnowflakeList,
     _AuditLogChange_AvailableTags,
     _AuditLogChange_DefaultReactionEmoji,
     _AuditLogChange_TriggerMetadata,
+    _AuditLogChange_Prompts,
+    _AuditLogChange_Options,
 ]
 
 
@@ -325,6 +355,7 @@ class AuditEntryInfo(TypedDict):
     auto_moderation_rule_name: str
     auto_moderation_rule_trigger_type: str
     integration_type: str
+    status: NotRequired[str]
 
 
 class AuditLogEntry(TypedDict):

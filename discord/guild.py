@@ -27,6 +27,7 @@ from __future__ import annotations
 import copy
 import datetime
 import unicodedata
+from operator import attrgetter
 from typing import (
     Any,
     AsyncIterator,
@@ -76,6 +77,7 @@ from .enums import (
     AutoModRuleEventType,
     ForumOrderType,
     ForumLayoutType,
+    OnboardingMode,
 )
 from .mixins import Hashable
 from .user import User
@@ -92,8 +94,10 @@ from .file import File
 from .audit_logs import AuditLogEntry
 from .object import OLDEST_OBJECT, Object
 from .welcome_screen import WelcomeScreen, WelcomeChannel
+from .onboarding import Onboarding, PartialOnboardingPrompt
 from .automod import AutoModRule, AutoModTrigger, AutoModRuleAction
 from .partial_emoji import _EmojiTag, PartialEmoji
+from .soundboard import SoundboardSound
 
 
 __all__ = (
@@ -135,6 +139,7 @@ if TYPE_CHECKING:
     from .types.snowflake import SnowflakeList
     from .types.widget import EditWidgetSettings
     from .types.audit_log import AuditLogEvent
+    from .types.user import PartialUser as PartialUserPayload
     from .message import EmojiInputType
 
     VocalGuildChannel = Union[VoiceChannel, StageChannel]
@@ -145,6 +150,7 @@ if TYPE_CHECKING:
 class BanEntry(NamedTuple):
     reason: Optional[str]
     user: User
+    data: PartialUserPayload
 
 
 class BulkBanResult(NamedTuple):
@@ -328,6 +334,9 @@ class Guild(Hashable):
         '_safety_alerts_channel_id',
         'max_stage_video_users',
         '_incidents_data',
+        '_soundboard_sounds',
+        '_home_header',
+        '_sticker_count',
     )
 
     _PREMIUM_GUILD_LIMITS: ClassVar[Dict[Optional[int], _GuildLimit]] = {
@@ -345,6 +354,7 @@ class Guild(Hashable):
         self._threads: Dict[int, Thread] = {}
         self._stage_instances: Dict[int, StageInstance] = {}
         self._scheduled_events: Dict[int, ScheduledEvent] = {}
+        self._soundboard_sounds: Dict[int, SoundboardSound] = {}
         self._state: ConnectionState = state
         self._member_count: Optional[int] = None
         self._from_data(data)
@@ -388,6 +398,12 @@ class Guild(Hashable):
         for k in to_remove:
             del self._threads[k]
         return to_remove
+
+    def _add_soundboard_sound(self, sound: SoundboardSound, /) -> None:
+        self._soundboard_sounds[sound.id] = sound
+
+    def _remove_soundboard_sound(self, sound: SoundboardSound, /) -> None:
+        self._soundboard_sounds.pop(sound.id, None)
 
     def __str__(self) -> str:
         return self.name or ''
@@ -454,8 +470,11 @@ class Guild(Hashable):
         return role
 
     @classmethod
-    def _create_unavailable(cls, *, state: ConnectionState, guild_id: int) -> Guild:
-        return cls(state=state, data={'id': guild_id, 'unavailable': True})  # type: ignore
+    def _create_unavailable(cls, *, state: ConnectionState, guild_id: int, data: Optional[Dict[str, Any]]) -> Guild:
+        if data is None:
+            data = {'unavailable': True}
+        data.update(id=guild_id)
+        return cls(state=state, data=data)  # type: ignore
 
     def _from_data(self, guild: GuildPayload) -> None:
         try:
@@ -518,6 +537,8 @@ class Guild(Hashable):
         self._large: Optional[bool] = None if self._member_count is None else self._member_count >= 250
         self._afk_channel_id: Optional[int] = utils._get_as_snowflake(guild, 'afk_channel_id')
         self._incidents_data: Optional[IncidentData] = guild.get('incidents_data')
+        self._sticker_count: Optional[int] = guild.get('sticker_count')
+        self._home_header: Optional[str] = guild.get('home_header')
 
         if 'channels' in guild:
             channels = guild['channels']
@@ -559,6 +580,11 @@ class Guild(Hashable):
                 scheduled_event = ScheduledEvent(data=s, state=self._state)
                 self._scheduled_events[scheduled_event.id] = scheduled_event
 
+        if 'soundboard_sounds' in guild:
+            for s in guild['soundboard_sounds']:
+                soundboard_sound = SoundboardSound(guild=self, data=s, state=self._state)
+                self._add_soundboard_sound(soundboard_sound)
+
     @property
     def channels(self) -> Sequence[GuildChannel]:
         """Sequence[:class:`abc.GuildChannel`]: A list of channels that belongs to this guild."""
@@ -591,8 +617,8 @@ class Guild(Hashable):
 
         This is sorted by the position and are in UI order from top to bottom.
         """
-        r = [ch for ch in self._channels.values() if isinstance(ch, VoiceChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.voice]
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -603,8 +629,8 @@ class Guild(Hashable):
 
         This is sorted by the position and are in UI order from top to bottom.
         """
-        r = [ch for ch in self._channels.values() if isinstance(ch, StageChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.stage_voice]
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -628,7 +654,7 @@ class Guild(Hashable):
         This is sorted by the position and are in UI order from top to bottom.
         """
         r = [ch for ch in self._channels.values() if isinstance(ch, TextChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -637,8 +663,8 @@ class Guild(Hashable):
 
         This is sorted by the position and are in UI order from top to bottom.
         """
-        r = [ch for ch in self._channels.values() if isinstance(ch, CategoryChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.category]
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -647,8 +673,18 @@ class Guild(Hashable):
 
         This is sorted by the position and are in UI order from top to bottom.
         """
-        r = [ch for ch in self._channels.values() if isinstance(ch, ForumChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.forum]
+        r.sort(key=attrgetter('position', 'id'))
+        return r
+
+    @property
+    def media_channels(self) -> List[ForumChannel]:
+        """List[:class:`ForumChannel`]: A list of forum channels that belongs to this guild.
+
+        This is sorted by the position and are in UI order from top to bottom.
+        """
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.media]
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     def by_category(self) -> List[ByCategoryItem]:
@@ -683,7 +719,7 @@ class Guild(Hashable):
         as_list: List[ByCategoryItem] = [(_get(k), v) for k, v in grouped.items()]  # type: ignore
         as_list.sort(key=key)
         for _, channels in as_list:
-            channels.sort(key=lambda c: (c._sorting_bucket, c.position, c.id))
+            channels.sort(key=attrgetter('_sorting_bucket', 'position', 'id'))
         return as_list
 
     def _resolve_channel(self, id: Optional[int], /) -> Optional[Union[GuildChannel, Thread]]:
@@ -1009,6 +1045,37 @@ class Guild(Hashable):
         return self._scheduled_events.get(scheduled_event_id)
 
     @property
+    def soundboard_sounds(self) -> Sequence[SoundboardSound]:
+        """Sequence[:class:`SoundboardSound`]: Returns a sequence of the guild's soundboard sounds.
+
+        .. versionadded:: 2.4
+        """
+        return utils.SequenceProxy(self._soundboard_sounds.values())
+
+    def get_soundboard_sound(self, sound_id: int, /) -> Optional[SoundboardSound]:
+        """Returns a soundboard sound with the given ID.
+
+        .. versionadded:: 2.4
+
+        Parameters
+        -----------
+        sound_id: :class:`int`
+            The ID to search for.
+
+        Returns
+        --------
+        Optional[:class:`SoundboardSound`]
+            The soundboard sound or ``None`` if not found.
+        """
+        return self._soundboard_sounds.get(sound_id)
+
+    def _resolve_soundboard_sound(self, id: Optional[int], /) -> Optional[SoundboardSound]:
+        if id is None:
+            return
+
+        return self._soundboard_sounds.get(id)
+
+    @property
     def owner(self) -> Optional[Member]:
         """Optional[:class:`Member`]: The member that owns the guild."""
         return self.get_member(self.owner_id)  # type: ignore
@@ -1040,6 +1107,13 @@ class Guild(Hashable):
         if self._discovery_splash is None:
             return None
         return Asset._from_guild_image(self._state, self.id, self._discovery_splash, path='discovery-splashes')
+
+    @property
+    def home_header(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's home header asset, if available."""
+        if self._home_header is None:
+            return None
+        return Asset._from_guild_image(self._state, self.id, self._home_header, path='home-headers')
 
     @property
     def member_count(self) -> Optional[int]:
@@ -1203,7 +1277,7 @@ class Guild(Hashable):
     def _create_channel(
         self,
         name: str,
-        channel_type: Literal[ChannelType.forum],
+        channel_type: Literal[ChannelType.forum, ChannelType.media],
         overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
@@ -1656,6 +1730,7 @@ class Guild(Hashable):
         default_reaction_emoji: EmojiInputType = MISSING,
         default_layout: ForumLayoutType = MISSING,
         available_tags: Sequence[ForumTag] = MISSING,
+        is_media: bool = False,
     ) -> ForumChannel:
         """|coro|
 
@@ -1779,7 +1854,12 @@ class Guild(Hashable):
             options['available_tags'] = [t.to_dict() for t in available_tags]
 
         data = await self._create_channel(
-            name=name, overwrites=overwrites, channel_type=ChannelType.forum, category=category, reason=reason, **options
+            name=name,
+            overwrites=overwrites,
+            channel_type=ChannelType.media if is_media else ChannelType.forum,
+            category=category,
+            reason=reason,
+            **options
         )
 
         channel = ForumChannel(state=self._state, guild=self, data=data)
@@ -2404,7 +2484,8 @@ class Guild(Hashable):
             The :class:`BanEntry` object for the specified user.
         """
         data: BanPayload = await self._state.http.get_ban(user.id, self.id)
-        return BanEntry(user=User(state=self._state, data=data['user']), reason=data['reason'])
+        user_ = User(state=self._state, data=data['user'])
+        return BanEntry(user=user_, reason=data['reason'], data=data['user'])
 
     async def fetch_channel(self, channel_id: int, /) -> Union[GuildChannel, Thread]:
         """|coro|
@@ -2554,7 +2635,7 @@ class Guild(Hashable):
                 limit = 0
 
             for e in data:
-                yield BanEntry(user=User(state=self._state, data=e['user']), reason=e['reason'])
+                yield BanEntry(user=User(state=self._state, data=e['user']), reason=e['reason'], data=e['user'])
 
     async def prune_members(
         self,
@@ -4422,7 +4503,7 @@ class Guild(Hashable):
         .. versionadded:: 2.4
         """
         if not self.invites_paused_until:
-            return False
+            return "INVITES_DISABLED" in self.features
 
         return self.invites_paused_until > utils.utcnow()
 
@@ -4435,3 +4516,162 @@ class Guild(Hashable):
             return False
 
         return self.dms_paused_until > utils.utcnow()
+
+    async def create_soundboard_sound(
+        self,
+        *,
+        name: str,
+        sound: bytes,
+        volume: float = 1,
+        emoji: Optional[EmojiInputType] = None,
+        reason: Optional[str] = None,
+    ) -> SoundboardSound:
+        """|coro|
+
+        Creates a :class:`SoundboardSound` for the guild.
+        You must have :attr:`Permissions.manage_expressions` to do this.
+
+        ..versionadded:: 2.4
+
+        Parameters
+        ----------
+        name: :class:`str`
+            The name of the sound. Must be between 2 and 32 characters.
+        sound: :class:`bytes`
+            The :term:`py:bytes-like object` representing the sound data.
+            Only MP3 sound files that don't exceed the duration of 5.2s are supported.
+        volume: :class:`float`
+            The volume of the sound. Must be between 0 and 1. Defaults to ``1``.
+        emoji: Optional[Union[:class:`Emoji`, :class:`PartialEmoji`, :class:`str`]]
+            The emoji of the sound.
+        reason: Optional[:class:`str`]
+            The reason for creating the sound. Shows up on the audit log.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to create a soundboard sound.
+        HTTPException
+            Creating the soundboard sound failed.
+
+        Returns
+        -------
+        :class:`SoundboardSound`
+            The newly created soundboard sound.
+        """
+        payload: Dict[str, Any] = {
+            'name': name,
+            'sound': utils._bytes_to_base64_data(sound, audio=True),
+            'volume': volume,
+            'emoji_id': None,
+            'emoji_name': None,
+        }
+
+        if emoji is not None:
+            if isinstance(emoji, _EmojiTag):
+                partial_emoji = emoji._to_partial()
+            elif isinstance(emoji, str):
+                partial_emoji = PartialEmoji.from_str(emoji)
+            else:
+                partial_emoji = None
+
+            if partial_emoji is not None:
+                if partial_emoji.id is None:
+                    payload['emoji_name'] = partial_emoji.name
+                else:
+                    payload['emoji_id'] = partial_emoji.id
+
+        data = await self._state.http.create_soundboard_sound(self.id, reason=reason, **payload)
+        return SoundboardSound(guild=self, state=self._state, data=data)
+
+    async def request_soundboard_sounds(self, *, cache: bool = True) -> List[SoundboardSound]:
+        """|coro|
+
+        Requests the soundboard sounds of the guild.
+
+        This is a websocket operation and can be slow.
+
+        .. versionadded:: 2.4
+
+        Parameters
+        ----------
+        cache: :class:`bool`
+            Whether to cache the soundboard sounds internally. Defaults to ``True``.
+
+        Raises
+        -------
+        asyncio.TimeoutError
+            The query timed out waiting for the sounds.
+
+        Returns
+        --------
+        List[:class:`SoundboardSound`]
+            A list of guilds with it's requested soundboard sounds.
+        """
+
+        return await self._state.request_soundboard_sounds(self, cache=cache)
+
+    async def onboarding(self) -> Onboarding:
+        """|coro|
+
+        Fetches the onboarding configuration for this guild.
+
+        .. versionadded:: 2.4
+
+        Returns
+        --------
+        :class:`Onboarding`
+            The onboarding configuration that was fetched.
+        """
+        data = await self._state.http.get_guild_onboarding(self.id)
+        return Onboarding(data=data, guild=self, state=self._state)
+
+    async def edit_onboarding(
+        self,
+        *,
+        prompts: List[PartialOnboardingPrompt] = MISSING,
+        default_channels: List[Snowflake] = MISSING,
+        enabled: bool = MISSING,
+        mode: OnboardingMode = MISSING,
+        reason: str = MISSING,
+    ) -> Onboarding:
+        """|coro|
+
+        Edits the onboarding configuration for this guild.
+
+        .. versionadded:: 2.4
+
+        Parameters
+        -----------
+        prompts: List[:class:`PartialOnboardingPrompt`]
+            The prompts that will be shown to new members.
+        default_channels: List[:class:`abc.Snowflake`]
+            The channels that will be used as the default channels for new members.
+        enabled: :class:`bool`
+            Whether the onboarding configuration is enabled.
+        mode: :class:`OnboardingMode`
+            The mode that will be used for the onboarding configuration.
+        reason: :class:`str`
+            The reason for editing the onboarding configuration. Shows up on the audit log.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to edit the onboarding configuration.
+        HTTPException
+            Editing the onboarding configuration failed.
+
+        Returns
+        --------
+        :class:`Onboarding`
+            The new onboarding configuration.
+        """
+        data = await self._state.http.modify_guild_onboarding(
+            self.id,
+            prompts=[p.to_dict() for p in prompts] if prompts is not MISSING else None,
+            default_channel_ids=[c.id for c in default_channels] if default_channels is not MISSING else None,
+            enabled=enabled if enabled is not MISSING else None,
+            mode=mode.value if mode is not MISSING else None,
+            reason=reason if reason is not MISSING else None,
+        )
+        return Onboarding(data=data, guild=self, state=self._state)

@@ -622,9 +622,19 @@ def _get_mime_type_for_image(data: bytes):
         raise ValueError('Unsupported image type given')
 
 
-def _bytes_to_base64_data(data: bytes) -> str:
+def _get_mime_type_for_audio(data: bytes):
+    if data.startswith(b'\x49\x44\x33') or data.startswith(b'\xff\xfb'):
+        return 'audio/mpeg'
+    else:
+        raise ValueError('Unsupported audio type given')
+
+
+def _bytes_to_base64_data(data: bytes, *, audio: bool = False) -> str:
     fmt = 'data:{mime};base64,{data}'
-    mime = _get_mime_type_for_image(data)
+    if audio:
+        mime = _get_mime_type_for_audio(data)
+    else:
+        mime = _get_mime_type_for_image(data)
     b64 = b64encode(data).decode('ascii')
     return fmt.format(mime=mime, data=b64)
 
@@ -640,7 +650,7 @@ def _is_submodule(parent: str, child: str) -> bool:
 if HAS_ORJSON:
 
     def _to_json(obj: Any) -> str:
-        return orjson.dumps(obj).decode('utf-8')
+        return orjson.dumps(obj).decode('utf-8')  # type: ignore
 
     _from_json = orjson.loads  # type: ignore
 
@@ -777,7 +787,7 @@ def utcnow() -> datetime.datetime:
     :class:`datetime.datetime`
         The current aware datetime in UTC.
     """
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 def valid_icon_size(size: int) -> bool:
@@ -969,7 +979,7 @@ def escape_markdown(text: str, *, as_needed: bool = False, ignore_links: bool = 
 
     if not as_needed:
 
-        def replacement(match):
+        def replacement(match: re.Match[str]) -> str:
             groupdict = match.groupdict()
             is_url = groupdict.get('url')
             if is_url:
@@ -979,7 +989,7 @@ def escape_markdown(text: str, *, as_needed: bool = False, ignore_links: bool = 
         regex = _MARKDOWN_STOCK_REGEX
         if ignore_links:
             regex = f'(?:{_URL_REGEX}|{regex})'
-        return re.sub(regex, replacement, text, 0, re.MULTILINE)
+        return re.sub(regex, replacement, text, count=0, flags=re.MULTILINE)
     else:
         text = re.sub(r'\\', r'\\\\', text)
         return _MARKDOWN_ESCAPE_REGEX.sub(r'\\\1', text)
@@ -1394,3 +1404,35 @@ def _human_join(seq: Sequence[str], /, *, delimiter: str = ', ', final: str = 'o
         return f'{seq[0]} {final} {seq[1]}'
 
     return delimiter.join(seq[:-1]) + f' {final} {seq[-1]}'
+
+
+def _find_y(x: int, z: int) -> Optional[int]:
+    """
+    Finds the integer value of y that satisfies the equation x^y = z.
+
+    Args
+    ----
+    x: The base of the exponentiation.
+    z: The result of the exponentiation.
+
+    Returns
+    -------
+    The integer value of y that satisfies the equation, or None if no such value exists.
+    """
+    # Check if z is 1
+    if z == 1:
+        return 0
+
+    # Initialize y and power
+    y, power = 1, x
+
+    # Loop until power exceeds z or y becomes too large
+    while power <= z and y <= z:
+        if power == z:
+            return y
+        power *= x
+        y += 1
+
+    # No integer solution found
+    return None
+

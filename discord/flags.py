@@ -58,9 +58,12 @@ __all__ = (
     'ChannelFlags',
     'AutoModPresets',
     'MemberFlags',
+    'AppCommandContext',
     'AttachmentFlags',
     'RoleFlags',
+    'AppIntegrationType',
     'SKUFlags',
+    'InviteFlags',
 )
 
 BF = TypeVar('BF', bound='BaseFlags')
@@ -133,7 +136,7 @@ class BaseFlags:
             setattr(self, key, value)
 
     @classmethod
-    def _from_value(cls, value):
+    def _from_value(cls, value: int):
         self = cls.__new__(cls)
         self.value = value
         return self
@@ -197,6 +200,14 @@ class BaseFlags:
             self.value &= ~o
         else:
             raise TypeError(f'Value to set for {self.__class__.__name__} must be a bool.')
+
+    def _to_dict(self) -> Dict[str, str]:
+        from .utils import _find_y
+        return {
+            k.upper(): f'1 << {_find_y(2, v.flag)}'
+            for k, v in self.__class__.__dict__.items()
+            if isinstance(v, flag_value) and self._has_flag(v.flag)
+        }
 
 
 @fill_with_flags(inverted=True)
@@ -333,6 +344,14 @@ class SystemChannelFlags(BaseFlags):
         """
         return 32
 
+    @flag_value
+    def unknown_flag_6(self):
+        return 64
+
+    @flag_value
+    def channel_prompt_deadchat(self):
+        return 128
+
 
 @fill_with_flags()
 class MessageFlags(BaseFlags):
@@ -407,6 +426,10 @@ class MessageFlags(BaseFlags):
         """:class:`bool`: Returns ``True`` if the message is the original crossposted message."""
         return 1
 
+    @alias_flag_value
+    def original_crossposted_message(self):
+        return 1
+
     @flag_value
     def is_crossposted(self):
         """:class:`bool`: Returns ``True`` if the message was crossposted from another channel."""
@@ -463,6 +486,19 @@ class MessageFlags(BaseFlags):
         .. versionadded:: 2.0
         """
         return 256
+
+    @flag_value
+    def unknown_flag_9(self):
+        return 512
+
+    @flag_value
+    def link_impersonates_discord(self):
+        """:class:`bool`: Returns ``True`` if the message contains a link that impersonates Discord."""
+        return 1024
+
+    @flag_value
+    def unknown_flag_11(self):
+        return 2048
 
     @flag_value
     def suppress_notifications(self):
@@ -1483,6 +1519,31 @@ class ApplicationFlags(BaseFlags):
     """
 
     @flag_value
+    def embedded_released(self):
+        """:class:`bool`: Returns ``True`` if the embedded application is released to the public."""
+        return 1 << 1
+
+    @flag_value
+    def managed_emoji(self):
+        """:class:`bool`: Returns ``True`` if the application has the ability to create Twitch-style emotes."""
+        return 1 << 2
+
+    @flag_value
+    def embedded_iap(self):
+        """:class:`bool`: Returns ``True`` if the application has the ability to use embedded in-app purchases."""
+        return 1 << 3
+
+    @flag_value
+    def group_dm_create(self):
+        """:class:`bool`: Returns ``True`` if the application has the ability to create group DMs."""
+        return 1 << 4
+
+    @flag_value
+    def rpc_private_beta(self):
+        """:class:`bool`: Returns ``True`` if the application has the ability to access the client RPC server."""
+        return 1 << 5
+
+    @flag_value
     def auto_mod_badge(self):
         """:class:`bool`: Returns ``True`` if the application uses at least 100 automod rules across all guilds.
         This shows up as a badge in the official client.
@@ -1490,6 +1551,30 @@ class ApplicationFlags(BaseFlags):
         .. versionadded:: 2.3
         """
         return 1 << 6
+
+    @flag_value
+    def unknown_flag_7(self):
+        return 1 << 7
+
+    @flag_value
+    def allow_assets(self):
+        """:class:`bool`: Returns ``True`` if the application has the ability to use activity assets."""
+        return 1 << 8
+
+    @flag_value
+    def allow_activity_action_spectate(self):
+        """:class:`bool`: Returns ``True`` if the application has the ability to enable spectating activities."""
+        return 1 << 9
+
+    @flag_value
+    def allow_activity_action_join_request(self):
+        """:class:`bool`: Returns ``True`` if the application has the ability to enable activity join requests."""
+        return 1 << 10
+
+    @flag_value
+    def rpc_has_connected(self):
+        """:class:`bool`: Returns ``True`` if the application has accessed the client RPC server before."""
+        return 1 << 11
 
     @flag_value
     def gateway_presence(self):
@@ -1544,6 +1629,19 @@ class ApplicationFlags(BaseFlags):
         return 1 << 19
 
     @flag_value
+    def embedded_first_party(self):
+        """:class:`bool`: Returns ``True`` if the an application is embedded within the Discord client."""
+        return 1 << 20
+
+    @flag_value
+    def unknown_flag_21(self):
+        return 1 << 21
+
+    @flag_value
+    def unknown_flag_22(self):
+        return 1 << 22
+
+    @flag_value
     def app_commands_badge(self):
         """:class:`bool`: Returns ``True`` if the application has registered a global application
         command. This shows up as a badge in the official client."""
@@ -1557,6 +1655,15 @@ class ApplicationFlags(BaseFlags):
         .. versionadded:: 2.1
         """
         return 1 << 24
+
+    @flag_value
+    def unknown_flag_25(self):
+        return 1 << 25
+
+    @flag_value
+    def iframe_modal(self):
+        """:class:`bool`: Returns ``True`` if the application can use IFrame modals."""
+        return 1 << 26
 
 
 @fill_with_flags()
@@ -1622,9 +1729,23 @@ class ChannelFlags(BaseFlags):
     """
 
     @flag_value
+    def guild_feed_removed(self):
+        """:class:`bool`: Returns ``True`` if this guild channel has been removed from the guild's feed."""
+        return 1 << 0
+
+    @flag_value
     def pinned(self):
         """:class:`bool`: Returns ``True`` if the thread is pinned to the forum channel."""
         return 1 << 1
+
+    @flag_value
+    def active_channels_removed(self):
+        """:class:`bool`: Returns ``True`` if this guild channel has been removed from the guild's active channels."""
+        return 1 << 2
+
+    @flag_value
+    def unknown_flag_3(self):
+        return 1 << 3
 
     @flag_value
     def require_tag(self):
@@ -1634,6 +1755,55 @@ class ChannelFlags(BaseFlags):
         .. versionadded:: 2.1
         """
         return 1 << 4
+
+    @flag_value
+    def spam(self):
+        """:class:`bool`: Returns ``True`` if this channel is marked as spam."""
+        return 1 << 5
+
+    @flag_value
+    def unknown_flag_6(self):
+        return 1 << 6
+
+    @flag_value
+    def guild_resource_channel(self):
+        """:class:`bool`: Returns ``True`` if this channel is used as a read-only resource for Server Onboarding and is not shown in the channel list."""
+        return 1 << 7
+
+    @flag_value
+    def clyde_ai(self):
+        """:class:`bool`: Returns ``True`` if the thread is created by Clyde AI.
+
+        .. versionadded:: 2.4
+        """
+        return 1 << 8
+
+    @flag_value
+    def scheduled_for_deletion(self):
+        """:class:`bool`: Returns ``True`` if this channel is scheduled for deletion and is not shown in the UI."""
+        return 1 << 9
+
+    @flag_value
+    def media_channel(self):
+        """:class:`bool`: Returns ``True`` if this channel is a media channel."""
+        return 1 << 10
+
+    @flag_value
+    def summaries_disabled(self):
+        """:class:`bool`: Returns ``True`` if this channel has guild summaries disabled by a user."""
+        return 1 << 11
+
+    @flag_value
+    def unknown_flag_12(self):
+        return 1 << 12
+
+    @flag_value
+    def unknown_flag_13(self):
+        return 1 << 13
+
+    @flag_value
+    def unknown_flag_14(self):
+        return 1 << 14
 
     @flag_value
     def hide_media_download_options(self):
@@ -1660,8 +1830,24 @@ class ArrayFlags(BaseFlags):
         self.value = reduce(or_, map((1).__lshift__, value), 0) >> 1
         return self
 
-    def to_array(self) -> List[int]:
-        return [i + 1 for i in range(self.value.bit_length()) if self.value & (1 << i)]
+    def to_array(self, *, offset: int = 0) -> List[int]:
+        return [i + offset for i in range(self.value.bit_length()) if self.value & (1 << i)]
+
+    @classmethod
+    def all(cls: Type[Self]) -> Self:
+        """A factory method that creates an instance of ArrayFlags with everything enabled."""
+        bits = max(cls.VALID_FLAGS.values()).bit_length()
+        value = (1 << bits) - 1
+        self = cls.__new__(cls)
+        self.value = value
+        return self
+
+    @classmethod
+    def none(cls: Type[Self]) -> Self:
+        """A factory method that creates an instance of ArrayFlags with everything disabled."""
+        self = cls.__new__(cls)
+        self.value = self.DEFAULT_VALUE
+        return self
 
 
 @fill_with_flags()
@@ -1728,6 +1914,9 @@ class AutoModPresets(ArrayFlags):
         rather than using this raw value.
     """
 
+    def to_array(self) -> List[int]:
+        return super().to_array(offset=1)
+
     @flag_value
     def profanity(self):
         """:class:`bool`: Whether to use the preset profanity filter."""
@@ -1743,21 +1932,152 @@ class AutoModPresets(ArrayFlags):
         """:class:`bool`: Whether to use the preset slurs filter."""
         return 1 << 2
 
-    @classmethod
-    def all(cls: Type[Self]) -> Self:
-        """A factory method that creates a :class:`AutoModPresets` with everything enabled."""
-        bits = max(cls.VALID_FLAGS.values()).bit_length()
-        value = (1 << bits) - 1
-        self = cls.__new__(cls)
-        self.value = value
-        return self
 
-    @classmethod
-    def none(cls: Type[Self]) -> Self:
-        """A factory method that creates a :class:`AutoModPresets` with everything disabled."""
-        self = cls.__new__(cls)
-        self.value = self.DEFAULT_VALUE
-        return self
+@fill_with_flags()
+class AppCommandContext(ArrayFlags):
+    r"""Wraps up the Discord :class:`AppCommand` context.
+
+    .. versionadded:: 2.4
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two AppCommand context flags are equal.
+        .. describe:: x != y
+
+            Checks if two AppCommand context flags are not equal.
+
+        .. describe:: x | y, x |= y
+
+            Returns an AppCommandContext instance with all enabled flags from
+            both x and y.
+
+            .. versionadded:: 2.4
+
+        .. describe:: x & y, x &= y
+
+            Returns an AppCommandContext instance with only flags enabled on
+            both x and y.
+
+            .. versionadded:: 2.4
+
+        .. describe:: x ^ y, x ^= y
+
+            Returns an AppCommandContext instance with only flags enabled on
+            only one of x or y, not on both.
+
+            .. versionadded:: 2.4
+
+        .. describe:: ~x
+
+            Returns an AppCommandContext instance with all flags inverted from x
+
+            .. versionadded:: 2.4
+
+        .. describe:: hash(x)
+
+            Return the flag's hash.
+        .. describe:: iter(x)
+
+            Returns an iterator of ``(name, value)`` pairs. This allows it
+            to be, for example, constructed as a dict or a list of pairs.
+            Note that aliases are not shown.
+
+        .. describe:: bool(b)
+
+            Returns whether any flag is set to ``True``.
+
+    Attributes
+    -----------
+    value: :class:`int`
+        The raw value. You should query flags via the properties
+        rather than using this raw value.
+    """
+
+    DEFAULT_VALUE = 3
+
+    @flag_value
+    def guild(self):
+        """:class:`bool`: Whether the context allows usage in a guild."""
+        return 1 << 0
+
+    @flag_value
+    def dm_channel(self):
+        """:class:`bool`: Whether the context allows usage in a DM channel."""
+        return 1 << 1
+
+    @flag_value
+    def private_channel(self):
+        """:class:`bool`: Whether the context allows usage in a GDM channel."""
+        return 1 << 2
+
+
+@fill_with_flags()
+class AppIntegrationType(ArrayFlags):
+    r"""Represents the installation location of an application command.
+
+    .. versionadded:: 2.4
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two AppIntegrationType flags are equal.
+
+        .. describe:: x != y
+
+            Checks if two AppIntegrationType flags are not equal.
+
+        .. describe:: x | y, x |= y
+
+            Returns an AppIntegrationType instance with all enabled flags from
+            both x and y.
+
+        .. describe:: x & y, x &= y
+
+            Returns an AppIntegrationType instance with only flags enabled on
+            both x and y.
+
+        .. describe:: x ^ y, x ^= y
+
+            Returns an AppIntegrationType instance with only flags enabled on
+            only one of x or y, not on both.
+
+        .. describe:: ~x
+
+            Returns an AppIntegrationType instance with all flags inverted from x
+
+        .. describe:: hash(x)
+
+            Return the flag's hash.
+
+        .. describe:: iter(x)
+
+            Returns an iterator of ``(name, value)`` pairs. This allows it
+            to be, for example, constructed as a dict or a list of pairs.
+            Note that aliases are not shown.
+
+        .. describe:: bool(b)
+
+            Returns whether any flag is set to ``True``.
+
+    Attributes
+    -----------
+    value: :class:`int`
+        The raw value. You should query flags via the properties
+        rather than using this raw value.
+    """
+
+    @flag_value
+    def guild_install(self):
+        """:class:`bool`: Whether the integration is a guild install."""
+        return 1 << 0
+
+    @flag_value
+    def user_install(self):
+        """:class:`bool`: Whether the integration is a user install."""
+        return 1 << 1
 
 
 @fill_with_flags()
@@ -1817,6 +2137,8 @@ class MemberFlags(BaseFlags):
         rather than using this raw value.
     """
 
+    __slots__ = ()
+
     @flag_value
     def did_rejoin(self):
         """:class:`bool`: Returns ``True`` if the member left and rejoined the :attr:`~discord.Member.guild`."""
@@ -1836,6 +2158,31 @@ class MemberFlags(BaseFlags):
     def started_onboarding(self):
         """:class:`bool`: Returns ``True`` if the member has started onboarding."""
         return 1 << 3
+
+    @flag_value
+    def guest(self):
+        """:class:`bool`: Returns ``True`` if the member is a guest.
+        Guest members are members that joined through a guest invite, and are not full members of the guild.
+
+        .. versionadded:: 2.4
+        """
+        return 1 << 4
+
+    @flag_value
+    def started_home_actions(self):
+        return 1 << 5
+
+    @flag_value
+    def completed_home_actions(self):
+        return 1 << 6
+
+    @flag_value
+    def automod_quarantined_name(self):
+        return 1 << 7
+
+    @flag_value
+    def automod_quarantined_bio(self):
+        return 1 << 8
 
 
 @fill_with_flags()
@@ -1895,6 +2242,8 @@ class AttachmentFlags(BaseFlags):
         rather than using this raw value.
     """
 
+    __slots__ = ()
+
     @flag_value
     def clip(self):
         """:class:`bool`: Returns ``True`` if the attachment is a clip."""
@@ -1909,6 +2258,14 @@ class AttachmentFlags(BaseFlags):
     def remix(self):
         """:class:`bool`: Returns ``True`` if the attachment has been edited using the remix feature."""
         return 1 << 2
+
+    @flag_value
+    def spoiler(self):
+        return 1 << 3
+
+    @flag_value
+    def contains_explicit_media(self):
+        return 1 << 4
 
 
 @fill_with_flags()
@@ -1967,6 +2324,8 @@ class RoleFlags(BaseFlags):
         The raw value. You should query flags via the properties
         rather than using this raw value.
     """
+
+    __slots__ = ()
 
     @flag_value
     def in_prompt(self):
@@ -2032,9 +2391,33 @@ class SKUFlags(BaseFlags):
     """
 
     @flag_value
+    def premium_purchase(self):
+        return 1 << 0
+
+    @flag_value
+    def has_free_premium_content(self):
+        return 1 << 1
+
+    @flag_value
     def available(self):
         """:class:`bool`: Returns ``True`` if the SKU is available for purchase."""
         return 1 << 2
+
+    @flag_value
+    def premium_and_distribution(self):
+        return 1 << 3
+
+    @flag_value
+    def sticker_pack(self):
+        return 1 << 4
+
+    @flag_value
+    def guild_role(self):
+        return 1 << 5
+
+    @flag_value
+    def available_for_subscription_gifting(self):
+        return 1 << 6
 
     @flag_value
     def guild_subscription(self):
@@ -2045,3 +2428,77 @@ class SKUFlags(BaseFlags):
     def user_subscription(self):
         """:class:`bool`: Returns ``True`` if the SKU is a user subscription."""
         return 1 << 8
+
+
+@fill_with_flags()
+class InviteFlags(BaseFlags):
+    r"""Wraps up the Discord Invite flags
+
+    .. versionadded:: 2.4
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two InviteFlags are equal.
+        .. describe:: x != y
+
+            Checks if two InviteFlags are not equal.
+
+        .. describe:: x | y, x |= y
+
+            Returns a InviteFlags instance with all enabled flags from
+            both x and y.
+
+        .. describe:: x & y, x &= y
+
+            Returns a InviteFlags instance with only flags enabled on
+            both x and y.
+
+        .. describe:: x ^ y, x ^= y
+
+            Returns a InviteFlags instance with only flags enabled on
+            only one of x or y, not on both.
+
+        .. describe:: ~x
+
+            Returns a InviteFlags instance with all flags inverted from x.
+
+        .. describe:: hash(x)
+
+            Return the flag's hash.
+        .. describe:: iter(x)
+
+            Returns an iterator of ``(name, value)`` pairs. This allows it
+            to be, for example, constructed as a dict or a list of pairs.
+            Note that aliases are not shown.
+
+        .. describe:: bool(b)
+
+            Returns whether any flag is set to ``True``.
+
+    Attributes
+    -----------
+    value: :class:`int`
+        The raw value. You should query flags via the properties
+        rather than using this raw value.
+    """
+
+    __slots__ = ()
+
+    @flag_value
+    def guest(self):
+        """:class:`bool`: Returns ``True`` if the invite is a guest invite.
+
+        Guest invites grant temporary membership for the purposes of joining a voice channel.
+        """
+        return 1 << 0
+
+    @flag_value
+    def viewed(self):
+        return 1 << 1
+
+    @flag_value
+    def enhanced(self):
+        return 1 << 2
+

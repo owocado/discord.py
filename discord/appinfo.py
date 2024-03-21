@@ -439,6 +439,7 @@ class PartialAppInfo:
         'redirect_uris',
         'interactions_endpoint_url',
         'role_connections_verification_url',
+        'install_params',
     )
 
     def __init__(self, *, state: ConnectionState, data: PartialAppInfoPayload):
@@ -457,6 +458,8 @@ class PartialAppInfo:
         self.redirect_uris: List[str] = data.get('redirect_uris', [])
         self.interactions_endpoint_url: Optional[str] = data.get('interactions_endpoint_url')
         self.role_connections_verification_url: Optional[str] = data.get('role_connections_verification_url')
+        params = data.get('install_params')
+        self.install_params: Optional[AppInstallParams] = AppInstallParams(params) if params else None
 
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} id={self.id} name={self.name!r} description={self.description!r}>'

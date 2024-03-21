@@ -28,7 +28,7 @@ import datetime
 from typing import TYPE_CHECKING, Literal, Optional, Set, List, Tuple, Union
 
 from .enums import ChannelType, try_enum
-from .utils import _get_as_snowflake
+from .utils import _get_as_snowflake, MISSING
 from .app_commands import AppCommandPermissions
 from .colour import Colour
 
@@ -47,6 +47,7 @@ if TYPE_CHECKING:
         ThreadMembersUpdate,
         TypingStartEvent,
         GuildMemberRemoveEvent,
+        VoiceChannelStatusUpdate,
     )
     from .types.command import GuildApplicationCommandPermissions
     from .message import Message
@@ -75,15 +76,27 @@ __all__ = (
     'RawTypingEvent',
     'RawMemberRemoveEvent',
     'RawAppCommandPermissionsUpdateEvent',
+    'RawVoiceChannelStatusUpdateEvent',
 )
 
 
 class _RawReprMixin:
+    message_id: int
+    channel_id: int
+    guild_id: Optional[int]
+
     __slots__: Tuple[str, ...] = ()
 
     def __repr__(self) -> str:
         value = ' '.join(f'{attr}={getattr(self, attr)!r}' for attr in self.__slots__)
         return f'<{self.__class__.__name__} {value}>'
+
+    @property
+    def jump_url(self) -> Optional[str]:
+        target = self.guild_id or '@me'
+        if self.message_id and self.channel_id:
+            return f'https://discord.com/channels/{target}/{self.channel_id}/{self.message_id}'
+        return None
 
 
 class RawMessageDeleteEvent(_RawReprMixin):
@@ -101,7 +114,7 @@ class RawMessageDeleteEvent(_RawReprMixin):
         The cached message, if found in the internal message cache.
     """
 
-    __slots__ = ('message_id', 'channel_id', 'guild_id', 'cached_message')
+    __slots__ = ('message_id', 'channel_id', 'guild_id', 'cached_message', 'data')
 
     def __init__(self, data: MessageDeleteEvent) -> None:
         self.message_id: int = int(data['id'])
@@ -111,6 +124,7 @@ class RawMessageDeleteEvent(_RawReprMixin):
             self.guild_id: Optional[int] = int(data['guild_id'])
         except KeyError:
             self.guild_id: Optional[int] = None
+        self.data: MessageDeleteEvent = data
 
 
 class RawBulkMessageDeleteEvent(_RawReprMixin):
@@ -128,7 +142,7 @@ class RawBulkMessageDeleteEvent(_RawReprMixin):
         The cached messages, if found in the internal message cache.
     """
 
-    __slots__ = ('message_ids', 'channel_id', 'guild_id', 'cached_messages')
+    __slots__ = ('message_ids', 'channel_id', 'guild_id', 'cached_messages', 'data')
 
     def __init__(self, data: BulkMessageDeleteEvent) -> None:
         self.message_ids: Set[int] = {int(x) for x in data.get('ids', [])}
@@ -139,6 +153,7 @@ class RawBulkMessageDeleteEvent(_RawReprMixin):
             self.guild_id: Optional[int] = int(data['guild_id'])
         except KeyError:
             self.guild_id: Optional[int] = None
+        self.data: BulkMessageDeleteEvent = data
 
 
 class RawMessageUpdateEvent(_RawReprMixin):
@@ -230,6 +245,9 @@ class RawReactionActionEvent(_RawReprMixin):
         'message_author_id',
         'burst',
         'burst_colours',
+        'reaction_type',
+        'me',
+        'data',
     )
 
     def __init__(self, data: ReactionActionEvent, emoji: PartialEmoji, event_type: ReactionActionType) -> None:
@@ -242,6 +260,10 @@ class RawReactionActionEvent(_RawReprMixin):
         self.message_author_id: Optional[int] = _get_as_snowflake(data, 'message_author_id')
         self.burst: bool = data.get('burst', False)
         self.burst_colours: List[Colour] = [Colour.from_str(c) for c in data.get('burst_colours', [])]
+        self.reaction_type: int = data.get('type', 0)
+        # only present when event_type == 'REACTION_ADD'
+        self.me: bool = data.get('me', False)
+        self.data: ReactionActionEvent = data
 
         try:
             self.guild_id: Optional[int] = int(data['guild_id'])
@@ -270,7 +292,7 @@ class RawReactionClearEvent(_RawReprMixin):
         The guild ID where the reactions got cleared.
     """
 
-    __slots__ = ('message_id', 'channel_id', 'guild_id')
+    __slots__ = ('message_id', 'channel_id', 'guild_id', 'data')
 
     def __init__(self, data: ReactionClearEvent) -> None:
         self.message_id: int = int(data['message_id'])
@@ -280,6 +302,7 @@ class RawReactionClearEvent(_RawReprMixin):
             self.guild_id: Optional[int] = int(data['guild_id'])
         except KeyError:
             self.guild_id: Optional[int] = None
+        self.data: ReactionClearEvent = data
 
 
 class RawReactionClearEmojiEvent(_RawReprMixin):
@@ -299,12 +322,15 @@ class RawReactionClearEmojiEvent(_RawReprMixin):
         The custom or unicode emoji being removed.
     """
 
-    __slots__ = ('message_id', 'channel_id', 'guild_id', 'emoji')
+    __slots__ = ('message_id', 'channel_id', 'guild_id', 'emoji', 'reaction_type', 'burst', 'data')
 
     def __init__(self, data: ReactionClearEmojiEvent, emoji: PartialEmoji) -> None:
         self.emoji: PartialEmoji = emoji
         self.message_id: int = int(data['message_id'])
         self.channel_id: int = int(data['channel_id'])
+        self.reaction_type: int = data.get('type', 0)
+        self.burst: bool = data.get('burst', False)
+        self.data: ReactionClearEmojiEvent = data
 
         try:
             self.guild_id: Optional[int] = int(data['guild_id'])
@@ -327,11 +353,12 @@ class RawIntegrationDeleteEvent(_RawReprMixin):
         The guild ID where the integration got deleted.
     """
 
-    __slots__ = ('integration_id', 'application_id', 'guild_id')
+    __slots__ = ('integration_id', 'application_id', 'guild_id', 'data')
 
     def __init__(self, data: IntegrationDeleteEvent) -> None:
         self.integration_id: int = int(data['id'])
         self.guild_id: int = int(data['guild_id'])
+        self.data: IntegrationDeleteEvent = data
 
         try:
             self.application_id: Optional[int] = int(data['application_id'])
@@ -503,3 +530,30 @@ class RawAppCommandPermissionsUpdateEvent(_RawReprMixin):
         self.permissions: List[AppCommandPermissions] = [
             AppCommandPermissions(data=perm, guild=self.guild, state=state) for perm in data['permissions']
         ]
+
+
+class RawVoiceChannelStatusUpdateEvent(_RawReprMixin):
+    """Represents the payload for a :func:`on_raw_voice_channel_status_update` event.
+
+    .. versionadded:: 2.4
+
+    Attributes
+    ----------
+    channel_id: :class:`int`
+        The id of the voice channel whose status was updated.
+    guild_id: :class:`int`
+        The id of the guild the voice channel is in.
+    status: Optional[:class:`str`]
+        The newly updated status of the voice channel. ``None`` if no status is set.
+    cached_status: Optional[:class:`str`]
+        The cached status, if the voice channel is found in the internal channel cache otherwise :attr:`utils.MISSING`.
+        Represents the status before it is modified. ``None`` if no status was set.
+    """
+
+    __slots__ = ('channel_id', 'guild_id', 'status', 'cached_status')
+
+    def __init__(self, data: VoiceChannelStatusUpdate):
+        self.channel_id: int = int(data['id'])
+        self.guild_id: int = int(data['guild_id'])
+        self.status: Optional[str] = data['status'] or None
+        self.cached_status: Optional[str] = MISSING

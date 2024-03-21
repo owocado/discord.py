@@ -22,34 +22,30 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from __future__ import annotations
-
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, Union
 from typing_extensions import NotRequired
 
 from .snowflake import Snowflake
+from .user import User
 
 
-class Role(TypedDict):
-    id: Snowflake
+class BaseSoundboardSound(TypedDict):
+    sound_id: Union[str, int]
+    volume: float
+
+
+class SoundboardSound(BaseSoundboardSound):
     name: str
-    color: int
-    hoist: bool
-    position: int
-    permissions: str
-    managed: bool
-    mentionable: bool
-    flags: int
-    icon: NotRequired[Optional[str]]
-    unicode_emoji: NotRequired[Optional[str]]
-    tags: NotRequired[RoleTags]
-    description: Optional[str]
+    emoji_name: Optional[str]
+    emoji_id: Optional[Snowflake]
+    user_id: Snowflake
+    available: bool
+    guild_id: NotRequired[Snowflake]
+    user: Optional[User]
 
 
-class RoleTags(TypedDict, total=False):
-    bot_id: Snowflake
-    integration_id: Snowflake
-    subscription_listing_id: Snowflake
-    premium_subscriber: None
-    available_for_purchase: None
-    guild_connections: None
+class SoundboardDefaultSound(BaseSoundboardSound):
+    name: str
+    emoji_name: str
+    emoji_id: Optional[Snowflake]
+    user_id: Snowflake

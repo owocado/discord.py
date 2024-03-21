@@ -24,32 +24,38 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import TypedDict, Optional
-from typing_extensions import NotRequired
+from typing import Literal, Optional, TypedDict
 
+from .emoji import PartialEmoji
 from .snowflake import Snowflake
 
 
-class Role(TypedDict):
+PromptType = Literal[0, 1]
+OnboardingMode = Literal[0, 1]
+
+
+class PromptOption(TypedDict):
     id: Snowflake
-    name: str
-    color: int
-    hoist: bool
-    position: int
-    permissions: str
-    managed: bool
-    mentionable: bool
-    flags: int
-    icon: NotRequired[Optional[str]]
-    unicode_emoji: NotRequired[Optional[str]]
-    tags: NotRequired[RoleTags]
+    channel_ids: list[Snowflake]
+    role_ids: list[Snowflake]
+    emoji: PartialEmoji
+    title: str
     description: Optional[str]
 
 
-class RoleTags(TypedDict, total=False):
-    bot_id: Snowflake
-    integration_id: Snowflake
-    subscription_listing_id: Snowflake
-    premium_subscriber: None
-    available_for_purchase: None
-    guild_connections: None
+class Prompt(TypedDict):
+    id: Snowflake
+    options: list[PromptOption]
+    title: str
+    single_select: bool
+    required: bool
+    in_onboarding: bool
+    type: PromptType
+
+
+class Onboarding(TypedDict):
+    guild_id: Snowflake
+    prompts: list[Prompt]
+    default_channel_ids: list[Snowflake]
+    enabled: bool
+    mode: OnboardingMode

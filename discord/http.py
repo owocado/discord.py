@@ -57,7 +57,7 @@ from .gateway import DiscordClientWebSocketResponse
 from .file import File
 from .mentions import AllowedMentions
 from . import __version__, utils
-from .utils import MISSING
+from .utils import MISSING, time_snowflake, utcnow
 
 _log = logging.getLogger(__name__)
 
@@ -81,6 +81,7 @@ if TYPE_CHECKING:
         invite,
         member,
         message,
+        onboarding,
         template,
         role,
         user,
@@ -90,6 +91,7 @@ if TYPE_CHECKING:
         scheduled_event,
         sticker,
         welcome_screen,
+        soundboard,
         sku,
     )
     from .types.snowflake import Snowflake, SnowflakeList
@@ -1424,6 +1426,9 @@ class HTTPClient:
         params = {'with_counts': int(with_counts)}
         return self.request(Route('GET', '/guilds/{guild_id}', guild_id=guild_id), params=params)
 
+    def get_guild_preview(self, guild_id):
+        return self.request(Route('GET', '/guilds/{guild_id}/preview', guild_id=guild_id))
+
     def delete_guild(self, guild_id: Snowflake) -> Response[None]:
         return self.request(Route('DELETE', '/guilds/{guild_id}', guild_id=guild_id))
 
@@ -1564,6 +1569,43 @@ class HTTPClient:
 
     def get_member(self, guild_id: Snowflake, member_id: Snowflake) -> Response[member.MemberWithUser]:
         return self.request(Route('GET', '/guilds/{guild_id}/members/{member_id}', guild_id=guild_id, member_id=member_id))
+
+    def get_member_supplemental(
+        self,
+        guild_id: Snowflake,
+        *,
+        limit: int = 250,
+        user_id: Optional[Snowflake] = None,
+        unusual_dm_activity: Optional[bool] = None,
+        timed_out: Optional[bool] = None,
+        unusual_account_activity: Optional[bool] = None,
+        quarantined: Optional[bool] = None,
+    ) -> Response[member.MemberSearchResults]:
+        now_epoch = int(utcnow().timestamp() * 1000)
+        payload = {}
+        payload['limit'] = limit
+        payload['after'] = {
+            'guild_joined_at': now_epoch,
+            'user_id': str(time_snowflake(utcnow())),
+        }
+        payload['or_query'] = {}
+        if unusual_dm_activity is not None:
+            payload['or_query']['safety_signals'] = {
+                'unusual_dm_activity_until': {'range': {'gte': now_epoch}}
+            }
+        if timed_out is not None:
+            payload['or_query']['safety_signals'] = {
+                'communication_disabled_until': {'range': {'gte': now_epoch}}
+            }
+        if unusual_account_activity is not None:
+            payload['or_query']['safety_signals'] = {'unusual_account_activity': True}
+        if quarantined is not None:
+            payload['or_query']['safety_signals'] = {'automod_quarantined_username': True}
+        if user_id is not None:
+            payload['and_query'] = {
+                'user_id': {'or_query': [str(user_id)]}
+            }
+        return self.request(Route('POST', '/guilds/{guild_id}/members-search', guild_id=guild_id), json=payload)
 
     def prune_members(
         self,
@@ -1851,7 +1893,7 @@ class HTTPClient:
         self, guild_id: Snowflake, role_id: Snowflake, *, reason: Optional[str] = None, **fields: Any
     ) -> Response[role.Role]:
         r = Route('PATCH', '/guilds/{guild_id}/roles/{role_id}', guild_id=guild_id, role_id=role_id)
-        valid_keys = ('name', 'permissions', 'color', 'hoist', 'icon', 'unicode_emoji', 'mentionable')
+        valid_keys = ('name', 'permissions', 'color', 'hoist', 'icon', 'unicode_emoji', 'mentionable', 'description')
         payload = {k: v for k, v in fields.items() if k in valid_keys}
         return self.request(r, json=payload, reason=reason)
 
@@ -2160,8 +2202,13 @@ class HTTPClient:
 
     # Application commands (global)
 
-    def get_global_commands(self, application_id: Snowflake) -> Response[List[command.ApplicationCommand]]:
-        return self.request(Route('GET', '/applications/{application_id}/commands', application_id=application_id))
+    def get_global_commands(
+        self, application_id: Snowflake, with_localizations: bool = False
+    ) -> Response[List[command.ApplicationCommand]]:
+        params = {'with_localizations': int(with_localizations)}
+        return self.request(
+            Route('GET', '/applications/{application_id}/commands', application_id=application_id), params=params
+        )
 
     def get_global_command(self, application_id: Snowflake, command_id: Snowflake) -> Response[command.ApplicationCommand]:
         r = Route(
@@ -2216,15 +2263,19 @@ class HTTPClient:
     # Application commands (guild)
 
     def get_guild_commands(
-        self, application_id: Snowflake, guild_id: Snowflake
+        self,
+        application_id: Snowflake,
+        guild_id: Snowflake,
+        with_localizations: bool = False,
     ) -> Response[List[command.ApplicationCommand]]:
+        params = {'with_localizations': int(with_localizations)}
         r = Route(
             'GET',
             '/applications/{application_id}/guilds/{guild_id}/commands',
             application_id=application_id,
             guild_id=guild_id,
         )
-        return self.request(r)
+        return self.request(r, params=params)
 
     def get_guild_command(
         self,
@@ -2407,6 +2458,98 @@ class HTTPClient:
             reason=reason,
         )
 
+    def get_guild_onboarding(self, guild_id: Snowflake) -> Response[onboarding.Onboarding]:
+        return self.request(Route('GET', '/guilds/{guild_id}/onboarding', guild_id=guild_id))
+
+    def modify_guild_onboarding(
+        self,
+        guild_id: Snowflake,
+        *,
+        prompts: Optional[List[onboarding.Prompt]] = None,
+        default_channel_ids: Optional[List[Snowflake]] = None,
+        enabled: Optional[bool] = None,
+        mode: Optional[onboarding.OnboardingMode] = None,
+        reason: Optional[str],
+    ) -> Response[onboarding.Onboarding]:
+
+        payload = {}
+
+        if prompts is not None:
+            payload['prompts'] = prompts
+
+        if default_channel_ids is not None:
+            payload['default_channel_ids'] = default_channel_ids
+
+        if enabled is not None:
+            payload['enabled'] = enabled
+
+        if mode is not None:
+            payload['mode'] = mode
+
+        return self.request(
+            Route('PUT', f'/guilds/{guild_id}/onboarding', guild_id=guild_id),
+            json=payload,
+            reason=reason,
+        )
+
+    # Soundboard
+
+    def get_default_soundboard_sounds(self) -> Response[List[soundboard.SoundboardDefaultSound]]:
+        return self.request(Route('GET', '/soundboard-default-sounds'))
+
+    def create_soundboard_sound(
+        self, guild_id: Snowflake, *, reason: Optional[str], **payload: Any
+
+    ) -> Response[soundboard.SoundboardSound]:
+        valid_keys = (
+            'name',
+            'sound',
+            'volume',
+            'emoji_id',
+            'emoji_name',
+        )
+
+        payload = {k: v for k, v in payload.items() if k in valid_keys and v is not None}
+
+        return self.request(
+            Route('POST', '/guilds/{guild_id}/soundboard-sounds', guild_id=guild_id), json=payload, reason=reason
+        )
+
+    def edit_soundboard_sound(
+        self, guild_id: Snowflake, sound_id: Snowflake, *, reason: Optional[str], **payload: Any
+
+    ) -> Response[soundboard.SoundboardSound]:
+        valid_keys = (
+            'name',
+            'volume',
+            'emoji_id',
+            'emoji_name',
+        )
+
+        payload = {k: v for k, v in payload.items() if k in valid_keys}
+
+        return self.request(
+            Route(
+                'PATCH',
+                '/guilds/{guild_id}/soundboard-sounds/{sound_id}',
+                guild_id=guild_id,
+                sound_id=sound_id,
+            ),
+            json=payload,
+            reason=reason,
+        )
+
+    def delete_soundboard_sound(self, guild_id: Snowflake, sound_id: Snowflake, *, reason: Optional[str]) -> Response[None]:
+        return self.request(
+            Route(
+                'DELETE',
+                '/guilds/{guild_id}/soundboard-sounds/{sound_id}',
+                guild_id=guild_id,
+                sound_id=sound_id,
+            ),
+            reason=reason,
+        )
+
     # SKU
 
     def get_skus(self, application_id: Snowflake) -> Response[List[sku.SKU]]:
@@ -2528,3 +2671,9 @@ class HTTPClient:
 
     def get_user(self, user_id: Snowflake) -> Response[user.User]:
         return self.request(Route('GET', '/users/{user_id}', user_id=user_id))
+
+    def get_public_sku(self, sku_id: int) -> Response[sku.SKU]:
+        return self.request(Route('GET', f'/store/published-listings/skus/{sku_id}?country_code=US'))
+
+    def get_discovery_categories(self) -> Response[List[guild.DiscoveryCategory]]:
+        return self.request(Route('GET', '/discovery/categories'))

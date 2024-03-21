@@ -57,6 +57,8 @@ class Item(Generic[V]):
     .. versionadded:: 2.0
     """
 
+    __slots__ = ()
+
     __item_repr_attributes__: Tuple[str, ...] = ('row',)
 
     def __init__(self):

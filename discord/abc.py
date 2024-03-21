@@ -244,7 +244,7 @@ class User(Snowflake, Protocol):
         raise NotImplementedError
 
     @property
-    def avatar(self) -> Optional[Asset]:
+    def avatar(self) -> Asset:
         """Optional[:class:`~discord.Asset`]: Returns an Asset that represents the user's avatar, if present."""
         raise NotImplementedError
 
@@ -686,7 +686,7 @@ class GuildChannel:
             denied = Permissions.all_channel()
             base.value &= ~denied.value
 
-    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
         """Handles permission resolution for the :class:`~discord.Member`
         or :class:`~discord.Role`.
 

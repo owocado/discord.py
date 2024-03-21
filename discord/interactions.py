@@ -27,7 +27,7 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Generic, TYPE_CHECKING, Sequence, Tuple, Union, List
+from typing import Any, Dict, Literal, Optional, Generic, TYPE_CHECKING, Sequence, Tuple, Union, List
 import asyncio
 import datetime
 
@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from .types.webhook import (
         Webhook as WebhookPayload,
     )
+    from .types.snowflake import Snowflake
     from .guild import Guild
     from .state import ConnectionState
     from .file import File
@@ -157,6 +158,7 @@ class Interaction(Generic[ClientT]):
         'command_failed',
         'entitlement_sku_ids',
         'entitlements',
+        '_integration_owners',
         '_permissions',
         '_app_permissions',
         '_state',
@@ -194,6 +196,10 @@ class Interaction(Generic[ClientT]):
         self.application_id: int = int(data['application_id'])
         self.entitlement_sku_ids: List[int] = [int(x) for x in data.get('entitlement_skus', []) or []]
         self.entitlements: List[Entitlement] = [Entitlement(self._state, x) for x in data.get('entitlements', [])]
+        # This is not entirely useful currently, unsure how to expose it in a way that it is.
+        self._integration_owners: Dict[int, Snowflake] = {
+            int(k): int(v) for k, v in data.get('authorizing_integration_owners', {}).items()
+        }
 
         self.locale: Locale = try_enum(Locale, data.get('locale', 'en-US'))
         self.guild_locale: Optional[Locale]
@@ -204,7 +210,10 @@ class Interaction(Generic[ClientT]):
 
         guild = None
         if self.guild_id:
-            guild = self._state._get_or_create_unavailable_guild(self.guild_id)
+            # The data type is a TypedDict but it doesn't narrow to Dict[str, Any] properly
+            guild = self._state._get_or_create_unavailable_guild(self.guild_id, data=data.get('guild'))  # type: ignore
+            if guild.me is None and self._client.user is not None:
+                guild._add_member(Member._from_client_user(user=self._client.user, guild=guild, state=self._state))
 
         raw_channel = data.get('channel', {})
         channel_id = utils._get_as_snowflake(raw_channel, 'id')
@@ -1090,6 +1099,52 @@ class InteractionResponse(Generic[ClientT]):
         )
 
         self._response_type = InteractionResponseType.autocomplete_result
+
+    async def send_iframe(
+        self, *, title: str, custom_id: str, modal_size: Literal[1, 2, 3] = 2, iframe_path: Optional[str] = "/"
+    ) -> None:
+        """|coro|
+
+        Responds to this interaction by sending an iframe modal.
+
+        Parameters
+        -----------
+        custom_id: :class:`str`
+            The custom ID of the iframe.
+        title: :class:`str`
+            The title of the iframe.
+        iframe_path: Optional[:class:`str`]
+            The path to the iframe. If ``None`` is passed then the iframe is removed.
+
+        Raises
+        -------
+        HTTPException
+            Sending the iframe failed.
+        InteractionResponded
+            This interaction has already been responded to before.
+        """
+        if self._response_type:
+            raise InteractionResponded(self._parent)
+
+        parent = self._parent
+
+        adapter = async_context.get()
+        http = parent._state.http
+
+        params = interaction_response_params(
+            InteractionResponseType.iframe.value,
+            {'iframe_path': iframe_path, 'title': title, 'modal_size': modal_size, 'custom_id': custom_id},
+        )
+        await adapter.create_interaction_response(
+            parent.id,
+            parent.token,
+            session=parent._session,
+            proxy=http.proxy,
+            proxy_auth=http.proxy_auth,
+            params=params,
+        )
+
+        self._response_type = InteractionResponseType.iframe
 
 
 class _InteractionMessageState:

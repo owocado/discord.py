@@ -24,12 +24,12 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
+from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, Union
 
 import discord.abc
 from .asset import Asset
 from .colour import Colour
-from .enums import DefaultAvatar
+from .enums import DefaultAvatar, PremiumType, try_enum
 from .flags import PublicUserFlags
 from .utils import snowflake_time, _bytes_to_base64_data, MISSING, _get_as_snowflake
 
@@ -71,6 +71,8 @@ class BaseUser(_UserTag):
         '_public_flags',
         '_state',
         '_avatar_decoration_data',
+        'bio',
+        '_premium_type',
     )
 
     if TYPE_CHECKING:
@@ -99,7 +101,7 @@ class BaseUser(_UserTag):
 
     def __str__(self) -> str:
         if self.discriminator == '0':
-            return self.name
+            return self.global_name or self.name
         return f'{self.name}#{self.discriminator}'
 
     def __eq__(self, other: object) -> bool:
@@ -123,6 +125,8 @@ class BaseUser(_UserTag):
         self.bot = data.get('bot', False)
         self.system = data.get('system', False)
         self._avatar_decoration_data = data.get('avatar_decoration_data')
+        self.bio = data.get('bio', '')
+        self._premium_type: Literal[0, 1, 2, 3] = data.get('premium_type') or 0
 
     @classmethod
     def _copy(cls, user: Self) -> Self:
@@ -139,6 +143,8 @@ class BaseUser(_UserTag):
         self._state = user._state
         self._public_flags = user._public_flags
         self._avatar_decoration_data = user._avatar_decoration_data
+        self.bio = user.bio
+        self._premium_type = user._premium_type
 
         return self
 
@@ -158,15 +164,15 @@ class BaseUser(_UserTag):
         return PublicUserFlags._from_value(self._public_flags)
 
     @property
-    def avatar(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: Returns an :class:`Asset` for the avatar the user has.
+    def avatar(self) -> Asset:
+        """:class:`Asset`: Returns an :class:`Asset` for the avatar the user has.
 
-        If the user has not uploaded a global avatar, ``None`` is returned.
+        If the user has not uploaded a global avatar, then :attr:`default_avatar` is returned.
         If you want the avatar that a user has displayed, consider :attr:`display_avatar`.
         """
         if self._avatar is not None:
             return Asset._from_avatar(self._state, self.id, self._avatar)
-        return None
+        return self.default_avatar
 
     @property
     def default_avatar(self) -> Asset:
@@ -304,6 +310,10 @@ class BaseUser(_UserTag):
         if self.global_name:
             return self.global_name
         return self.name
+
+    @property
+    def premium_type(self) -> PremiumType:
+        return try_enum(PremiumType, self._premium_type)
 
     def mentioned_in(self, message: Message) -> bool:
         """Checks if the user is mentioned in the specified message.

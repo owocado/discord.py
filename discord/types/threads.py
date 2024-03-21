@@ -68,6 +68,7 @@ class Thread(TypedDict):
     newly_created: NotRequired[bool]
     flags: NotRequired[int]
     applied_tags: NotRequired[List[Snowflake]]
+    total_message_sent: int
 
 
 class ThreadPaginationPayload(TypedDict):

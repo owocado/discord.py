@@ -202,6 +202,12 @@ class Colour:
         if value[0] == '#':
             return parse_hex_number(value[1:])
 
+        if value == 'random':
+            return cls.random()
+
+        if len(value) == 6:
+            return parse_hex_number(value)
+
         if value[0:2] == '0x':
             rest = value[2:]
             # Legacy backwards compatible syntax

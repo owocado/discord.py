@@ -31,7 +31,7 @@ from .sku import Entitlement
 from .voice import GuildVoiceState
 from .integration import BaseIntegration, IntegrationApplication
 from .role import Role
-from .channel import ChannelType, StageInstance
+from .channel import ChannelType, StageInstance, VoiceChannelEffect
 from .interactions import Interaction
 from .invite import InviteTargetType
 from .emoji import Emoji, PartialEmoji
@@ -45,6 +45,7 @@ from .user import User, AvatarDecorationData
 from .threads import Thread, ThreadMember
 from .scheduled_event import GuildScheduledEvent
 from .audit_log import AuditLogEntry
+from .soundboard import SoundboardSound
 
 
 class SessionStartLimit(TypedDict):
@@ -317,6 +318,7 @@ class _GuildScheduledEventUsersEvent(TypedDict):
 GuildScheduledEventUserAdd = GuildScheduledEventUserRemove = _GuildScheduledEventUsersEvent
 
 VoiceStateUpdateEvent = GuildVoiceState
+VoiceChannelEffectSendEvent = VoiceChannelEffect
 
 
 class VoiceServerUpdateEvent(TypedDict):
@@ -351,4 +353,23 @@ class GuildAuditLogEntryCreate(AuditLogEntry):
     guild_id: Snowflake
 
 
+GuildSoundBoardSoundCreateEvent = SoundboardSound
+
+
+class GuildSoundBoardSoundDeleteEvent(TypedDict):
+    sound_id: Snowflake
+    guild_id: Snowflake
+
+
+class VoiceChannelStatusUpdate(TypedDict):
+    id: Snowflake
+    guild_id: Snowflake
+    status: Optional[str]
+
+
 EntitlementCreateEvent = EntitlementUpdateEvent = EntitlementDeleteEvent = Entitlement
+
+
+class SoundboardSoundsRequestEvent(TypedDict):
+    guild_id: Snowflake
+    soundboard_sounds: List[SoundboardSound]
