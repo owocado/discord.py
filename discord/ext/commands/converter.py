@@ -146,6 +146,7 @@ class Converter(Protocol[T_co]):
 
 
 _ID_REGEX = re.compile(r'\"?([0-9]{15,20})\"?')
+_DELETED_USER_ID: int = 456226577798135808
 
 
 class IDConverter(Converter[T_co]):
@@ -258,7 +259,7 @@ class MemberConverter(IDConverter[discord.Member]):
                 users = []
                 for user_name in process.extract(
                     argument,
-                    {user: unidecode(user.name).casefold() for user in guild.members},
+                    {user: user.name for user in guild.members},
                     limit=None,
                     score_cutoff=80,
                     scorer=fuzz.WRatio,
@@ -324,6 +325,8 @@ class UserConverter(IDConverter[discord.User]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.User:
+        if argument.isdigit() and int(argument) == _DELETED_USER_ID:
+            raise BadArgument('oh hey, it’s the ID that Discord assigns to deleted users.')
         match = self._get_id_match(argument) or re.search(r'<@!?([0-9]{15,20})>$', argument)
         result = None
 

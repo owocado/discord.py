@@ -63,23 +63,23 @@ class Typing:
         return channel
 
     async def wrapped_typer(self) -> None:
-        channel = await self._get_channel()
-        await channel._state.http.send_typing(channel.id)
+        channel = None  # await self._get_channel()
+        #  await channel._state.http.send_typing(channel.id)
 
     def __await__(self) -> Generator[None, None, None]:
         return self.wrapped_typer().__await__()
 
     async def do_typing(self) -> None:
-        channel = await self._get_channel()
-        typing = channel._state.http.send_typing
+        channel = None  # await self._get_channel()
+        #  typing = channel._state.http.send_typing
 
-        while True:
-            await asyncio.sleep(5)
-            await typing(channel.id)
+        #  while True:
+            #  await asyncio.sleep(5)
+            #  await typing(channel.id)
 
     async def __aenter__(self) -> None:
-        channel = await self._get_channel()
-        await channel._state.http.send_typing(channel.id)
+        #  channel = await self._get_channel()
+        #  await channel._state.http.send_typing(channel.id)
         self.task: asyncio.Task[None] = self.loop.create_task(self.do_typing())
         self.task.add_done_callback(_typing_done_callback)
 

@@ -51,8 +51,8 @@ class UnavailableGuild(TypedDict):
 
 
 class IncidentData(TypedDict):
-    invites_disabled_until: NotRequired[Optional[str]]
-    dms_disabled_until: NotRequired[Optional[str]]
+    invites_disabled_until: Optional[str]
+    dms_disabled_until: Optional[str]
 
 
 DefaultMessageNotificationLevel = Literal[0, 1]
@@ -196,12 +196,12 @@ class RolePositionUpdate(_RolePositionRequired, total=False):
     position: Optional[Snowflake]
 
 
-class BulkBanUserResponse(TypedDict):
-    banned_users: Optional[List[Snowflake]]
-    failed_users: Optional[List[Snowflake]]
-
-
 class DiscoveryCategory(TypedDict):
     id: int
     is_primary: bool
     name: str
+
+
+class BulkBanUserResponse(TypedDict):
+    banned_users: Optional[List[Snowflake]]
+    failed_users: Optional[List[Snowflake]]

@@ -43,7 +43,12 @@ if TYPE_CHECKING:
     from .message import Message
     from .state import ConnectionState
     from .types.channel import DMChannel as DMChannelPayload
-    from .types.user import PartialUser as PartialUserPayload, User as UserPayload, AvatarDecorationData
+    from .types.user import (
+        PartialUser as PartialUserPayload,
+        User as UserPayload,
+        AvatarDecorationData,
+        Clan as ClanPayload,
+    )
 
 
 __all__ = (
@@ -72,7 +77,7 @@ class BaseUser(_UserTag):
         '_state',
         '_avatar_decoration_data',
         'bio',
-        '_premium_type',
+        '_clan',
     )
 
     if TYPE_CHECKING:
@@ -88,6 +93,7 @@ class BaseUser(_UserTag):
         _accent_colour: Optional[int]
         _public_flags: int
         _avatar_decoration_data: Optional[AvatarDecorationData]
+        _clan: Optional[ClanPayload]
 
     def __init__(self, *, state: ConnectionState, data: Union[UserPayload, PartialUserPayload]) -> None:
         self._state = state
@@ -96,7 +102,7 @@ class BaseUser(_UserTag):
     def __repr__(self) -> str:
         return (
             f"<BaseUser id={self.id} name={self.name!r} global_name={self.global_name!r}"
-            f" bot={self.bot} system={self.system}>"
+            f" bot={self.bot} system={self.system}> discriminator={self.discriminator!r}"
         )
 
     def __str__(self) -> str:
@@ -126,7 +132,7 @@ class BaseUser(_UserTag):
         self.system = data.get('system', False)
         self._avatar_decoration_data = data.get('avatar_decoration_data')
         self.bio = data.get('bio', '')
-        self._premium_type: Literal[0, 1, 2, 3] = data.get('premium_type') or 0
+        self._clan = data.get('clan')
 
     @classmethod
     def _copy(cls, user: Self) -> Self:
@@ -144,7 +150,7 @@ class BaseUser(_UserTag):
         self._public_flags = user._public_flags
         self._avatar_decoration_data = user._avatar_decoration_data
         self.bio = user.bio
-        self._premium_type = user._premium_type
+        self._clan = user._clan
 
         return self
 
@@ -214,9 +220,9 @@ class BaseUser(_UserTag):
 
         .. versionadded:: 2.4
         """
-        if self._avatar_decoration_data is not None:
-            return _get_as_snowflake(self._avatar_decoration_data, 'sku_id')
-        return None
+        if self._avatar_decoration_data is None:
+            return None
+        return _get_as_snowflake(self._avatar_decoration_data, 'sku_id')
 
     @property
     def banner(self) -> Optional[Asset]:
@@ -310,10 +316,6 @@ class BaseUser(_UserTag):
         if self.global_name:
             return self.global_name
         return self.name
-
-    @property
-    def premium_type(self) -> PremiumType:
-        return try_enum(PremiumType, self._premium_type)
 
     def mentioned_in(self, message: Message) -> bool:
         """Checks if the user is mentioned in the specified message.

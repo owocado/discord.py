@@ -61,7 +61,7 @@ __all__ = (
     'AppCommandContext',
     'AttachmentFlags',
     'RoleFlags',
-    'AppIntegrationType',
+    'AppInstallationType',
     'SKUFlags',
     'InviteFlags',
 )
@@ -1291,6 +1291,57 @@ class Intents(BaseFlags):
         """
         return 1 << 21
 
+    @alias_flag_value
+    def polls(self):
+        """:class:`bool`: Whether guild and direct messages poll related events are enabled.
+
+        This is a shortcut to set or get both :attr:`guild_polls` and :attr:`dm_polls`.
+
+        This corresponds to the following events:
+
+        - :func:`on_poll_vote_add` (both guilds and DMs)
+        - :func:`on_poll_vote_remove` (both guilds and DMs)
+        - :func:`on_raw_poll_vote_add` (both guilds and DMs)
+        - :func:`on_raw_poll_vote_remove` (both guilds and DMs)
+
+        .. versionadded:: 2.4
+        """
+        return (1 << 24) | (1 << 25)
+
+    @flag_value
+    def guild_polls(self):
+        """:class:`bool`: Whether guild poll related events are enabled.
+
+        See also :attr:`dm_polls` and :attr:`polls`.
+
+        This corresponds to the following events:
+
+        - :func:`on_poll_vote_add` (only for guilds)
+        - :func:`on_poll_vote_remove` (only for guilds)
+        - :func:`on_raw_poll_vote_add` (only for guilds)
+        - :func:`on_raw_poll_vote_remove` (only for guilds)
+
+        .. versionadded:: 2.4
+        """
+        return 1 << 24
+
+    @flag_value
+    def dm_polls(self):
+        """:class:`bool`: Whether direct messages poll related events are enabled.
+
+        See also :attr:`guild_polls` and :attr:`polls`.
+
+        This corresponds to the following events:
+
+        - :func:`on_poll_vote_add` (only for DMs)
+        - :func:`on_poll_vote_remove` (only for DMs)
+        - :func:`on_raw_poll_vote_add` (only for DMs)
+        - :func:`on_raw_poll_vote_remove` (only for DMs)
+
+        .. versionadded:: 2.4
+        """
+        return 1 << 25
+
 
 @fill_with_flags()
 class MemberCacheFlags(BaseFlags):
@@ -1814,6 +1865,10 @@ class ChannelFlags(BaseFlags):
         """
         return 1 << 15
 
+    @flag_value
+    def join_request_interview_channel(self):
+        return 1 << 16
+
 
 class ArrayFlags(BaseFlags):
     @classmethod
@@ -2014,7 +2069,7 @@ class AppCommandContext(ArrayFlags):
 
 
 @fill_with_flags()
-class AppIntegrationType(ArrayFlags):
+class AppInstallationType(ArrayFlags):
     r"""Represents the installation location of an application command.
 
     .. versionadded:: 2.4
@@ -2023,30 +2078,30 @@ class AppIntegrationType(ArrayFlags):
 
         .. describe:: x == y
 
-            Checks if two AppIntegrationType flags are equal.
+            Checks if two AppInstallationType flags are equal.
 
         .. describe:: x != y
 
-            Checks if two AppIntegrationType flags are not equal.
+            Checks if two AppInstallationType flags are not equal.
 
         .. describe:: x | y, x |= y
 
-            Returns an AppIntegrationType instance with all enabled flags from
+            Returns an AppInstallationType instance with all enabled flags from
             both x and y.
 
         .. describe:: x & y, x &= y
 
-            Returns an AppIntegrationType instance with only flags enabled on
+            Returns an AppInstallationType instance with only flags enabled on
             both x and y.
 
         .. describe:: x ^ y, x ^= y
 
-            Returns an AppIntegrationType instance with only flags enabled on
+            Returns an AppInstallationType instance with only flags enabled on
             only one of x or y, not on both.
 
         .. describe:: ~x
 
-            Returns an AppIntegrationType instance with all flags inverted from x
+            Returns an AppInstallationType instance with all flags inverted from x
 
         .. describe:: hash(x)
 
@@ -2070,12 +2125,12 @@ class AppIntegrationType(ArrayFlags):
     """
 
     @flag_value
-    def guild_install(self):
+    def guild(self):
         """:class:`bool`: Whether the integration is a guild install."""
         return 1 << 0
 
     @flag_value
-    def user_install(self):
+    def user(self):
         """:class:`bool`: Whether the integration is a user install."""
         return 1 << 1
 

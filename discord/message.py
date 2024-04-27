@@ -1651,6 +1651,7 @@ class Message(PartialMessage, Hashable):
         'role_subscription',
         'application_id',
         'position',
+        '_interaction_metadata',
         '__weakref__',
     )
 
@@ -1713,7 +1714,7 @@ class Message(PartialMessage, Hashable):
                     self._thread = Thread(guild=self.guild, state=state, data=thread)
 
         self.interaction: Optional[MessageInteraction] = None
-
+        self._interaction_metadata = data.get('interaction_metadata')
         try:
             interaction = data['interaction']
         except KeyError:

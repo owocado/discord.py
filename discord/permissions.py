@@ -735,12 +735,32 @@ class Permissions(BaseFlags):
         return 1 << 46
 
     @flag_value
+    def use_clyde_ai(self) -> int: # deprecated
+        return 1 << 47
+
+    @flag_value
     def set_voice_channel_status(self) -> int:
         """:class:`bool`: Returns ``True`` if a user can set the status of voice channels.
 
         .. versionadded:: 2.4
         """
         return 1 << 48
+
+    @flag_value
+    def send_polls(self) -> int:
+        """:class:`bool`: Returns ``True`` if a user can send poll messages.
+
+        .. versionadded:: 2.4
+        """
+        return 1 << 49
+
+    @make_permission_alias('send_polls')
+    def create_polls(self) -> int:
+        """:class:`bool`: An alias for :attr:`send_polls`.
+
+        .. versionadded:: 2.4
+        """
+        return 1 << 49
 
 
 def _augment_from_permissions(cls):
@@ -864,6 +884,7 @@ class PermissionOverwrite:
         create_expressions: Optional[bool]
         create_events: Optional[bool]
         set_voice_channel_status: Optional[bool]
+        send_polls: Optional[bool]
 
     def __init__(self, **kwargs: Optional[bool]):
         self._values: Dict[str, Optional[bool]] = {}

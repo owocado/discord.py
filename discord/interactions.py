@@ -45,6 +45,7 @@ from .message import Message, Attachment
 from .permissions import Permissions
 from .http import handle_message_parameters
 from .webhook.async_ import async_context, Webhook, interaction_response_params, interaction_message_response_params
+from .app_commands.installs import AppCommandContext
 from .app_commands.namespace import Namespace
 from .app_commands.translator import locale_str, TranslationContext, TranslationContextLocation
 from .channel import _threaded_channel_factory
@@ -140,6 +141,10 @@ class Interaction(Generic[ClientT]):
     command_failed: :class:`bool`
         Whether the command associated with this interaction failed to execute.
         This includes checks and execution.
+    context: :class:`.AppCommandContext`
+        The context of the interaction.
+
+        .. versionadded:: 2.4
     """
 
     __slots__: Tuple[str, ...] = (
@@ -158,6 +163,7 @@ class Interaction(Generic[ClientT]):
         'command_failed',
         'entitlement_sku_ids',
         'entitlements',
+        "context",
         '_integration_owners',
         '_permissions',
         '_app_permissions',
@@ -171,6 +177,7 @@ class Interaction(Generic[ClientT]):
         'channel',
         '_cs_namespace',
         '_cs_command',
+        '_raw_channel',
     )
 
     def __init__(self, *, data: InteractionPayload, state: ConnectionState[ClientT]):
@@ -200,6 +207,10 @@ class Interaction(Generic[ClientT]):
         self._integration_owners: Dict[int, Snowflake] = {
             int(k): int(v) for k, v in data.get('authorizing_integration_owners', {}).items()
         }
+        try:
+            self.context = AppCommandContext._from_value([data['context']])
+        except KeyError:
+            self.context = AppCommandContext()
 
         self.locale: Locale = try_enum(Locale, data.get('locale', 'en-US'))
         self.guild_locale: Optional[Locale]
@@ -216,6 +227,7 @@ class Interaction(Generic[ClientT]):
                 guild._add_member(Member._from_client_user(user=self._client.user, guild=guild, state=self._state))
 
         raw_channel = data.get('channel', {})
+        self._raw_channel = raw_channel
         channel_id = utils._get_as_snowflake(raw_channel, 'id')
         if channel_id is not None and guild is not None:
             self.channel = guild and guild._resolve_channel(channel_id)
@@ -379,6 +391,22 @@ class Interaction(Generic[ClientT]):
     def is_expired(self) -> bool:
         """:class:`bool`: Returns ``True`` if the interaction is expired."""
         return utils.utcnow() >= self.expires_at
+
+    def is_guild_integration(self) -> bool:
+        """:class:`bool`: Returns ``True`` if the interaction is a guild integration.
+
+        .. versionadded:: 2.4
+        """
+        if self.guild_id:
+            return self.guild_id == self._integration_owners.get(0)
+        return False
+
+    def is_user_integration(self) -> bool:
+        """:class:`bool`: Returns ``True`` if the interaction is a user integration.
+
+        .. versionadded:: 2.4
+        """
+        return self.user.id == self._integration_owners.get(1)
 
     async def original_response(self) -> InteractionMessage:
         """|coro|

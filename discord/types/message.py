@@ -34,7 +34,7 @@ from .emoji import PartialEmoji
 from .embed import Embed
 from .channel import ChannelType
 from .components import Component
-from .interactions import MessageInteraction
+from .interactions import MessageInteraction, InteractionMetadata
 from .sticker import StickerItem
 from .threads import Thread
 
@@ -177,6 +177,7 @@ class Message(PartialMessage):
     sticker_items: NotRequired[List[StickerItem]]
     referenced_message: NotRequired[Optional[Message]]
     interaction: NotRequired[MessageInteraction]
+    interaction_metadata: NotRequired[InteractionMetadata]
     components: NotRequired[List[Component]]
     position: NotRequired[int]
     role_subscription_data: NotRequired[RoleSubscriptionData]

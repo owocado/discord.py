@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
 InteractionType = Literal[1, 2, 3, 4, 5]
 InteractionContextType = Literal[0, 1, 2]
+InteractionInstallationType = Literal[0, 1]
 
 
 class _BasePartialChannel(TypedDict):
@@ -252,3 +253,34 @@ class MessageInteraction(TypedDict):
     name: str
     user: User
     member: NotRequired[Member]
+
+
+class _BaseInteractionMetadata(TypedDict):
+    id: Snowflake
+    type: InteractionType
+    user_id: Snowflake
+    # keys are stringified ApplicationIntegrationType's
+    authorizing_integration_owners: Dict[str, Snowflake]
+    original_response_message_id: NotRequired[Snowflake]  # only on followups
+
+
+class ApplicationCommandInteractionMetadata(_BaseInteractionMetadata):
+    name: NotRequired[str]  # not documented
+
+
+class MessageComponentInteractionMetadata(_BaseInteractionMetadata):
+    interacted_message_id: Snowflake
+
+
+class ModalInteractionMetadata(_BaseInteractionMetadata):
+    triggering_interaction_metadata: Union[
+        ApplicationCommandInteractionMetadata,
+        MessageComponentInteractionMetadata,
+    ]
+
+
+InteractionMetadata = Union[
+    ApplicationCommandInteractionMetadata,
+    MessageComponentInteractionMetadata,
+    ModalInteractionMetadata,
+]

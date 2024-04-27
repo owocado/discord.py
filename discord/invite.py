@@ -125,11 +125,12 @@ class PartialInviteChannel:
             return self.name
 
         if self.type == ChannelType.group:
-            return ', '.join(self.recipients) if self.recipients else 'Unnamed'
-        return f'Direct Message with {self.recipients[0] if self.recipients else "Unknown User"}'
+            users = ', '.join(self.recipients) if self.recipients else 'Unknown users'
+            return f'Group DM with {users}'
+        return f'DM with {self.recipients[0] if self.recipients else "Unknown User"}'
 
     def __repr__(self) -> str:
-        return f'<PartialInviteChannel id={self.id} name={self.name} type={self.type!r}>'
+        return f'<PartialInviteChannel id={self.id} name={self.name!r} type={self.type!r}>'
 
     @property
     def mention(self) -> str:

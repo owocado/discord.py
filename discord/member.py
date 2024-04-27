@@ -813,10 +813,6 @@ class Member(discord.abc.Messageable, _UserTag):
         """
         return MemberFlags._from_value(self._flags)
 
-    @property
-    def premium_type(self):
-        return self._user.premium_type
-
     async def ban(
         self,
         *,
@@ -1213,6 +1209,10 @@ class Member(discord.abc.Messageable, _UserTag):
         if self.timed_out_until is not None:
             return utils.utcnow() < self.timed_out_until
         return False
+
+    def is_guest(self) -> bool:
+        """Returns whether this member is a guest."""
+        return self.flags.guest
 
     async def safety_metadata(self) -> Optional[MemberSearch]:
         r"""|coro|

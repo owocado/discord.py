@@ -265,18 +265,10 @@ class OnboardingPrompt(PartialOnboardingPrompt, Hashable):
         Whether this prompt is part of the onboarding flow.
     """
 
-    options: List[OnboardingPromptOption]
-
     __slots__ = (
         '_state',
         'guild',
         'id',
-        'title',
-        'options',
-        'single_select',
-        'required',
-        'in_onboarding',
-        'type',
     )
 
     def __init__(self, *, data: PromptPayload, state: ConnectionState, guild: Guild):

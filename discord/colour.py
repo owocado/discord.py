@@ -205,7 +205,7 @@ class Colour:
         if value == 'random':
             return cls.random()
 
-        if len(value) == 6:
+        if len(value) == 6 and re.match(r"^(?:[0-9a-fA-F]{2}){3}$", value):
             return parse_hex_number(value)
 
         if value[0:2] == '0x':

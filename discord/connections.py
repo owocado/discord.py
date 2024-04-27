@@ -141,10 +141,12 @@ class PartialConnection:
             return f'https://psnprofiles.com/{self.name}'
         elif self.type == ConnectionType.domain:
             return f'https://{self.name}'
+        elif self.type == ConnectionType.roblox:
+            return f'https://www.roblox.com/users/{self.id}/profile'
         else:
             return None
 
     @property
     def hyperlink(self) -> str:
-        return f'[{self.name}]({self.url})' if self.url else self.name
+        return f'[{self.name or '\u200b'}]({self.url})' if self.url and self.url.startswith('https') else self.name
 

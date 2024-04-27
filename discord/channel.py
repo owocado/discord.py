@@ -314,6 +314,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         'default_auto_archive_duration',
         'default_thread_slowmode_delay',
         'icon_emoji',
+        'last_pin_timestamp',
         '_theme_color',
         '_flags',
     )
@@ -349,6 +350,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         self.default_thread_slowmode_delay: int = data.get('default_thread_rate_limit_per_user', 0)
         self._type: Literal[0, 5] = data.get('type', self._type)
         self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
+        self.last_pin_timestamp: Optional[datetime.datetime] = utils.parse_time(data.get('last_pin_timestamp'))
 
         self._flags: int = data.get('flags', 0)
         self._theme_color: Optional[int] = data.get('theme_color')
@@ -3105,22 +3107,21 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
         The user you are participating with in the direct message channel.
         If this channel is received through the gateway, the recipient information
         may not be always available.
+    recipients: List[:class:`User`]
+        The users you are participating with in the DM channel.
+
+        .. versionadded:: 2.4
     me: :class:`ClientUser`
         The user presenting yourself.
     id: :class:`int`
         The direct message channel ID.
     """
 
-    __slots__ = ('id', 'recipient', 'me', '_state')
+    __slots__ = ('id', 'recipients', 'me', '_state')
 
     def __init__(self, *, me: ClientUser, state: ConnectionState, data: DMChannelPayload):
         self._state: ConnectionState = state
-        self.recipient: Optional[User] = None
-
-        recipients = data.get('recipients')
-        if recipients is not None:
-            self.recipient = state.store_user(recipients[0])
-
+        self.recipients: List[User] = [state.store_user(u) for u in data.get('recipients', [])]
         self.me: ClientUser = me
         self.id: int = int(data['id'])
 
@@ -3140,10 +3141,16 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
         self = cls.__new__(cls)
         self._state = state
         self.id = channel_id
-        self.recipient = None
+        self.recipients = []
         # state.user won't be None here
         self.me = state.user  # type: ignore
         return self
+
+    @property
+    def recipient(self) -> Optional[User]:
+        if self.recipients:
+            return self.recipients[0]
+        return None
 
     @property
     def type(self) -> Literal[ChannelType.private]:
@@ -3286,7 +3293,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         The group channel's name if provided.
     """
 
-    __slots__ = ('id', 'recipients', 'owner_id', 'owner', '_icon', 'name', 'me', '_state')
+    __slots__ = ('id', 'recipients', 'owner_id', '_icon', 'name', 'me', '_state', 'last_message_id')
 
     def __init__(self, *, me: ClientUser, state: ConnectionState, data: GroupChannelPayload):
         self._state: ConnectionState = state
@@ -3299,12 +3306,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         self._icon: Optional[str] = data.get('icon')
         self.name: Optional[str] = data.get('name')
         self.recipients: List[User] = [self._state.store_user(u) for u in data.get('recipients', [])]
-
-        self.owner: Optional[BaseUser]
-        if self.owner_id == self.me.id:
-            self.owner = self.me
-        else:
-            self.owner = utils.find(lambda u: u.id == self.owner_id, self.recipients)
+        self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
 
     async def _get_channel(self) -> Self:
         return self
@@ -3319,7 +3321,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         return ', '.join(map(lambda x: x.name, self.recipients))
 
     def __repr__(self) -> str:
-        return f'<GroupChannel id={self.id} name={self.name!r}>'
+        return f'<GroupChannel id={self.id} name={self.name!r} owner_id={self.owner_id!r}>'
 
     @property
     def type(self) -> Literal[ChannelType.group]:
@@ -3360,6 +3362,12 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
     def mention(self) -> str:
         """:class:`str`: The string that allows you to mention the channel."""
         return f'<#{self.id}>'
+
+    @property
+    def owner(self) -> Optional[User]:
+        """Optional[:class:`User`]: The owner that owns the group channel."""""
+        # Only reason it wouldn't be in recipients is if it's a managed channel
+        return utils.get(self.recipients, id=self.owner_id) or self._state.get_user(self.owner_id)
 
     def permissions_for(self, obj: Snowflake, /) -> Permissions:
         """Handles permission resolution for a :class:`User`.

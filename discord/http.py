@@ -791,7 +791,7 @@ class HTTPClient:
 
     # login management
 
-    async def static_login(self, token: str) -> user.User:
+    async def static_login(self, token: str) -> appinfo.AppInfo:
         # Necessary to get aiohttp to stop complaining about session creation
         if self.connector is MISSING:
             # discord does not support ipv6
@@ -809,7 +809,7 @@ class HTTPClient:
         self.token = token
 
         try:
-            data = await self.request(Route('GET', '/users/@me'))
+            data = await self.application_info()
         except HTTPException as exc:
             self.token = old_token
             if exc.status == 401:
@@ -1576,6 +1576,7 @@ class HTTPClient:
         *,
         limit: int = 250,
         user_id: Optional[Snowflake] = None,
+        username: Optional[str] = None,
         unusual_dm_activity: Optional[bool] = None,
         timed_out: Optional[bool] = None,
         unusual_account_activity: Optional[bool] = None,
@@ -1602,9 +1603,9 @@ class HTTPClient:
         if quarantined is not None:
             payload['or_query']['safety_signals'] = {'automod_quarantined_username': True}
         if user_id is not None:
-            payload['and_query'] = {
-                'user_id': {'or_query': [str(user_id)]}
-            }
+            payload['and_query'] = {'user_id': {'or_query': [str(user_id)]}}
+        elif username is not None:
+            payload['and_query'] = {'usernames': {'or_query': [username]}}
         return self.request(Route('POST', '/guilds/{guild_id}/members-search', guild_id=guild_id), json=payload)
 
     def prune_members(
@@ -1881,7 +1882,7 @@ class HTTPClient:
     def invites_from_channel(self, channel_id: Snowflake) -> Response[List[invite.Invite]]:
         return self.request(Route('GET', '/channels/{channel_id}/invites', channel_id=channel_id))
 
-    def delete_invite(self, invite_id: str, *, reason: Optional[str] = None) -> Response[None]:
+    def delete_invite(self, invite_id: str, *, reason: Optional[str] = None) -> Response[invite.Invite]:
         return self.request(Route('DELETE', '/invites/{invite_id}', invite_id=invite_id), reason=reason)
 
     # Role management

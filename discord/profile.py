@@ -280,10 +280,10 @@ class MemberUserProfile:
         'bio',
         'pronouns',
         'theme_colors',
-        '_accent_color',
-        '_banner',
         'emoji',
         'user_id',
+        '_accent_color',
+        '_banner',
     )
 
     def __init__(self, *, state: ConnectionState, data: ProfileMetadata, user_id: int) -> None:
