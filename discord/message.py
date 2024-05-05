@@ -1652,6 +1652,7 @@ class Message(PartialMessage, Hashable):
         'application_id',
         'position',
         '_interaction_metadata',
+        '_data',
         '__weakref__',
     )
 
@@ -1768,6 +1769,7 @@ class Message(PartialMessage, Hashable):
                 getattr(self, f'_handle_{handler}')(data[handler])
             except KeyError:
                 continue
+        self._data = data
 
     def __repr__(self) -> str:
         name = self.__class__.__name__

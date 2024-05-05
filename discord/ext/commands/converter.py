@@ -145,7 +145,13 @@ class Converter(Protocol[T_co]):
         raise NotImplementedError('Derived classes need to implement this.')
 
 
-_ID_REGEX = re.compile(r'\"?([0-9]{15,20})\"?')
+_ID_REGEX: re.Pattern[str] = re.compile(r'\"?([0-9]{15,20})\"?')
+MESSAGE_ID_REGEX: re.Pattern[str] = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
+MESSAGE_LINK_REGEX: re.Pattern[str] = re.compile(
+    r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
+    r'(?P<guild_id>[0-9]{15,20}|@me)'
+    r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
+)
 _DELETED_USER_ID: int = 456226577798135808
 
 
@@ -362,13 +368,7 @@ class PartialMessageConverter(Converter[discord.PartialMessage]):
 
     @staticmethod
     def _get_id_matches(ctx: Context[BotT], argument: str) -> Tuple[Optional[int], int, int]:
-        id_regex = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
-        link_regex = re.compile(
-            r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
-            r'(?P<guild_id>[0-9]{15,20}|@me)'
-            r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
-        )
-        match = id_regex.match(argument) or link_regex.match(argument)
+        match = MESSAGE_ID_REGEX.match(argument) or MESSAGE_LINK_REGEX.match(argument)
         if not match:
             raise MessageNotFound(argument)
         data = match.groupdict()

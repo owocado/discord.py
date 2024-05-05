@@ -66,6 +66,7 @@ if TYPE_CHECKING:
         Webhook as WebhookPayload,
     )
     from .types.snowflake import Snowflake
+    from .types.user import User as UserPayload, PartialUser as PartialUserPayload
     from .guild import Guild
     from .state import ConnectionState
     from .file import File
@@ -1182,13 +1183,13 @@ class _InteractionMessageState:
         self._interaction: Interaction = interaction
         self._parent: ConnectionState = parent
 
-    def _get_guild(self, guild_id):
+    def _get_guild(self, guild_id: int):
         return self._parent._get_guild(guild_id)
 
-    def store_user(self, data, *, cache: bool = True):
+    def store_user(self, data: Union[UserPayload, PartialUserPayload], *, cache: bool = True):
         return self._parent.store_user(data, cache=cache)
 
-    def create_user(self, data):
+    def create_user(self, data: Union[UserPayload, PartialUserPayload]):
         return self._parent.create_user(data)
 
     @property

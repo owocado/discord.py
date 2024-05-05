@@ -133,7 +133,7 @@ class Colour:
         return not self.__eq__(other)
 
     def __str__(self) -> str:
-        return f'#{self.value:0>6x}'
+        return f'#{self.value:0>6x}'.upper()
 
     def __int__(self) -> int:
         return self.value

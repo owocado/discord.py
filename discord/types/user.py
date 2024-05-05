@@ -55,7 +55,6 @@ class User(PartialUser, total=False):
     verified: bool
     email: Optional[str]
     flags: int
-    premium_type: PremiumType
     public_flags: int
     purchased_flags: int
     premium_usage_flags: int
@@ -86,7 +85,14 @@ class Connection(PartialConnection):
     access_token: NotRequired[str]
 
 
+class Clan(TypedDict):
+    identity_guild_id: Snowflake
+    identity_enabled: bool
+    tag: str
+
+
 class APIUser(PartialUser):
     banner: Optional[str]
     banner_color: Optional[str]
     accent_color: Optional[int]
+    clan: Optional[Clan]

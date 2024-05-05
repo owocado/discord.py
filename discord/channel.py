@@ -3365,7 +3365,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
 
     @property
     def owner(self) -> Optional[User]:
-        """Optional[:class:`User`]: The owner that owns the group channel."""""
+        """Optional[:class:`User`]: The owner that owns the group channel."""
         # Only reason it wouldn't be in recipients is if it's a managed channel
         return utils.get(self.recipients, id=self.owner_id) or self._state.get_user(self.owner_id)
 

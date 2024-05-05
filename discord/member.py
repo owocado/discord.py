@@ -342,6 +342,11 @@ class Member(discord.abc.Messageable, _UserTag):
         This will be set to ``None`` if the user is not timed out.
 
         .. versionadded:: 2.0
+    unusual_dm_activity_until: Optional[:class:`datetime.datetime`]
+        An aware datetime object that specifies the date and time in UTC that the member's unusual DM activity will expire.
+        This will be set to ``None`` if the user does not have unusual DM activity.
+
+        .. versionadded:: 2.4
     """
 
     __slots__ = (
@@ -353,7 +358,6 @@ class Member(discord.abc.Messageable, _UserTag):
         'pending',
         'nick',
         'timed_out_until',
-        'unusual_dm_activity_until',
         '_permissions',
         '_client_status',
         '_user',
@@ -361,6 +365,7 @@ class Member(discord.abc.Messageable, _UserTag):
         '_avatar',
         '_flags',
         '_avatar_decoration_data',
+        'unusual_dm_activity_until',
         '_banner',
         'bio',
     )
@@ -448,6 +453,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self.pending = data.get('pending', False)
         self.timed_out_until = utils.parse_time(data.get('communication_disabled_until'))
         self._flags = data.get('flags', 0)
+
         self.unusual_dm_activity_until = utils.parse_time(data.get('unusual_dm_activity_until'))
 
     @classmethod
@@ -479,6 +485,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self._state = member._state
         self._avatar = member._avatar
         self._avatar_decoration_data = member._avatar_decoration_data
+        self.unusual_dm_activity_until = member.unusual_dm_activity_until
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -1208,6 +1215,20 @@ class Member(discord.abc.Messageable, _UserTag):
         """
         if self.timed_out_until is not None:
             return utils.utcnow() < self.timed_out_until
+        return False
+
+    def has_unusual_dm_activity(self) -> bool:
+        """Returns whether this member has unusual DM activity.
+
+        .. versionadded:: 2.4
+
+        Returns
+        --------
+        :class:`bool`
+            ``True`` if the member has unusual DM activity. ``False`` otherwise.
+        """
+        if self.unusual_dm_activity_until is not None:
+            return utils.utcnow() < self.unusual_dm_activity_until
         return False
 
     def is_guest(self) -> bool:

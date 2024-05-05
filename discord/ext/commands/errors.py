@@ -396,7 +396,7 @@ class ChannelNotReadable(BadArgument):
 
     def __init__(self, argument: Union[GuildChannel, Thread]) -> None:
         self.argument: Union[GuildChannel, Thread] = argument
-        super().__init__(f"Can't read messages in {argument.mention}.")
+        super().__init__(f"I cannot read messages in {argument.mention}")
 
 
 class ChannelNotFound(BadArgument):
