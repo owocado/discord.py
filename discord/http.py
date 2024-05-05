@@ -2683,8 +2683,9 @@ class HTTPClient:
     def get_user(self, user_id: Snowflake) -> Response[user.User]:
         return self.request(Route('GET', '/users/{user_id}', user_id=user_id))
 
-    def get_public_sku(self, sku_id: int) -> Response[sku.SKU]:
-        return self.request(Route('GET', f'/store/published-listings/skus/{sku_id}?country_code=US'))
+    def get_public_sku(self, sku_id: int, *, localize: bool = True) -> Response[sku.SKU]:
+        params = {'localize': str(localize).lower()}
+        return self.request(Route('GET', f'/store/published-listings/skus/{sku_id}?country_code=US'), params=params)
 
     def get_discovery_categories(self) -> Response[List[guild.DiscoveryCategory]]:
         return self.request(Route('GET', '/discovery/categories'))

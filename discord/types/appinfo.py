@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Dict, Literal, TypedDict, List, Optional
+from typing import TypedDict, List, Optional, Dict, Literal
 from typing_extensions import NotRequired
 
 from .user import PartialUser, User
@@ -53,10 +53,6 @@ class BaseAppInfo(TypedDict):
     redirect_uris: NotRequired[List[str]]
     role_connections_verification_url: NotRequired[Optional[str]]
     install_params: NotRequired[InstallParams]
-    integration_types_config: NotRequired[
-        Dict[Literal["0", "1"], Dict[Literal['oauth2_install_params'], InstallParams]]
-    ]
-    integration_type: Optional[int]
 
 
 class AppInfo(BaseAppInfo):

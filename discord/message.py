@@ -1653,7 +1653,6 @@ class Message(PartialMessage, Hashable):
         'position',
         '_interaction_metadata',
         '_data',
-        '__weakref__',
     )
 
     if TYPE_CHECKING:
@@ -1715,7 +1714,7 @@ class Message(PartialMessage, Hashable):
                     self._thread = Thread(guild=self.guild, state=state, data=thread)
 
         self.interaction: Optional[MessageInteraction] = None
-        self._interaction_metadata = data.get('interaction_metadata')
+
         try:
             interaction = data['interaction']
         except KeyError:

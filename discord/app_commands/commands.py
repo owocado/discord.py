@@ -231,7 +231,7 @@ def validate_auto_complete_callback(
 
     # 'method' objects can't have dynamic attributes
     if binding is None:
-        callback.pass_command_binding = pass_command_binding  # type: ignore
+        callback.pass_command_binding = pass_command_binding
 
     required_parameters = 2 + pass_command_binding
     params = inspect.signature(callback).parameters
@@ -389,7 +389,7 @@ def _extract_parameters_from_callback(func: Callable[..., Any], globalns: Dict[s
     descriptions = _parse_args_from_docstring(func, result)
 
     try:
-        descriptions.update(func.__discord_app_commands_param_description__)  # type: ignore
+        descriptions.update(func.__discord_app_commands_param_description__)
     except AttributeError:
         for param in values:
             if param.description is MISSING:
@@ -398,21 +398,21 @@ def _extract_parameters_from_callback(func: Callable[..., Any], globalns: Dict[s
         _populate_descriptions(result, descriptions)
 
     try:
-        renames = func.__discord_app_commands_param_rename__  # type: ignore
+        renames = func.__discord_app_commands_param_rename__
     except AttributeError:
         pass
     else:
         _populate_renames(result, renames.copy())
 
     try:
-        choices = func.__discord_app_commands_param_choices__  # type: ignore
+        choices = func.__discord_app_commands_param_choices__
     except AttributeError:
         pass
     else:
         _populate_choices(result, choices.copy())
 
     try:
-        autocomplete = func.__discord_app_commands_param_autocomplete__  # type: ignore
+        autocomplete = func.__discord_app_commands_param_autocomplete__
     except AttributeError:
         pass
     else:
@@ -452,7 +452,7 @@ def _get_context_menu_parameter(func: ContextMenuCallback) -> Tuple[str, Any, Ap
 
 
 def mark_overrideable(func: F) -> F:
-    func.__discord_app_commands_base_function__ = None  # type: ignore
+    func.__discord_app_commands_base_function__ = None
     return func
 
 
@@ -679,8 +679,8 @@ class Command(Generic[GroupT, P, T]):
 
         # Unwrap __self__ for bound methods
         try:
-            self.binding = callback.__self__  # type: ignore
-            self._callback = callback = callback.__func__  # type: ignore
+            self.binding = callback.__self__
+            self._callback = callback = callback.__func__
         except AttributeError:
             pass
 

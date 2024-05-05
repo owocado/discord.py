@@ -322,7 +322,8 @@ def oauth_url(
     state: str = MISSING,
     integration_type: Optional[Literal[0, 1]] = None,
 ) -> str:
-    """A helper function that returns the OAuth2 URL for authorizing the application.
+    """A helper function that returns the OAuth2 URL for authorizing the bot
+    into guilds.
 
     .. versionchanged:: 2.0
 
@@ -370,8 +371,6 @@ def oauth_url(
         url += '&response_type=code&' + urlencode({'redirect_uri': redirect_uri})
     if state is not MISSING:
         url += f'&{urlencode({"state": state})}'
-    if integration_type is not None:
-        url += f"&integration_type={integration_type}"
     return url
 
 

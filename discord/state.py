@@ -720,7 +720,6 @@ class ConnectionState(Generic[ClientT]):
         self.dispatch('resumed')
 
     def parse_message_create(self, data: gw.MessageCreateEvent) -> None:
-        self.dispatch('raw_message', data)
         channel, _ = self._get_guild_channel(data)
         # channel would be the correct type here
         message = Message(channel=channel, data=data, state=self)  # type: ignore
@@ -849,7 +848,6 @@ class ConnectionState(Generic[ClientT]):
                     self.dispatch('reaction_clear_emoji', reaction)
 
     def parse_interaction_create(self, data: gw.InteractionCreateEvent) -> None:
-        self.dispatch('raw_interaction', data)
         interaction = Interaction(data=data, state=self)
         if data['type'] in (2, 4) and self._command_tree:  # application command and auto complete
             self._command_tree._from_interaction(interaction)

@@ -24,12 +24,12 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, TYPE_CHECKING, Union
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
 import discord.abc
 from .asset import Asset
 from .colour import Colour
-from .enums import DefaultAvatar, PremiumType, try_enum
+from .enums import DefaultAvatar
 from .flags import PublicUserFlags
 from .utils import snowflake_time, _bytes_to_base64_data, MISSING, _get_as_snowflake
 
@@ -43,12 +43,7 @@ if TYPE_CHECKING:
     from .message import Message
     from .state import ConnectionState
     from .types.channel import DMChannel as DMChannelPayload
-    from .types.user import (
-        PartialUser as PartialUserPayload,
-        User as UserPayload,
-        AvatarDecorationData,
-        Clan as ClanPayload,
-    )
+    from .types.user import PartialUser as PartialUserPayload, User as UserPayload, AvatarDecorationData, Clan as ClanPayload
 
 
 __all__ = (
@@ -220,9 +215,9 @@ class BaseUser(_UserTag):
 
         .. versionadded:: 2.4
         """
-        if self._avatar_decoration_data is None:
-            return None
-        return _get_as_snowflake(self._avatar_decoration_data, 'sku_id')
+        if self._avatar_decoration_data is not None:
+            return _get_as_snowflake(self._avatar_decoration_data, 'sku_id')
+        return None
 
     @property
     def banner(self) -> Optional[Asset]:

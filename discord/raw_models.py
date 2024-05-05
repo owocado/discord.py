@@ -83,9 +83,6 @@ __all__ = (
 
 
 class _RawReprMixin:
-    message_id: int
-    channel_id: int
-    guild_id: Optional[int]
 
     __slots__: Tuple[str, ...] = ()
 
@@ -116,7 +113,7 @@ class RawMessageDeleteEvent(_RawReprMixin):
         The cached message, if found in the internal message cache.
     """
 
-    __slots__ = ('message_id', 'channel_id', 'guild_id', 'cached_message', 'data')
+    __slots__ = ('message_id', 'channel_id', 'guild_id', 'cached_message')
 
     def __init__(self, data: MessageDeleteEvent) -> None:
         self.message_id: int = int(data['id'])
@@ -126,7 +123,6 @@ class RawMessageDeleteEvent(_RawReprMixin):
             self.guild_id: Optional[int] = int(data['guild_id'])
         except KeyError:
             self.guild_id: Optional[int] = None
-        self.data: MessageDeleteEvent = data
 
 
 class RawBulkMessageDeleteEvent(_RawReprMixin):
@@ -144,7 +140,7 @@ class RawBulkMessageDeleteEvent(_RawReprMixin):
         The cached messages, if found in the internal message cache.
     """
 
-    __slots__ = ('message_ids', 'channel_id', 'guild_id', 'cached_messages', 'data')
+    __slots__ = ('message_ids', 'channel_id', 'guild_id', 'cached_messages')
 
     def __init__(self, data: BulkMessageDeleteEvent) -> None:
         self.message_ids: Set[int] = {int(x) for x in data.get('ids', [])}
@@ -155,7 +151,6 @@ class RawBulkMessageDeleteEvent(_RawReprMixin):
             self.guild_id: Optional[int] = int(data['guild_id'])
         except KeyError:
             self.guild_id: Optional[int] = None
-        self.data: BulkMessageDeleteEvent = data
 
 
 class RawMessageUpdateEvent(_RawReprMixin):
@@ -247,9 +242,6 @@ class RawReactionActionEvent(_RawReprMixin):
         'message_author_id',
         'burst',
         'burst_colours',
-        'reaction_type',
-        'me',
-        'data',
     )
 
     def __init__(self, data: ReactionActionEvent, emoji: PartialEmoji, event_type: ReactionActionType) -> None:
@@ -262,10 +254,6 @@ class RawReactionActionEvent(_RawReprMixin):
         self.message_author_id: Optional[int] = _get_as_snowflake(data, 'message_author_id')
         self.burst: bool = data.get('burst', False)
         self.burst_colours: List[Colour] = [Colour.from_str(c) for c in data.get('burst_colours', [])]
-        self.reaction_type: int = data.get('type', 0)
-        # only present when event_type == 'REACTION_ADD'
-        self.me: bool = data.get('me', False)
-        self.data: ReactionActionEvent = data
 
         try:
             self.guild_id: Optional[int] = int(data['guild_id'])
@@ -324,15 +312,12 @@ class RawReactionClearEmojiEvent(_RawReprMixin):
         The custom or unicode emoji being removed.
     """
 
-    __slots__ = ('message_id', 'channel_id', 'guild_id', 'emoji', 'reaction_type', 'burst', 'data')
+    __slots__ = ('message_id', 'channel_id', 'guild_id', 'emoji')
 
     def __init__(self, data: ReactionClearEmojiEvent, emoji: PartialEmoji) -> None:
         self.emoji: PartialEmoji = emoji
         self.message_id: int = int(data['message_id'])
         self.channel_id: int = int(data['channel_id'])
-        self.reaction_type: int = data.get('type', 0)
-        self.burst: bool = data.get('burst', False)
-        self.data: ReactionClearEmojiEvent = data
 
         try:
             self.guild_id: Optional[int] = int(data['guild_id'])
