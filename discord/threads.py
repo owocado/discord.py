@@ -881,7 +881,7 @@ class Thread(Messageable, Hashable):
         Parameters
         -----------
         reason: Optional[:class:`str`]
-            The reason for deleting this channel.
+            The reason for deleting this thread.
             Shows up on the audit log.
 
             .. versionadded:: 2.4

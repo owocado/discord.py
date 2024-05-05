@@ -231,13 +231,13 @@ class AppCommand(Hashable):
 
         allowed_contexts = data.get('contexts')
         if allowed_contexts is None:
-            self.allowed_contexts: AppCommandContext = AppCommandContext.all()
+            self.allowed_contexts: Optional[AppCommandContext] = None
         else:
             self.allowed_contexts = AppCommandContext._from_value(allowed_contexts)
 
         allowed_installs = data.get('integration_types')
         if allowed_installs is None:
-            self.allowed_installs: AppInstallationType = AppInstallationType.all()
+            self.allowed_installs: Optional[AppInstallationType] = None
         else:
             self.allowed_installs = AppInstallationType._from_value(allowed_installs)
 
@@ -254,8 +254,8 @@ class AppCommand(Hashable):
             'description': self.description,
             'name_localizations': {str(k): v for k, v in self.name_localizations.items()},
             'description_localizations': {str(k): v for k, v in self.description_localizations.items()},
-            'contexts': self.allowed_contexts.to_array(),
-            'integration_types': self.allowed_installs.to_array(),
+            'contexts': self.allowed_contexts.to_array() if self.allowed_contexts is not None else None,
+            'integration_types': self.allowed_installs.to_array() if self.allowed_installs is not None else None,
             'options': [opt.to_dict() for opt in self.options],
         }  # type: ignore # Type checker does not understand this literal.
 

@@ -696,7 +696,7 @@ class Command(Generic[GroupT, P, T]):
         self.allowed_contexts: Optional[AppCommandContext] = allowed_contexts or getattr(
             callback, '__discord_app_commands_contexts__', None
         )
-        self.allowed_installs: Optional[AppInstallationType] = getattr(
+        self.allowed_installs: Optional[AppInstallationType] = allowed_installs or getattr(
             callback, '__discord_app_commands_installation_types__', None
         )
 
@@ -1229,7 +1229,7 @@ class ContextMenu:
         type: AppCommandType = MISSING,
         nsfw: bool = False,
         guild_ids: Optional[List[int]] = None,
-        allowed_contexts: Optional[AppCommandContext] = MISSING,
+        allowed_contexts: Optional[AppCommandContext] = None,
         allowed_installs: Optional[AppInstallationType] = None,
         auto_locale_strings: bool = True,
         extras: Dict[Any, Any] = MISSING,
@@ -1259,7 +1259,7 @@ class ContextMenu:
         self.allowed_contexts: Optional[AppCommandContext] = allowed_contexts or getattr(
             callback, '__discord_app_commands_contexts__', None
         )
-        self.allowed_installs: Optional[AppInstallationType] = getattr(
+        self.allowed_installs: Optional[AppInstallationType] = allowed_installs or getattr(
             callback, '__discord_app_commands_installation_types__', None
         )
         self.checks: List[Check] = getattr(callback, '__discord_app_commands_checks__', [])
@@ -1455,7 +1455,7 @@ class Group:
         Whether the group should only be usable in guild contexts.
 
         Due to a Discord limitation, this does not work on subcommands.
-    allowed_contexts: Optional[:class:`~discord.app_commands..AppCommandContext`]
+    allowed_contexts: Optional[:class:`~discord.app_commands.AppCommandContext`]
         The contexts that this group is allowed to be used in. Overrides
         guild_only if set.
 
@@ -2543,7 +2543,7 @@ def private_channel_only(func: Optional[T] = None) -> Union[T, Callable[[T], T]]
         @app_commands.command()
         @app_commands.private_channel_only()
         async def my_private_channel_only_command(interaction: discord.Interaction) -> None:
-            await interaction.response.send_message('I am only available in GDMs!')
+            await interaction.response.send_message('I am only available in DMs and GDMs!')
     """
 
     def inner(f: T) -> T:
@@ -2598,7 +2598,6 @@ def dm_only(func: Optional[T] = None) -> Union[T, Callable[[T], T]]:
             f.__discord_app_commands_contexts__ = allowed_contexts  # type: ignore # Runtime attribute assignment
 
         allowed_contexts.dm_channel = True
-
         return f
 
     # Check if called with parentheses or not
@@ -2609,7 +2608,6 @@ def dm_only(func: Optional[T] = None) -> Union[T, Callable[[T], T]]:
         return inner(func)
 
 
-# wrapper over previous 3 commands
 def allowed_contexts(
     guilds: bool = MISSING, dms: bool = MISSING, private_channels: bool = MISSING
 ) -> Union[T, Callable[[T], T]]:
@@ -2735,7 +2733,6 @@ def allowed_installs(
     users: bool = MISSING,
 ) -> Union[T, Callable[[T], T]]:
     """A decorator that indicates this command should be installed in certain contexts.
-
     Valid contexts are guilds and users.
 
     This is **not** implemented as a :func:`check`, and is instead verified by Discord server side.

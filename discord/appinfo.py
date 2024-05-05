@@ -145,8 +145,8 @@ class AppInfo:
         A list of authentication redirect URIs.
 
         .. versionadded:: 2.4
-    bot: Optional[:class:`User`]
-        The bot user, if this application belongs to a bot.
+    approximate_guild_count: :class:`int`
+        The approximate count of the guilds the bot was added to.
 
         .. versionadded:: 2.4
     """
@@ -177,8 +177,7 @@ class AppInfo:
         'role_connections_verification_url',
         'interactions_endpoint_url',
         'redirect_uris',
-        'integration_type',
-        'integration_types_config',
+        'approximate_guild_count',
     )
 
     def __init__(self, state: ConnectionState, data: AppInfoPayload):
@@ -218,17 +217,7 @@ class AppInfo:
         self.install_params: Optional[AppInstallParams] = AppInstallParams(params, self.id) if params else None
         self.interactions_endpoint_url: Optional[str] = data.get('interactions_endpoint_url')
         self.redirect_uris: List[str] = data.get('redirect_uris', [])
-        self.integration_type: Optional[int] = data.get('integration_type')
-        self.integration_types_config: Dict[ApplicationIntegrationType, AppInstallParams] = {}
-        for _type, config in (data.get('integration_types_config') or {}).items():
-            if not config:
-                continue
-            integration_type = try_enum(ApplicationIntegrationType, int(_type))
-            self.integration_types_config[integration_type] = AppInstallParams(
-                config['oauth2_install_params'],
-                self.id,
-                integration_type=integration_type,
-            )
+        self.approximate_guild_count: int = data.get('approximate_guild_count', 0)
 
     def __repr__(self) -> str:
         return (

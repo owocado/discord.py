@@ -178,7 +178,7 @@ class AppCommandContext:
     def _is_unset(self) -> bool:
         return all(x is None for x in (self._guild, self._dm_channel, self._private_channel))
 
-    def _merge_to_array(self, other: Optional[AppCommandContext]) -> Optional[List[InteractionInstallationType]]:
+    def _merge_to_array(self, other: Optional[AppCommandContext]) -> Optional[List[InteractionContextType]]:
         result = self.merge(other) if other is not None else self
         if result._is_unset():
             return None
@@ -196,7 +196,7 @@ class AppCommandContext:
                 self._private_channel = True
         return self
 
-    def to_array(self) -> List[InteractionInstallationType]:
+    def to_array(self) -> List[InteractionContextType]:
         values = []
         if self._guild:
             values.append(self.GUILD)
@@ -205,4 +205,3 @@ class AppCommandContext:
         if self._private_channel:
             values.append(self.PRIVATE_CHANNEL)
         return values
-

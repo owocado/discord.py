@@ -1990,7 +1990,7 @@ class AutoModPresets(ArrayFlags):
 
 @fill_with_flags()
 class AppCommandContext(ArrayFlags):
-    r"""Wraps up the Discord :class:`AppCommand` context.
+    r"""Wraps up the Discord :class:`~discord.app_commands.Command` execution context.
 
     .. versionadded:: 2.4
 
@@ -1998,37 +1998,30 @@ class AppCommandContext(ArrayFlags):
 
         .. describe:: x == y
 
-            Checks if two AppCommand context flags are equal.
+            Checks if two AppCommandContext flags are equal.
+
         .. describe:: x != y
 
-            Checks if two AppCommand context flags are not equal.
+            Checks if two AppCommandContext flags are not equal.
 
         .. describe:: x | y, x |= y
 
             Returns an AppCommandContext instance with all enabled flags from
             both x and y.
 
-            .. versionadded:: 2.4
-
         .. describe:: x & y, x &= y
 
             Returns an AppCommandContext instance with only flags enabled on
             both x and y.
-
-            .. versionadded:: 2.4
 
         .. describe:: x ^ y, x ^= y
 
             Returns an AppCommandContext instance with only flags enabled on
             only one of x or y, not on both.
 
-            .. versionadded:: 2.4
-
         .. describe:: ~x
 
             Returns an AppCommandContext instance with all flags inverted from x
-
-            .. versionadded:: 2.4
 
         .. describe:: hash(x)
 
@@ -2064,7 +2057,7 @@ class AppCommandContext(ArrayFlags):
 
     @flag_value
     def private_channel(self):
-        """:class:`bool`: Whether the context allows usage in a GDM channel."""
+        """:class:`bool`: Whether the context allows usage in a DM or a GDM channel."""
         return 1 << 2
 
 
@@ -2106,7 +2099,6 @@ class AppInstallationType(ArrayFlags):
         .. describe:: hash(x)
 
             Return the flag's hash.
-
         .. describe:: iter(x)
 
             Returns an iterator of ``(name, value)`` pairs. This allows it
