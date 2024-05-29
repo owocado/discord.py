@@ -65,7 +65,6 @@ class Invite(IncompleteInvite, total=False):
     target_application: PartialAppInfo
     guild_scheduled_event: GuildScheduledEvent
     type: InviteType
-    flags: int
 
 
 class InviteWithCounts(Invite, _GuildPreviewUnique):

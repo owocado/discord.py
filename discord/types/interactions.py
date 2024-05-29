@@ -255,32 +255,11 @@ class MessageInteraction(TypedDict):
     member: NotRequired[Member]
 
 
-class _BaseInteractionMetadata(TypedDict):
+class MessageInteractionMetadata(TypedDict):
     id: Snowflake
     type: InteractionType
-    user_id: Snowflake
-    # keys are stringified ApplicationIntegrationType's
-    authorizing_integration_owners: Dict[str, Snowflake]
-    original_response_message_id: NotRequired[Snowflake]  # only on followups
-
-
-class ApplicationCommandInteractionMetadata(_BaseInteractionMetadata):
-    name: NotRequired[str]  # not documented
-
-
-class MessageComponentInteractionMetadata(_BaseInteractionMetadata):
-    interacted_message_id: Snowflake
-
-
-class ModalInteractionMetadata(_BaseInteractionMetadata):
-    triggering_interaction_metadata: Union[
-        ApplicationCommandInteractionMetadata,
-        MessageComponentInteractionMetadata,
-    ]
-
-
-InteractionMetadata = Union[
-    ApplicationCommandInteractionMetadata,
-    MessageComponentInteractionMetadata,
-    ModalInteractionMetadata,
-]
+    user: User
+    authorizing_integration_owners: Dict[Literal['0', '1'], Snowflake]
+    original_response_message_id: NotRequired[Snowflake]
+    interacted_message_id: NotRequired[Snowflake]
+    triggering_interaction_metadata: NotRequired[MessageInteractionMetadata]

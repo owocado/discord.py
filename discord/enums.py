@@ -74,12 +74,6 @@ __all__ = (
     'EntitlementType',
     'EntitlementOwnerType',
     'PollLayoutType',
-    'VoiceChannelEffectAnimationType',
-    'OnboardingPromptType',
-    'OnboardingMode',
-    'PremiumType',
-    'InviteType',
-    'MemberJoinType',
 )
 
 
@@ -906,11 +900,7 @@ class EntitlementOwnerType(Enum):
 
 
 class PollLayoutType(Enum):
-    unknown = 0
     default = 1
-    image_only_answers = 2
-
-    normal = 1
 
 
 class InviteType(Enum):
@@ -918,23 +908,10 @@ class InviteType(Enum):
     group_dm = 1
     friend = 2
 
-    gdm = 1
 
-
-class MemberJoinType(Enum):
-    unknown = 0
-    bot = 1
-    integration = 2
-    discovery = 3
-    hub = 4
-    invite = 5
-    vanity_url = 6
-
-
-# TODO: `guild` vs `guild_install`
-class ApplicationIntegrationType(Enum):
-    guild = 0
-    user = 1
+class ReactionType(Enum):
+    normal = 0
+    burst = 1
 
 
 def create_unknown_value(cls: Type[E], val: Any) -> E:

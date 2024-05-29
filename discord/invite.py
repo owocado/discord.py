@@ -30,7 +30,7 @@ from .asset import Asset
 from .utils import parse_time, snowflake_time, _get_as_snowflake
 from .object import Object
 from .mixins import Hashable
-from .enums import ChannelType, InviteTarget, InviteType, Locale, NSFWLevel, VerificationLevel, try_enum
+from .enums import ChannelType, NSFWLevel, VerificationLevel, InviteTarget, InviteType, try_enum
 from .appinfo import PartialAppInfo
 from .scheduled_event import ScheduledEvent
 from .flags import InviteFlags
@@ -459,7 +459,6 @@ class Invite(Hashable):
         'scheduled_event',
         'scheduled_event_id',
         'type',
-        '_flags',
     )
 
     BASE = 'https://discord.gg'

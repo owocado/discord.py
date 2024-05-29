@@ -27,8 +27,8 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Literal, Optional, Set, List, Tuple, Union
 
-from .enums import ChannelType, try_enum
-from .utils import _get_as_snowflake, MISSING
+from .enums import ChannelType, try_enum, ReactionType
+from .utils import _get_as_snowflake
 from .app_commands import AppCommandPermissions
 from .colour import Colour
 
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
         ThreadMembersUpdate,
         TypingStartEvent,
         GuildMemberRemoveEvent,
-        VoiceChannelStatusUpdate,
+        PollVoteActionEvent,
     )
     from .types.command import GuildApplicationCommandPermissions
     from .message import Message
@@ -78,7 +78,7 @@ __all__ = (
     'RawTypingEvent',
     'RawMemberRemoveEvent',
     'RawAppCommandPermissionsUpdateEvent',
-    'RawVoiceChannelStatusUpdateEvent',
+    'RawPollVoteActionEvent',
 )
 
 
@@ -229,6 +229,10 @@ class RawReactionActionEvent(_RawReprMixin):
         and if ``event_type`` is ``REACTION_ADD``.
 
         .. versionadded:: 2.0
+    type: :class:`ReactionType`
+        The type of the reaction.
+
+        .. versionadded:: 2.4
     """
 
     __slots__ = (
@@ -242,6 +246,7 @@ class RawReactionActionEvent(_RawReprMixin):
         'message_author_id',
         'burst',
         'burst_colours',
+        'type',
     )
 
     def __init__(self, data: ReactionActionEvent, emoji: PartialEmoji, event_type: ReactionActionType) -> None:
@@ -254,6 +259,7 @@ class RawReactionActionEvent(_RawReprMixin):
         self.message_author_id: Optional[int] = _get_as_snowflake(data, 'message_author_id')
         self.burst: bool = data.get('burst', False)
         self.burst_colours: List[Colour] = [Colour.from_str(c) for c in data.get('burst_colours', [])]
+        self.type: ReactionType = try_enum(ReactionType, data['type'])
 
         try:
             self.guild_id: Optional[int] = int(data['guild_id'])
@@ -533,28 +539,31 @@ class RawAppCommandPermissionsUpdateEvent(_RawReprMixin):
         ]
 
 
-class RawVoiceChannelStatusUpdateEvent(_RawReprMixin):
-    """Represents the payload for a :func:`on_raw_voice_channel_status_update` event.
+class RawPollVoteActionEvent(_RawReprMixin):
+    """Represents the payload for a :func:`on_raw_poll_vote_add` or :func:`on_raw_poll_vote_remove`
+    event.
 
     .. versionadded:: 2.4
 
     Attributes
     ----------
+    user_id: :class:`int`
+        The ID of the user that added or removed a vote.
     channel_id: :class:`int`
-        The id of the voice channel whose status was updated.
-    guild_id: :class:`int`
-        The id of the guild the voice channel is in.
-    status: Optional[:class:`str`]
-        The newly updated status of the voice channel. ``None`` if no status is set.
-    cached_status: Optional[:class:`str`]
-        The cached status, if the voice channel is found in the internal channel cache otherwise :attr:`utils.MISSING`.
-        Represents the status before it is modified. ``None`` if no status was set.
+        The channel ID where the poll vote action took place.
+    message_id: :class:`int`
+        The message ID that contains the poll the user added or removed their vote on.
+    guild_id: Optional[:class:`int`]
+        The guild ID where the vote got added or removed, if applicable..
+    answer_id: :class:`int`
+        The poll answer's ID the user voted on.
     """
 
-    __slots__ = ('channel_id', 'guild_id', 'status', 'cached_status')
+    __slots__ = ('user_id', 'channel_id', 'message_id', 'guild_id', 'answer_id')
 
-    def __init__(self, data: VoiceChannelStatusUpdate):
-        self.channel_id: int = int(data['id'])
-        self.guild_id: int = int(data['guild_id'])
-        self.status: Optional[str] = data['status'] or None
-        self.cached_status: Optional[str] = MISSING
+    def __init__(self, data: PollVoteActionEvent) -> None:
+        self.user_id: int = int(data['user_id'])
+        self.channel_id: int = int(data['channel_id'])
+        self.message_id: int = int(data['message_id'])
+        self.guild_id: Optional[int] = _get_as_snowflake(data, 'guild_id')
+        self.answer_id: int = int(data['answer_id'])
