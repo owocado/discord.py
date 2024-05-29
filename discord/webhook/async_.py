@@ -1304,7 +1304,7 @@ class Webhook(BaseWebhook):
         return cls(data, session, token=bot_token, state=state)  # type: ignore  # Casting dict[str, Any] to WebhookPayload
 
     @classmethod
-    def _as_follower(cls, data, *, channel, user) -> Self:
+    def _as_follower(cls, data, *, channel, user: User) -> Self:
         name = f"{channel.guild} #{channel}"
         feed: WebhookPayload = {
             'id': data['webhook_id'],
@@ -1319,6 +1319,7 @@ class Webhook(BaseWebhook):
                 'avatar': user._avatar,
                 'avatar_decoration_data': user._avatar_decoration_data,
                 'global_name': user.global_name,
+                'clan': user._clan,
             },
         }
 

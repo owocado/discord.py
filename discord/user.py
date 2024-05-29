@@ -102,7 +102,7 @@ class BaseUser(_UserTag):
 
     def __str__(self) -> str:
         if self.discriminator == '0':
-            return self.global_name or self.name
+            return self.name
         return f'{self.name}#{self.discriminator}'
 
     def __eq__(self, other: object) -> bool:
@@ -575,3 +575,15 @@ class User(BaseUser, discord.abc.Messageable):
         state = self._state
         data: DMChannelPayload = await state.http.start_private_message(self.id)
         return state.add_dm_channel(data)
+
+    def has_default_avatar(self) -> bool:
+        return self.avatar == self.default_avatar
+
+    def is_deleted(self) -> bool:
+        import re
+
+        if self.bot:
+            check = bool(self.discriminator and re.match(r"Deleted User [a-z0-9]{8}", self.name))
+        else:
+            check = bool(re.match(r"deleted_user_[a-f0-9]{12}", self.name) and not self.mutual_guilds)
+        return bool(self.has_default_avatar() and check)

@@ -524,6 +524,10 @@ class MessageFlags(BaseFlags):
         """
         return 8192
 
+    @flag_value
+    def ui_kit_component(self):
+        return 16384
+
 
 @fill_with_flags()
 class PublicUserFlags(BaseFlags):

@@ -98,6 +98,7 @@ from .onboarding import Onboarding, PartialOnboardingPrompt
 from .automod import AutoModRule, AutoModTrigger, AutoModRuleAction
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .soundboard import SoundboardSound
+from .http import Route
 
 
 __all__ = (
@@ -145,6 +146,7 @@ if TYPE_CHECKING:
     VocalGuildChannel = Union[VoiceChannel, StageChannel]
     GuildChannel = Union[VocalGuildChannel, ForumChannel, TextChannel, CategoryChannel]
     ByCategoryItem = Tuple[Optional[CategoryChannel], List[GuildChannel]]
+    WidgetStyle = Literal['shield', 'banner1', 'banner2', 'banner3', 'banner4']
 
 
 class BanEntry(NamedTuple):
@@ -3702,7 +3704,7 @@ class Guild(Hashable):
 
         The guild must have ``COMMUNITY`` in :attr:`~Guild.features`.
 
-        You must have :attr:`~Permissions.manage_guild` to do this.as well.
+        You must have :attr:`~Permissions.manage_guild` to do this as well.
 
         .. versionadded:: 2.0
 
@@ -4183,6 +4185,29 @@ class Guild(Hashable):
         data = await self._state.http.get_widget(self.id)
 
         return Widget(state=self._state, data=data)
+
+    def widget_image_url(self, style: WidgetStyle = 'shield') -> Optional[str]:
+        """Returns the widget image url of the guild.
+
+        .. note::
+
+            The guild must have the widget enabled to get this information.
+
+        Parameters
+        -----------
+        style: :class:`str`
+            The style which should be applied for the widget.
+            Default to ``shield``. Returns ``None`` if widget is not enabled.
+
+        Returns
+        --------
+        Optional[:class:`str`]
+            The widget image url in the given style.
+        """
+        if not self.widget_enabled:
+            return None
+
+        return f"{Route.BASE}/guilds/{self.id}/widget.png?style={style}"
 
     async def edit_widget(
         self,

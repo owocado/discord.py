@@ -41,7 +41,7 @@ from .message import Message, ReactionType
 from .sticker import GuildSticker
 from .appinfo import GatewayAppInfo, PartialAppInfo
 from .guild import Guild, UnavailableGuild
-from .user import User, AvatarDecorationData
+from .user import User, AvatarDecorationData, Clan
 from .threads import Thread, ThreadMember
 from .scheduled_event import GuildScheduledEvent
 from .audit_log import AuditLogEntry
@@ -232,6 +232,7 @@ class GuildMemberUpdateEvent(TypedDict):
     pending: NotRequired[bool]
     communication_disabled_until: NotRequired[str]
     avatar_decoration_data: NotRequired[AvatarDecorationData]
+    clan: Optional[Clan]
 
 
 class GuildEmojisUpdateEvent(TypedDict):
@@ -378,3 +379,8 @@ class PollVoteActionEvent(TypedDict):
     message_id: Snowflake
     guild_id: NotRequired[Snowflake]
     answer_id: int
+
+
+class SoundboardSoundsRequestEvent(TypedDict):
+    guild_id: Snowflake
+    soundboard_sounds: List[SoundboardSound]

@@ -70,6 +70,10 @@ from .components import *
 from .threads import *
 from .automod import *
 from .poll import *
+from .onboarding import *
+from .soundboard import *
+from .connections import *
+from .profile import *
 
 
 class VersionInfo(NamedTuple):

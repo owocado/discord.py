@@ -74,6 +74,12 @@ __all__ = (
     'EntitlementType',
     'EntitlementOwnerType',
     'PollLayoutType',
+    'VoiceChannelEffectAnimationType',
+    'OnboardingPromptType',
+    'OnboardingMode',
+    'PremiumType',
+    'InviteType',
+    'MemberJoinType',
 )
 
 
@@ -267,6 +273,9 @@ class MessageType(Enum):
     guild_gaming_stats_prompt = 42
     poll = 43
     purchase_notification = 44
+    voice_hangout_invite = 45
+    poll_result = 46
+    changelog = 47
 
 
 class SpeakingState(Enum):
@@ -415,6 +424,9 @@ class AuditLogAction(Enum):
     server_guide_update                               = 191
     voice_channel_status_update                       = 192
     voice_channel_status_delete                       = 193
+    scheduled_event_exception_create                  = 200
+    scheduled_event_exception_update                  = 201
+    scheduled_event_exception_delete                  = 202
 
     # fmt: on
 
@@ -497,6 +509,9 @@ class AuditLogAction(Enum):
             AuditLogAction.server_guide_update:                      AuditLogActionCategory.update,
             AuditLogAction.voice_channel_status_update:              AuditLogActionCategory.create,
             AuditLogAction.voice_channel_status_delete:              AuditLogActionCategory.delete,
+            AuditLogAction.scheduled_event_exception_create:         AuditLogActionCategory.create,
+            AuditLogAction.scheduled_event_exception_delete:         AuditLogActionCategory.delete,
+            AuditLogAction.scheduled_event_exception_update:         AuditLogActionCategory.update,
         }
         # fmt: on
         return lookup[self]
@@ -900,7 +915,11 @@ class EntitlementOwnerType(Enum):
 
 
 class PollLayoutType(Enum):
+    unknown = 0
     default = 1
+    image_only_answers = 2
+
+    normal = 1
 
 
 class InviteType(Enum):
@@ -908,10 +927,28 @@ class InviteType(Enum):
     group_dm = 1
     friend = 2
 
+    gdm = 1
+
 
 class ReactionType(Enum):
     normal = 0
     burst = 1
+
+
+class MemberJoinType(Enum):
+    unknown = 0
+    bot = 1
+    integration = 2
+    discovery = 3
+    hub = 4
+    invite = 5
+    vanity_url = 6
+
+
+# TODO: `guild` vs `guild_install`
+class ApplicationIntegrationType(Enum):
+    guild = 0
+    user = 1
 
 
 def create_unknown_value(cls: Type[E], val: Any) -> E:

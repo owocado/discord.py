@@ -69,7 +69,7 @@ if TYPE_CHECKING:
         MemberSearch as MemberSearchPayload,
     )
     from .types.gateway import GuildMemberUpdateEvent
-    from .types.user import User as UserPayload, AvatarDecorationData
+    from .types.user import User as UserPayload, AvatarDecorationData, Clan as ClanPayload
     from .abc import Snowflake
     from .state import ConnectionState
     from .message import Message
@@ -367,6 +367,7 @@ class Member(discord.abc.Messageable, _UserTag):
         '_avatar_decoration_data',
         'unusual_dm_activity_until',
         '_banner',
+        '_clan',
         'bio',
     )
 
@@ -409,8 +410,9 @@ class Member(discord.abc.Messageable, _UserTag):
             self._permissions = None
 
         self.timed_out_until: Optional[datetime.datetime] = utils.parse_time(data.get('communication_disabled_until'))
-        self.bio: str = data.get('bio')
         self.unusual_dm_activity_until: Optional[datetime.datetime] = utils.parse_time(data.get('unusual_dm_activity_until'))
+        self._clan: Optional[ClanPayload] = data.get('clan')
+        self.bio: str = data.get('bio')
 
     def __str__(self) -> str:
         return str(self._user)
@@ -453,8 +455,8 @@ class Member(discord.abc.Messageable, _UserTag):
         self.pending = data.get('pending', False)
         self.timed_out_until = utils.parse_time(data.get('communication_disabled_until'))
         self._flags = data.get('flags', 0)
-
         self.unusual_dm_activity_until = utils.parse_time(data.get('unusual_dm_activity_until'))
+        self._clan = data.get('clan')
 
     @classmethod
     def _try_upgrade(cls, *, data: UserWithMemberPayload, guild: Guild, state: ConnectionState) -> Union[User, Self]:
@@ -486,6 +488,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self._avatar = member._avatar
         self._avatar_decoration_data = member._avatar_decoration_data
         self.unusual_dm_activity_until = member.unusual_dm_activity_until
+        self._clan = member._clan
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -516,6 +519,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self._flags = data.get('flags', 0)
         self._avatar_decoration_data = data.get('avatar_decoration_data')
         self.unusual_dm_activity_until = utils.parse_time(data.get('unusual_dm_activity_until'))
+        self._clan = data.get('clan')
 
     def _presence_update(self, data: PartialPresenceUpdate, user: UserPayload) -> Optional[Tuple[User, User]]:
         self.activities = tuple(create_activity(d, self._state) for d in data['activities'])
@@ -534,6 +538,7 @@ class Member(discord.abc.Messageable, _UserTag):
             u.global_name,
             u._public_flags,
             u._avatar_decoration_data['sku_id'] if u._avatar_decoration_data is not None else None,
+            u._clan,
         )
 
         decoration_payload = user.get('avatar_decoration_data')
@@ -545,16 +550,18 @@ class Member(discord.abc.Messageable, _UserTag):
             user.get('global_name'),
             user.get('public_flags', 0),
             decoration_payload['sku_id'] if decoration_payload is not None else None,
+            user.get('clan'),
         )
         if original != modified:
             to_return = User._copy(self._user)
-            u.name, u.discriminator, u._avatar, u.global_name, u._public_flags, u._avatar_decoration_data = (
+            u.name, u.discriminator, u._avatar, u.global_name, u._public_flags, u._avatar_decoration_data, u._clan = (
                 user['username'],
                 user['discriminator'],
                 user['avatar'],
                 user.get('global_name'),
                 user.get('public_flags', 0),
                 decoration_payload,
+                user.get('clan'),
             )
             # Signal to dispatch on_user_update
             return to_return, u

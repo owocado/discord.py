@@ -2732,8 +2732,22 @@ class HTTPClient:
         return self.request(Route('GET', '/users/{user_id}', user_id=user_id))
 
     def get_public_sku(self, sku_id: int, *, localize: bool = True) -> Response[sku.SKU]:
+        """Get Public SKU object."""
         params = {'localize': str(localize).lower()}
         return self.request(Route('GET', f'/store/published-listings/skus/{sku_id}?country_code=US'), params=params)
 
     def get_discovery_categories(self) -> Response[List[guild.DiscoveryCategory]]:
+        """Get the list of Discord Discovery category objects."""
         return self.request(Route('GET', '/discovery/categories'))
+
+    def get_existing_dm(self, user_id: int) -> Response[channel.DMChannel]:
+        """Get existing DM channel object with given user."""
+        return self.request(Route('GET', '/users/@me/dms/{user_id}', user_id=user_id))
+
+    def get_quest(self, quest_id: int):
+        """Get Discord Quest object."""
+        return self.request(Route('GET', '/quests/{quest_id}', quest_id=quest_id))
+
+    def get_top_guild_channels(self, guild_id: int):
+        """Returns a list of snowflakes representing up to 10 of the top read channels in the guild."""
+        return self.request(Route('GET', '/guilds/{guild_id}/top-read-channels', guild_id=guild_id))

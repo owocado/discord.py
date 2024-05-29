@@ -1594,7 +1594,7 @@ class PartialMessage(Hashable):
 
         return Message(state=self._state, channel=self.channel, data=data)
 
-    def to_reference(self, *, fail_if_not_exists: bool = True) -> MessageReference:
+    def to_reference(self, *, fail_if_not_exists: bool = False) -> MessageReference:
         """Creates a :class:`~discord.MessageReference` from the current message.
 
         .. versionadded:: 1.6
@@ -1805,6 +1805,7 @@ class Message(PartialMessage, Hashable):
         'position',
         'interaction_metadata',
         'poll',
+        '_data',
     )
 
     if TYPE_CHECKING:

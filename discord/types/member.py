@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from typing import Optional, TypedDict, List, Literal
 from .snowflake import SnowflakeList, Snowflake
-from .user import User, AvatarDecorationData
+from .user import User, AvatarDecorationData, Clan
 from typing_extensions import NotRequired
 
 
@@ -52,6 +52,7 @@ class Member(PartialMember, total=False):
     communication_disabled_until: str
     avatar_decoration_data: NotRequired[AvatarDecorationData]
     unusual_dm_activity_until: Optional[str]
+    clan: Optional[Clan]
 
 
 class _OptionalMemberWithUser(PartialMember, total=False):
@@ -63,6 +64,7 @@ class _OptionalMemberWithUser(PartialMember, total=False):
     communication_disabled_until: str
     avatar_decoration_data: NotRequired[AvatarDecorationData]
     unusual_dm_activity_until: Optional[str]
+    clan: Optional[Clan]
 
 
 class MemberWithUser(_OptionalMemberWithUser):

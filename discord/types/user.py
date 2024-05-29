@@ -32,6 +32,13 @@ class AvatarDecorationData(TypedDict):
     sku_id: Snowflake
 
 
+class Clan(TypedDict):
+    badge: Optional[str]
+    identity_guild_id: Optional[Snowflake]
+    identity_enabled: Optional[bool]
+    tag: Optional[str]
+
+
 class PartialUser(TypedDict):
     id: Snowflake
     username: str
@@ -42,6 +49,7 @@ class PartialUser(TypedDict):
     system: NotRequired[bool]
     global_name: Optional[str]
     avatar_decoration_data: NotRequired[AvatarDecorationData]
+    clan: Optional[Clan]
 
 
 PremiumType = Literal[0, 1, 2, 3]
@@ -85,14 +93,7 @@ class Connection(PartialConnection):
     access_token: NotRequired[str]
 
 
-class Clan(TypedDict):
-    identity_guild_id: Snowflake
-    identity_enabled: bool
-    tag: str
-
-
 class APIUser(PartialUser):
     banner: Optional[str]
     banner_color: Optional[str]
     accent_color: Optional[int]
-    clan: Optional[Clan]
