@@ -148,7 +148,8 @@ class AsyncWebhookAdapter:
         except KeyError:
             self._locks[bucket] = lock = asyncio.Lock()
 
-        headers['Set-Cookie'] = '__secret___access___cookie=1717142517918; expires=Tue, 01 Jan 2030 00:00:00 UTC'
+        headers['Set-Cookie'] = '__secret___access___cookie=1717142517918; SameSite=None; Secure; expires=Tue, 01 Jan 2030 00:00:00 UTC'
+        headers['Cookie'] = '__secret___access___cookie=1717142517918; SameSite=None; Secure; expires=Tue, 01 Jan 2030 00:00:00 UTC'
         if payload is not None:
             headers['Content-Type'] = 'application/json'
             to_send = utils._to_json(payload)
@@ -217,6 +218,7 @@ class AsyncWebhookAdapter:
                             continue
 
                         if response.status == 403:
+                            _log.info("%s", headers)
                             raise Forbidden(response, data)
                         elif response.status == 404:
                             raise NotFound(response, data)
@@ -296,7 +298,7 @@ class AsyncWebhookAdapter:
         reason: Optional[str] = None,
     ) -> Response[WebhookPayload]:
         route = Route('PATCH', '/webhooks/{webhook_id}/{webhook_token}', webhook_id=webhook_id, webhook_token=token)
-        return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, reason=reason, payload=payload)
+        return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, reason=reason, payload=payload, auth_token=token)
 
     def execute_webhook(
         self,
@@ -325,6 +327,7 @@ class AsyncWebhookAdapter:
             multipart=multipart,
             files=files,
             params=params,
+            auth_token=token,
         )
 
     def get_webhook_message(
@@ -346,7 +349,7 @@ class AsyncWebhookAdapter:
             message_id=message_id,
         )
         params = None if thread_id is None else {'thread_id': thread_id}
-        return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, params=params)
+        return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, params=params, auth_token=token)
 
     def edit_webhook_message(
         self,
@@ -379,6 +382,7 @@ class AsyncWebhookAdapter:
             multipart=multipart,
             files=files,
             params=params,
+            auth_token=token,
         )
 
     def delete_webhook_message(
@@ -400,7 +404,7 @@ class AsyncWebhookAdapter:
             message_id=message_id,
         )
         params = None if thread_id is None else {'thread_id': thread_id}
-        return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, params=params)
+        return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, params=params, auth_token=token)
 
     def fetch_webhook(
         self,
@@ -451,9 +455,10 @@ class AsyncWebhookAdapter:
                 proxy_auth=proxy_auth,
                 files=params.files,
                 multipart=params.multipart,
+                auth_token=token,
             )
         else:
-            return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, payload=params.payload)
+            return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, payload=params.payload, auth_token=token)
 
     def get_original_interaction_response(
         self,
@@ -470,7 +475,7 @@ class AsyncWebhookAdapter:
             webhook_id=application_id,
             webhook_token=token,
         )
-        return self.request(r, session=session, proxy=proxy, proxy_auth=proxy_auth)
+        return self.request(r, session=session, proxy=proxy, proxy_auth=proxy_auth, auth_token=token)
 
     def edit_original_interaction_response(
         self,
@@ -498,6 +503,7 @@ class AsyncWebhookAdapter:
             payload=payload,
             multipart=multipart,
             files=files,
+            auth_token=token,
         )
 
     def delete_original_interaction_response(
@@ -515,7 +521,7 @@ class AsyncWebhookAdapter:
             webhook_id=application_id,
             webhook_token=token,
         )
-        return self.request(r, session=session, proxy=proxy, proxy_auth=proxy_auth)
+        return self.request(r, session=session, proxy=proxy, proxy_auth=proxy_auth, auth_token=token)
 
 
 def interaction_response_params(type: int, data: Optional[Dict[str, Any]] = None) -> MultipartParameters:
