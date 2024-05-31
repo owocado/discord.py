@@ -338,7 +338,7 @@ class FlagsMeta(type):
         if prefix is not MISSING:
             attrs['__commands_flag_prefix__'] = prefix
 
-        case_insensitive = attrs.setdefault('__commands_flag_case_insensitive__', False)
+        case_insensitive = attrs.setdefault('__commands_flag_case_insensitive__', True)
         delimiter = attrs.setdefault('__commands_flag_delimiter__', ':')
         prefix = attrs.setdefault('__commands_flag_prefix__', '')
 

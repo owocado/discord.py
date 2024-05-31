@@ -23,7 +23,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from .snowflake import Snowflake
-from typing import Literal, Optional, TypedDict
+from typing import Literal, Optional, TypedDict, Any, Dict
 from typing_extensions import NotRequired
 
 
@@ -32,13 +32,24 @@ class AvatarDecorationData(TypedDict):
     sku_id: Snowflake
 
 
+class Clan(TypedDict):
+    badge: Optional[str]
+    identity_guild_id: Optional[Snowflake]
+    identity_enabled: Optional[bool]
+    tag: Optional[str]
+
+
 class PartialUser(TypedDict):
     id: Snowflake
     username: str
     discriminator: str
     avatar: Optional[str]
+    public_flags: NotRequired[int]
+    bot: NotRequired[bool]
+    system: NotRequired[bool]
     global_name: Optional[str]
     avatar_decoration_data: NotRequired[AvatarDecorationData]
+    clan: Optional[Clan]
 
 
 PremiumType = Literal[0, 1, 2, 3]
@@ -52,5 +63,37 @@ class User(PartialUser, total=False):
     verified: bool
     email: Optional[str]
     flags: int
-    premium_type: PremiumType
     public_flags: int
+    purchased_flags: int
+    premium_usage_flags: int
+    banner: Optional[str]
+    accent_color: Optional[int]
+    bio: str
+    analytics_token: str
+    phone: NotRequired[str]
+    token: str
+    nsfw_allowed: NotRequired[bool]
+
+
+class PartialConnection(TypedDict):
+    id: str
+    type: str
+    name: str
+    verified: bool
+    metadata: NotRequired[Dict[str, Any]]
+
+
+class Connection(PartialConnection):
+    revoked: bool
+    visibility: Literal[0, 1]
+    metadata_visibility: Literal[0, 1]
+    show_activity: bool
+    friend_sync: bool
+    two_way_link: bool
+    access_token: NotRequired[str]
+
+
+class APIUser(PartialUser):
+    banner: Optional[str]
+    banner_color: Optional[str]
+    accent_color: Optional[int]

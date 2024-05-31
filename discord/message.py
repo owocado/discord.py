@@ -405,6 +405,9 @@ class Attachment(Hashable):
             'size': self.size,
             'url': self.url,
             'spoiler': self.is_spoiler(),
+            'ephemeral': self.ephemeral,
+            'duration_secs': self.duration,
+            'flags': self._flags,
         }
         if self.height:
             result['height'] = self.height
@@ -451,6 +454,10 @@ class DeletedReferencedMessage:
         """Optional[:class:`int`]: The guild ID of the deleted referenced message."""
         return self._parent.guild_id
 
+    @property
+    def jump_url(self) -> str:
+        return f'https://staging.discord.sex/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.id}'
+
 
 class MessageReference:
     """Represents a reference to a :class:`~discord.Message`.
@@ -488,7 +495,7 @@ class MessageReference:
 
     __slots__ = ('message_id', 'channel_id', 'guild_id', 'fail_if_not_exists', 'resolved', '_state')
 
-    def __init__(self, *, message_id: int, channel_id: int, guild_id: Optional[int] = None, fail_if_not_exists: bool = True):
+    def __init__(self, *, message_id: int, channel_id: int, guild_id: Optional[int] = None, fail_if_not_exists: bool = False):
         self._state: Optional[ConnectionState] = None
         self.resolved: Optional[Union[Message, DeletedReferencedMessage]] = None
         self.message_id: Optional[int] = message_id
@@ -502,13 +509,13 @@ class MessageReference:
         self.message_id = utils._get_as_snowflake(data, 'message_id')
         self.channel_id = int(data['channel_id'])
         self.guild_id = utils._get_as_snowflake(data, 'guild_id')
-        self.fail_if_not_exists = data.get('fail_if_not_exists', True)
+        self.fail_if_not_exists = data.get('fail_if_not_exists', False)
         self._state = state
         self.resolved = None
         return self
 
     @classmethod
-    def from_message(cls, message: PartialMessage, *, fail_if_not_exists: bool = True) -> Self:
+    def from_message(cls, message: PartialMessage, *, fail_if_not_exists: bool = False) -> Self:
         """Creates a :class:`MessageReference` from an existing :class:`~discord.Message`.
 
         .. versionadded:: 1.6
@@ -549,7 +556,7 @@ class MessageReference:
         .. versionadded:: 1.7
         """
         guild_id = self.guild_id if self.guild_id is not None else '@me'
-        return f'https://discord.com/channels/{guild_id}/{self.channel_id}/{self.message_id}'
+        return f'https://staging.discord.sex/channels/{guild_id}/{self.channel_id}/{self.message_id}'
 
     def __repr__(self) -> str:
         return f'<MessageReference message_id={self.message_id!r} channel_id={self.channel_id!r} guild_id={self.guild_id!r}>'
@@ -922,7 +929,7 @@ class PartialMessage(Hashable):
     def jump_url(self) -> str:
         """:class:`str`: Returns a URL that allows the client to jump to this message."""
         guild_id = getattr(self.guild, 'id', '@me')
-        return f'https://discord.com/channels/{guild_id}/{self.channel.id}/{self.id}'
+        return f'https://staging.discord.sex/channels/{guild_id}/{self.channel.id}/{self.id}'
 
     @property
     def thread(self) -> Optional[Thread]:
@@ -1587,7 +1594,7 @@ class PartialMessage(Hashable):
 
         return Message(state=self._state, channel=self.channel, data=data)
 
-    def to_reference(self, *, fail_if_not_exists: bool = True) -> MessageReference:
+    def to_reference(self, *, fail_if_not_exists: bool = False) -> MessageReference:
         """Creates a :class:`~discord.MessageReference` from the current message.
 
         .. versionadded:: 1.6
@@ -1798,6 +1805,7 @@ class Message(PartialMessage, Hashable):
         'position',
         'interaction_metadata',
         'poll',
+        '_data',
     )
 
     if TYPE_CHECKING:
@@ -1930,6 +1938,7 @@ class Message(PartialMessage, Hashable):
                 getattr(self, f'_handle_{handler}')(data[handler])
             except KeyError:
                 continue
+        self._data = data
 
     def __repr__(self) -> str:
         name = self.__class__.__name__
@@ -2288,7 +2297,7 @@ class Message(PartialMessage, Hashable):
                 return f'{self.author.name} removed {self.mentions[0].name} from the thread.'
 
         if self.type is MessageType.channel_name_change:
-            if getattr(self.channel, 'parent', self.channel).type is ChannelType.forum:
+            if getattr(self.channel, 'parent', self.channel).type in {ChannelType.forum, ChannelType.media}:
                 return f'{self.author.name} changed the post title: **{self.content}**'
             else:
                 return f'{self.author.name} changed the channel name: **{self.content}**'

@@ -133,7 +133,7 @@ class Colour:
         return not self.__eq__(other)
 
     def __str__(self) -> str:
-        return f'#{self.value:0>6x}'
+        return f'#{self.value:0>6x}'.upper()
 
     def __int__(self) -> int:
         return self.value
@@ -201,6 +201,12 @@ class Colour:
 
         if value[0] == '#':
             return parse_hex_number(value[1:])
+
+        if value == 'random':
+            return cls.random()
+
+        if len(value) == 6 and re.match(r"^(?:[0-9a-fA-F]{2}){3}$", value):
+            return parse_hex_number(value)
 
         if value[0:2] == '0x':
             rest = value[2:]

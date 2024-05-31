@@ -58,6 +58,8 @@ if TYPE_CHECKING:
     from .abc import Snowflake, SnowflakeTime
     from .role import Role
     from .state import ConnectionState
+    from .user import ClientUser
+    from .webhook import Webhook
 
     ThreadChannelType = Literal[ChannelType.news_thread, ChannelType.public_thread, ChannelType.private_thread]
 
@@ -123,8 +125,7 @@ class Thread(Messageable, Hashable):
         The user's ID that archived this thread.
 
         .. note::
-            Due to an API change, the ``archiver_id`` will always be ``None`` and can only be obtained via the audit log.
-
+            Due to an API change, the ``archiver_id``, therefore, will always be ``None`` and can only be obtained via the audit log now.
     auto_archive_duration: :class:`int`
         The duration in minutes until the thread is automatically hidden from the channel list.
         Usually a value of 60, 1440, 4320 and 10080.
@@ -253,7 +254,7 @@ class Thread(Messageable, Hashable):
 
         .. versionadded:: 2.0
         """
-        return f'https://discord.com/channels/{self.guild.id}/{self.id}'
+        return f'https://staging.discord.sex/channels/{self.guild.id}/{self.id}'
 
     @property
     def members(self) -> List[ThreadMember]:
@@ -272,7 +273,7 @@ class Thread(Messageable, Hashable):
         .. versionadded:: 2.1
         """
         tags = []
-        if self.parent is None or self.parent.type != ChannelType.forum:
+        if self.parent is None or self.parent.type not in {ChannelType.forum, ChannelType.media}:
             return tags
 
         parent = self.parent
@@ -394,7 +395,7 @@ class Thread(Messageable, Hashable):
         parent = self.parent
         return parent is not None and parent.is_nsfw()
 
-    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
         """Handles permission resolution for the :class:`~discord.Member`
         or :class:`~discord.Role`.
 
@@ -573,6 +574,29 @@ class Thread(Messageable, Hashable):
             bulk=bulk,
             reason=reason,
         )
+
+    async def webhooks(self) -> List[Webhook]:
+        """|coro|
+
+        Gets the list of webhooks from this thread's parent channel.
+
+        You must have :attr:`~.Permissions.manage_webhooks` to do this.
+
+        Raises
+        -------
+        Forbidden
+            You don't have permissions to get the webhooks.
+
+        Returns
+        --------
+        List[:class:`Webhook`]
+            The webhooks for this thread's parent channel.
+        """
+
+        from .webhook import Webhook
+
+        data = await self._state.http.channel_webhooks(self.parent_id)
+        return [Webhook.from_state(d, state=self._state) for d in data]
 
     async def edit(
         self,

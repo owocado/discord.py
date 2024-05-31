@@ -291,7 +291,7 @@ def _populate_renames(params: Dict[str, CommandParameter], renames: Dict[str, Un
 
     # original name to renamed name
 
-    for name in params.keys():
+    for name in params:
         new_name = renames.pop(name, MISSING)
 
         if new_name is MISSING:
@@ -2372,12 +2372,6 @@ def guilds(*guild_ids: Union[Snowflake, int]) -> Callable[[T], T]:
         with the :meth:`CommandTree.command` or :meth:`CommandTree.context_menu` decorator
         then this must go below that decorator.
 
-    .. note ::
-
-        Due to a Discord limitation, this decorator cannot be used in conjunction with
-        contexts (e.g. :func:`.app_commands.allowed_contexts`) or installation types
-        (e.g. :func:`.app_commands.allowed_installs`).
-
     Example:
 
     .. code-block:: python3
@@ -2471,6 +2465,8 @@ def check(predicate: Check) -> Callable[[T], T]:
             func.__discord_app_commands_checks__.append(predicate)
 
         return func
+
+    decorator.predicate = predicate
 
     return decorator  # type: ignore
 

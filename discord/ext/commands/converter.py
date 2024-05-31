@@ -46,6 +46,8 @@ from typing import (
 import types
 
 import discord
+from rapidfuzz import fuzz, process
+from unidecode import unidecode
 
 from .errors import *
 
@@ -143,13 +145,19 @@ class Converter(Protocol[T_co]):
         raise NotImplementedError('Derived classes need to implement this.')
 
 
-_ID_REGEX = re.compile(r'([0-9]{15,20})$')
+_ID_REGEX: re.Pattern[str] = re.compile(r'\"?([0-9]{15,20})\"?')
+MESSAGE_ID_REGEX: re.Pattern[str] = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
+MESSAGE_LINK_REGEX: re.Pattern[str] = re.compile(
+    r'https?://(?:staging\.)?discord(?:app)?\.sex/channels/(?P<guild_id>[0-9]{15,20}|@me)'
+    r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
+)
+_DELETED_USER_ID: int = 456226577798135808
 
 
 class IDConverter(Converter[T_co]):
     @staticmethod
-    def _get_id_match(argument):
-        return _ID_REGEX.match(argument)
+    def _get_id_match(argument: str):
+        return _ID_REGEX.search(argument)
 
 
 class ObjectConverter(IDConverter[discord.Object]):
@@ -245,7 +253,7 @@ class MemberConverter(IDConverter[discord.Member]):
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.Member:
         bot = ctx.bot
-        match = self._get_id_match(argument) or re.match(r'<@!?([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<@!?([0-9]{15,20})>$', argument)
         guild = ctx.guild
         result = None
         user_id = None
@@ -253,7 +261,24 @@ class MemberConverter(IDConverter[discord.Member]):
         if match is None:
             # not a mention...
             if guild:
-                result = guild.get_member_named(argument)
+                users = []
+                for user_name in process.extract(
+                    argument,
+                    {user: user.name for user in guild.members},
+                    limit=None,
+                    score_cutoff=80,
+                    scorer=fuzz.WRatio,
+                ):
+                    users.append(user_name[2])
+                for user_nick in process.extract(
+                    argument,
+                    {obj: unidecode(obj.nick).casefold() for obj in guild.members if obj.nick and obj not in users},
+                    limit=None,
+                    score_cutoff=80,
+                    scorer=fuzz.WRatio,
+                ):
+                    users.append(user_nick[2])
+                result = users[0] if users else guild.get_member_named(argument)
             else:
                 result = _get_from_guilds(bot, 'get_member_named', argument)
         else:
@@ -305,9 +330,10 @@ class UserConverter(IDConverter[discord.User]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.User:
-        match = self._get_id_match(argument) or re.match(r'<@!?([0-9]{15,20})>$', argument)
+        if argument.isdigit() and int(argument) == _DELETED_USER_ID:
+            raise BadArgument('oh hey, it’s the ID that Discord assigns to deleted users.')
+        match = self._get_id_match(argument) or re.search(r'<@!?([0-9]{15,20})>$', argument)
         result = None
-        state = ctx._state
 
         if match is not None:
             user_id = int(match.group(1))
@@ -320,18 +346,7 @@ class UserConverter(IDConverter[discord.User]):
 
             return result  # type: ignore
 
-        username, _, discriminator = argument.rpartition('#')
-
-        # If # isn't found then "discriminator" actually has the username
-        if not username:
-            discriminator, username = username, discriminator
-
-        if discriminator == '0' or (len(discriminator) == 4 and discriminator.isdigit()):
-            predicate = lambda u: u.name == username and u.discriminator == discriminator
-        else:
-            predicate = lambda u: u.name == argument or u.global_name == argument
-
-        result = discord.utils.find(predicate, state._users.values())
+        result = ctx.bot.get_user_named(argument)
         if result is None:
             raise UserNotFound(argument)
 
@@ -352,13 +367,7 @@ class PartialMessageConverter(Converter[discord.PartialMessage]):
 
     @staticmethod
     def _get_id_matches(ctx: Context[BotT], argument: str) -> Tuple[Optional[int], int, int]:
-        id_regex = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
-        link_regex = re.compile(
-            r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
-            r'(?P<guild_id>[0-9]{15,20}|@me)'
-            r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
-        )
-        match = id_regex.match(argument) or link_regex.match(argument)
+        match = MESSAGE_ID_REGEX.match(argument) or MESSAGE_LINK_REGEX.match(argument)
         if not match:
             raise MessageNotFound(argument)
         data = match.groupdict()
@@ -450,7 +459,7 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
     def _resolve_channel(ctx: Context[BotT], argument: str, attribute: str, type: Type[CT]) -> CT:
         bot = ctx.bot
 
-        match = IDConverter._get_id_match(argument) or re.match(r'<#([0-9]{15,20})>$', argument)
+        match = IDConverter._get_id_match(argument) or re.search(r'<#([0-9]{15,20})>$', argument)
         result = None
         guild = ctx.guild
 
@@ -480,7 +489,7 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
 
     @staticmethod
     def _resolve_thread(ctx: Context[BotT], argument: str, attribute: str, type: Type[TT]) -> TT:
-        match = IDConverter._get_id_match(argument) or re.match(r'<#([0-9]{15,20})>$', argument)
+        match = IDConverter._get_id_match(argument) or re.search(r'<#([0-9]{15,20})>$', argument)
         result = None
         guild = ctx.guild
 
@@ -677,11 +686,21 @@ class RoleConverter(IDConverter[discord.Role]):
         if not guild:
             raise NoPrivateMessage()
 
-        match = self._get_id_match(argument) or re.match(r'<@&([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<@&([0-9]{15,20})>$', argument)
         if match:
             result = guild.get_role(int(match.group(1)))
         else:
-            result = discord.utils.get(guild._roles.values(), name=argument)
+            roles = []
+            for res in process.extract(
+                argument,
+                {r: unidecode(r.name).casefold() for r in guild.roles},
+                limit=None,
+                score_cutoff=80,
+                scorer=fuzz.WRatio,
+            ):
+                roles.append(res[2])
+
+            result = roles[0] if roles else discord.utils.get(guild._roles.values(), name=argument)
 
         if result is None:
             raise RoleNotFound(argument)
@@ -1028,7 +1047,7 @@ class Greedy(List[T]):
         converter = getattr(self.converter, '__name__', repr(self.converter))
         return f'Greedy[{converter}]'
 
-    def __class_getitem__(cls, params: Union[Tuple[T], T]) -> Greedy[T]:
+    def __class_getitem__(cls, params: Union[Tuple[T], T]) -> Greedy[T]:  # type: ignore
         if not isinstance(params, tuple):
             params = (params,)
         if len(params) != 1:
@@ -1036,7 +1055,7 @@ class Greedy(List[T]):
         converter = params[0]
 
         args = getattr(converter, '__args__', ())
-        if discord.utils.PY_310 and converter.__class__ is types.UnionType:  # type: ignore
+        if discord.utils.PY_310 and converter.__class__ is types.UnionType:
             converter = Union[args]  # type: ignore
 
         origin = getattr(converter, '__origin__', None)

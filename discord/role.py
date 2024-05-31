@@ -220,6 +220,7 @@ class Role(Hashable):
         'hoist',
         'guild',
         'tags',
+        'description',
         '_flags',
         '_state',
     )
@@ -283,6 +284,7 @@ class Role(Hashable):
         self.managed: bool = data.get('managed', False)
         self.mentionable: bool = data.get('mentionable', False)
         self.tags: Optional[RoleTags]
+        self.description: Optional[str] = data.get('description')
         self._flags: int = data.get('flags', 0)
 
         try:
@@ -370,6 +372,8 @@ class Role(Hashable):
     @property
     def mention(self) -> str:
         """:class:`str`: Returns a string that allows you to mention a role."""
+        if self.is_default():
+            return "@everyone"
         return f'<@&{self.id}>'
 
     @property
@@ -424,6 +428,7 @@ class Role(Hashable):
         display_icon: Optional[Union[bytes, str]] = MISSING,
         mentionable: bool = MISSING,
         position: int = MISSING,
+        description: str = MISSING,
         reason: Optional[str] = MISSING,
     ) -> Optional[Role]:
         """|coro|
@@ -518,6 +523,9 @@ class Role(Hashable):
 
         if mentionable is not MISSING:
             payload['mentionable'] = mentionable
+
+        if description is not MISSING:
+            payload['description'] = description
 
         data = await self._state.http.edit_role(self.guild.id, self.id, reason=reason, **payload)
         return Role(guild=self.guild, data=data, state=self._state)

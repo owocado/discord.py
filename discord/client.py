@@ -77,6 +77,7 @@ from .ui.dynamic import DynamicItem
 from .stage_instance import StageInstance
 from .threads import Thread
 from .sticker import GuildSticker, StandardSticker, StickerPack, _sticker_factory
+from .soundboard import SoundboardDefaultSound, SoundboardSound
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -348,7 +349,7 @@ class Client:
         return False
 
     @property
-    def user(self) -> Optional[ClientUser]:
+    def user(self) -> ClientUser:
         """Optional[:class:`.ClientUser`]: Represents the connected client. ``None`` if not logged in."""
         return self._connection.user
 
@@ -369,6 +370,14 @@ class Client:
         .. versionadded:: 2.0
         """
         return self._connection.stickers
+
+    @property
+    def soundboard_sounds(self) -> List[SoundboardSound]:
+        """List[:class:`.SoundboardSound`]: The soundboard sounds that the connected client has.
+
+        .. versionadded:: 2.4
+        """
+        return self._connection.soundboard_sounds
 
     @property
     def cached_messages(self) -> Sequence[Message]:
@@ -618,8 +627,8 @@ class Client:
         token = token.strip()
 
         data = await self.http.static_login(token)
-        self._connection.user = ClientUser(state=self._connection, data=data)
-        self._application = await self.application_info()
+        self._connection.user = ClientUser(state=self._connection, data=data['bot'])  # type: ignore
+        self._application = AppInfo(self._connection, data)
         if self._connection.application_id is None:
             self._connection.application_id = self._application.id
 
@@ -1055,6 +1064,50 @@ class Client:
         """
         return self._connection.get_user(id)
 
+    def get_user_named(self, name: str, /) -> Optional[User]:
+        """Returns the first user found that matches the name provided.
+
+        The name is looked up in the following order:
+
+        - Username#Discriminator (deprecated)
+        - Username#0 (deprecated, only gets users that migrated from their discriminator)
+        - Global name
+        - Username
+
+        If no user is found, ``None`` is returned.
+
+        .. versionadded:: 2.4
+        .. deprecated:: 2.4
+
+            Looking up users via discriminator due to Discord API change.
+
+        Parameters
+        -----------
+        name: :class:`str`
+            The name of the user to lookup.
+
+        Returns
+        --------
+        Optional[:class:`~discord.User`]
+            The user sharing a server with the bot with the associated name. If not found
+            then ``None`` is returned.
+        """
+
+        users = self.users
+
+        username, _, discriminator = name.rpartition('#')
+
+        # If # isn't found then "discriminator" actually has the username
+        if not username:
+            discriminator, username = username, discriminator
+
+        if discriminator == '0' or (len(discriminator) == 4 and discriminator.isdigit()):
+            pred = lambda u: u.name == username and u.discriminator == discriminator
+        else:
+            pred = lambda u: u.name == name or u.global_name == name
+
+        return utils.find(pred, users)
+
     def get_emoji(self, id: int, /) -> Optional[Emoji]:
         """Returns an emoji with the given ID.
 
@@ -1090,6 +1143,23 @@ class Client:
             The sticker or ``None`` if not found.
         """
         return self._connection.get_sticker(id)
+
+    def get_soundboard_sound(self, id: int, /) -> Optional[SoundboardSound]:
+        """Returns a soundboard sound with the given ID.
+
+        .. versionadded:: 2.4
+
+        Parameters
+        ----------
+        id: :class:`int`
+            The ID to search for.
+
+        Returns
+        --------
+        Optional[:class:`.SoundboardSound`]
+            The soundboard sound or ``None`` if not found.
+        """
+        return self._connection.get_soundboard_sound(id)
 
     def get_all_channels(self) -> Generator[GuildChannel, None, None]:
         """A generator that retrieves every :class:`.abc.GuildChannel` the client can 'access'.
@@ -2287,6 +2357,10 @@ class Client:
         data = await self.http.get_guild(guild_id, with_counts=with_counts)
         return Guild(data=data, state=self._connection)
 
+    async def fetch_guild_preview(self, guild_id: int):
+        data = await self.http.get_guild_preview(guild_id)
+        return Guild(data=data, state=self._connection)
+
     async def create_guild(
         self,
         *,
@@ -2918,6 +2992,26 @@ class Client:
         """
         data = await self.http.list_premium_sticker_packs()
         return [StickerPack(state=self._connection, data=pack) for pack in data['sticker_packs']]
+
+    async def fetch_default_soundboard_sounds(self) -> List[SoundboardDefaultSound]:
+        """|coro|
+
+        Retrieves all default soundboard sounds.
+
+        .. versionadded:: 2.4
+
+        Raises
+        -------
+        HTTPException
+            Retrieving the default soundboard sounds failed.
+
+        Returns
+        ---------
+        List[:class:`.SoundboardDefaultSound`]
+            All default soundboard sounds.
+        """
+        data = await self.http.get_default_soundboard_sounds()
+        return [SoundboardDefaultSound(state=self._connection, data=sound) for sound in data]
 
     async def create_dm(self, user: Snowflake) -> DMChannel:
         """|coro|

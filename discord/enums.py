@@ -74,6 +74,12 @@ __all__ = (
     'EntitlementType',
     'EntitlementOwnerType',
     'PollLayoutType',
+    'VoiceChannelEffectAnimationType',
+    'OnboardingPromptType',
+    'OnboardingMode',
+    'PremiumType',
+    'InviteType',
+    'MemberJoinType',
 )
 
 
@@ -207,10 +213,13 @@ class ChannelType(Enum):
     group = 3
     category = 4
     news = 5
+    store = 6
+    lfg = 7
     news_thread = 10
     public_thread = 11
     private_thread = 12
     stage_voice = 13
+    directory = 14
     forum = 15
     media = 16
 
@@ -252,10 +261,21 @@ class MessageType(Enum):
     stage_raise_hand = 30
     stage_topic = 31
     guild_application_premium_subscription = 32
+    private_channel_integration_added = 33
+    private_channel_integration_removed = 34
+    premium_referral = 35
     guild_incident_alert_mode_enabled = 36
     guild_incident_alert_mode_disabled = 37
     guild_incident_report_raid = 38
     guild_incident_report_false_alarm = 39
+    guild_deadchat_revive_prompt = 40
+    custom_gift = 41
+    guild_gaming_stats_prompt = 42
+    poll = 43
+    purchase_notification = 44
+    voice_hangout_invite = 45
+    poll_result = 46
+    changelog = 47
 
 
 class SpeakingState(Enum):
@@ -377,14 +397,37 @@ class AuditLogAction(Enum):
     thread_update                                     = 111
     thread_delete                                     = 112
     app_command_permission_update                     = 121
+    soundboard_sound_create                           = 130
+    soundboard_sound_update                           = 131
+    soundboard_sound_delete                           = 132
     automod_rule_create                               = 140
     automod_rule_update                               = 141
     automod_rule_delete                               = 142
     automod_block_message                             = 143
     automod_flag_message                              = 144
     automod_timeout_member                            = 145
+    automod_quarantine_user                           = 146
     creator_monetization_request_created              = 150
     creator_monetization_terms_accepted               = 151
+    role_prompt_create                                = 160
+    role_prompt_update                                = 161
+    role_prompt_delete                                = 162
+    onboarding_question_create                        = 163
+    onboarding_question_update                        = 164
+    onboarding_question_delete                        = 165
+    onboarding_create                                 = 166
+    onboarding_update                                 = 167
+    guild_home_feature_item                           = 171
+    guild_home_remove_item                            = 172
+    harmful_links_blocked_message                     = 180
+    server_guide_create                               = 190
+    server_guide_update                               = 191
+    voice_channel_status_update                       = 192
+    voice_channel_status_delete                       = 193
+    scheduled_event_exception_create                  = 200
+    scheduled_event_exception_update                  = 201
+    scheduled_event_exception_delete                  = 202
+
     # fmt: on
 
     @property
@@ -439,14 +482,36 @@ class AuditLogAction(Enum):
             AuditLogAction.thread_delete:                            AuditLogActionCategory.delete,
             AuditLogAction.thread_update:                            AuditLogActionCategory.update,
             AuditLogAction.app_command_permission_update:            AuditLogActionCategory.update,
+            AuditLogAction.soundboard_sound_create:                  AuditLogActionCategory.create,
+            AuditLogAction.soundboard_sound_delete:                  AuditLogActionCategory.delete,
+            AuditLogAction.soundboard_sound_update:                  AuditLogActionCategory.update,
             AuditLogAction.automod_rule_create:                      AuditLogActionCategory.create,
             AuditLogAction.automod_rule_update:                      AuditLogActionCategory.update,
             AuditLogAction.automod_rule_delete:                      AuditLogActionCategory.delete,
             AuditLogAction.automod_block_message:                    None,
             AuditLogAction.automod_flag_message:                     None,
             AuditLogAction.automod_timeout_member:                   None,
+            AuditLogAction.automod_quarantine_user:                  None,
             AuditLogAction.creator_monetization_request_created:     None,
             AuditLogAction.creator_monetization_terms_accepted:      None,
+            AuditLogAction.role_prompt_create:                       AuditLogActionCategory.create,
+            AuditLogAction.role_prompt_update:                       AuditLogActionCategory.update,
+            AuditLogAction.role_prompt_delete:                       AuditLogActionCategory.delete,
+            AuditLogAction.onboarding_question_create:               AuditLogActionCategory.create,
+            AuditLogAction.onboarding_question_delete:               AuditLogActionCategory.delete,
+            AuditLogAction.onboarding_question_update:               AuditLogActionCategory.update,
+            AuditLogAction.onboarding_create:                        AuditLogActionCategory.create,
+            AuditLogAction.onboarding_update:                        AuditLogActionCategory.update,
+            AuditLogAction.guild_home_feature_item:                  None,
+            AuditLogAction.guild_home_remove_item:                   None,
+            AuditLogAction.harmful_links_blocked_message:            None,
+            AuditLogAction.server_guide_create:                      AuditLogActionCategory.create,
+            AuditLogAction.server_guide_update:                      AuditLogActionCategory.update,
+            AuditLogAction.voice_channel_status_update:              AuditLogActionCategory.create,
+            AuditLogAction.voice_channel_status_delete:              AuditLogActionCategory.delete,
+            AuditLogAction.scheduled_event_exception_create:         AuditLogActionCategory.create,
+            AuditLogAction.scheduled_event_exception_delete:         AuditLogActionCategory.delete,
+            AuditLogAction.scheduled_event_exception_update:         AuditLogActionCategory.update,
         }
         # fmt: on
         return lookup[self]
@@ -492,6 +557,14 @@ class AuditLogAction(Enum):
             return 'user'
         elif v < 152:
             return 'creator_monetization'
+        elif v < 165:
+            return 'onboarding_question'
+        elif v < 168:
+            return 'onboarding'
+        elif v == 180:
+            return 'harmful_link'
+        elif v < 194:
+            return 'voice_channel_status'
 
 
 class UserFlags(Enum):
@@ -583,6 +656,8 @@ class InviteTarget(Enum):
     unknown = 0
     stream = 1
     embedded_application = 2
+    role_subscriptions = 3
+    creator_page = 4
 
 
 class InteractionType(Enum):
@@ -604,6 +679,7 @@ class InteractionResponseType(Enum):
     autocomplete_result = 8
     modal = 9  # for modals
     premium_required = 10
+    iframe = 11 # for iframe modals
 
 
 class VideoQualityMode(Enum):
@@ -708,6 +784,7 @@ class Locale(Enum):
     turkish = 'tr'
     ukrainian = 'uk'
     vietnamese = 'vi'
+    arabic = 'ar'
 
     def __str__(self) -> str:
         return self.value
@@ -765,6 +842,7 @@ class AutoModRuleTriggerType(Enum):
     keyword_preset = 4
     mention_spam = 5
     member_profile = 6
+    server_policy = 7
 
 
 class AutoModRuleEventType(Enum):
@@ -788,6 +866,23 @@ class ForumLayoutType(Enum):
 class ForumOrderType(Enum):
     latest_activity = 0
     creation_date = 1
+
+
+class OnboardingPromptType(Enum):
+    multiple_choice = 0
+    dropdown = 1
+
+
+class OnboardingMode(Enum):
+    regular = 0
+    advanced = 1
+
+    default = 0
+
+
+class VoiceChannelEffectAnimationType(Enum):
+    premium = 0
+    basic = 1
 
 
 class SelectDefaultValueType(Enum):
@@ -820,7 +915,11 @@ class EntitlementOwnerType(Enum):
 
 
 class PollLayoutType(Enum):
+    unknown = 0
     default = 1
+    image_only_answers = 2
+
+    normal = 1
 
 
 class InviteType(Enum):
@@ -828,10 +927,28 @@ class InviteType(Enum):
     group_dm = 1
     friend = 2
 
+    gdm = 1
+
 
 class ReactionType(Enum):
     normal = 0
     burst = 1
+
+
+class MemberJoinType(Enum):
+    unknown = 0
+    bot = 1
+    integration = 2
+    discovery = 3
+    hub = 4
+    invite = 5
+    vanity_url = 6
+
+
+# TODO: `guild` vs `guild_install`
+class ApplicationIntegrationType(Enum):
+    guild = 0
+    user = 1
 
 
 def create_unknown_value(cls: Type[E], val: Any) -> E:
@@ -850,3 +967,52 @@ def try_enum(cls: Type[E], val: Any) -> E:
         return cls._enum_value_map_[val]  # type: ignore # All errors are caught below
     except (KeyError, TypeError, AttributeError):
         return create_unknown_value(cls, val)
+
+
+class ConnectionType(Enum):
+    battle_net = 'battlenet'
+    contacts = 'contacts'
+    crunchyroll = 'crunchyroll'
+    ebay = 'ebay'
+    epic_games = 'epicgames'
+    facebook = 'facebook'
+    github = 'github'
+    instagram = 'instagram'
+    league_of_legends = 'leagueoflegends'
+    paypal = 'paypal'
+    playstation = 'playstation'
+    reddit = 'reddit'
+    riot_games = 'riotgames'
+    samsung = 'samsung'
+    spotify = 'spotify'
+    skype = 'skype'
+    steam = 'steam'
+    tiktok = 'tiktok'
+    twitch = 'twitch'
+    twitter = 'twitter'
+    youtube = 'youtube'
+    xbox = 'xbox'
+    domain = 'domain'
+    bungie = 'bungie'
+    roblox = 'roblox'
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class PremiumType(Enum):
+    none = 0
+    nitro_classic = 1
+    nitro = 2
+    nitro_basic = 3
+
+    @classmethod
+    def from_sku_id(cls, sku_id: int) -> Optional[PremiumType]:
+        if sku_id == 628379670982688768:
+            return cls.none
+        elif sku_id == 521846918637420545:
+            return cls.nitro_classic
+        elif sku_id in (521842865731534868, 521847234246082599):
+            return cls.nitro
+        elif sku_id == 978380684370378762:
+            return cls.nitro_basic

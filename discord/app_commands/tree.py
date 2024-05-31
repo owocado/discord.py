@@ -200,7 +200,9 @@ class CommandTree(Generic[ClientT]):
 
         return AppCommand(data=command, state=self._state)
 
-    async def fetch_commands(self, *, guild: Optional[Snowflake] = None) -> List[AppCommand]:
+    async def fetch_commands(
+        self, *, guild: Optional[Snowflake] = None, with_localizations: bool = False
+    ) -> List[AppCommand]:
         """|coro|
 
         Fetches the application's current commands.
@@ -217,6 +219,10 @@ class CommandTree(Generic[ClientT]):
         guild: Optional[:class:`~discord.abc.Snowflake`]
             The guild to fetch the commands from. If not passed then global commands
             are fetched instead.
+        with_localizations: :class:`bool`
+            Whether to fetch the localizations for the commands. Defaults to ``False``.
+
+            .. versionadded:: 2.4
 
         Raises
         -------
@@ -234,9 +240,13 @@ class CommandTree(Generic[ClientT]):
             raise MissingApplicationID
 
         if guild is None:
-            commands = await self._http.get_global_commands(self.client.application_id)
+            commands = await self._http.get_global_commands(
+                self.client.application_id, with_localizations=with_localizations
+            )
         else:
-            commands = await self._http.get_guild_commands(self.client.application_id, guild.id)
+            commands = await self._http.get_guild_commands(
+                self.client.application_id, guild.id, with_localizations=with_localizations
+            )
 
         return [AppCommand(data=data, state=self._state) for data in commands]
 
@@ -307,24 +317,10 @@ class CommandTree(Generic[ClientT]):
         guild: Optional[:class:`~discord.abc.Snowflake`]
             The guild to add the command to. If not given or ``None`` then it
             becomes a global command instead.
-
-            .. note ::
-
-                Due to a Discord limitation, this keyword argument cannot be used in conjunction with
-                contexts (e.g. :func:`.app_commands.allowed_contexts`) or installation types
-                (e.g. :func:`.app_commands.allowed_installs`).
-
         guilds: List[:class:`~discord.abc.Snowflake`]
             The list of guilds to add the command to. This cannot be mixed
             with the ``guild`` parameter. If no guilds are given at all
             then it becomes a global command instead.
-
-            .. note ::
-
-                Due to a Discord limitation, this keyword argument cannot be used in conjunction with
-                contexts (e.g. :func:`.app_commands.allowed_contexts`) or installation types
-                (e.g. :func:`.app_commands.allowed_installs`).
-
         override: :class:`bool`
             Whether to override a command with the same name. If ``False``
             an exception is raised. Default is ``False``.
@@ -891,24 +887,10 @@ class CommandTree(Generic[ClientT]):
         guild: Optional[:class:`~discord.abc.Snowflake`]
             The guild to add the command to. If not given or ``None`` then it
             becomes a global command instead.
-
-            .. note ::
-
-                Due to a Discord limitation, this keyword argument cannot be used in conjunction with
-                contexts (e.g. :func:`.app_commands.allowed_contexts`) or installation types
-                (e.g. :func:`.app_commands.allowed_installs`).
-
         guilds: List[:class:`~discord.abc.Snowflake`]
             The list of guilds to add the command to. This cannot be mixed
             with the ``guild`` parameter. If no guilds are given at all
             then it becomes a global command instead.
-
-            .. note ::
-
-                Due to a Discord limitation, this keyword argument cannot be used in conjunction with
-                contexts (e.g. :func:`.app_commands.allowed_contexts`) or installation types
-                (e.g. :func:`.app_commands.allowed_installs`).
-
         auto_locale_strings: :class:`bool`
             If this is set to ``True``, then all translatable strings will implicitly
             be wrapped into :class:`locale_str` rather than :class:`str`. This could
@@ -988,24 +970,10 @@ class CommandTree(Generic[ClientT]):
         guild: Optional[:class:`~discord.abc.Snowflake`]
             The guild to add the command to. If not given or ``None`` then it
             becomes a global command instead.
-
-            .. note ::
-
-                Due to a Discord limitation, this keyword argument cannot be used in conjunction with
-                contexts (e.g. :func:`.app_commands.allowed_contexts`) or installation types
-                (e.g. :func:`.app_commands.allowed_installs`).
-
         guilds: List[:class:`~discord.abc.Snowflake`]
             The list of guilds to add the command to. This cannot be mixed
             with the ``guild`` parameter. If no guilds are given at all
             then it becomes a global command instead.
-
-            .. note ::
-
-                Due to a Discord limitation, this keyword argument cannot be used in conjunction with
-                contexts (e.g. :func:`.app_commands.allowed_contexts`) or installation types
-                (e.g. :func:`.app_commands.allowed_installs`).
-
         auto_locale_strings: :class:`bool`
             If this is set to ``True``, then all translatable strings will implicitly
             be wrapped into :class:`locale_str` rather than :class:`str`. This could
@@ -1219,6 +1187,7 @@ class CommandTree(Generic[ClientT]):
     async def _call_context_menu(
         self, interaction: Interaction[ClientT], data: ApplicationCommandInteractionData, type: int
     ) -> None:
+        self.client.dispatch("raw_app_command_completion", data)
         name = data['name']
         guild_id = _get_as_snowflake(data, 'guild_id')
         ctx_menu = self._context_menus.get((name, guild_id, type))
@@ -1274,6 +1243,7 @@ class CommandTree(Generic[ClientT]):
             return
 
         data: ApplicationCommandInteractionData = interaction.data  # type: ignore
+        self.client.dispatch("raw_app_command_completion", data)
         type = data.get('type', 1)
         if type != 1:
             # Context menu command...

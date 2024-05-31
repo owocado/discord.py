@@ -37,6 +37,7 @@ from .member import Member
 from .emoji import Emoji
 from .user import User
 from .threads import Thread
+from .soundboard import SoundboardSound
 
 
 class Ban(TypedDict):
@@ -50,8 +51,8 @@ class UnavailableGuild(TypedDict):
 
 
 class IncidentData(TypedDict):
-    invites_disabled_until: NotRequired[Optional[str]]
-    dms_disabled_until: NotRequired[Optional[str]]
+    invites_disabled_until: Optional[str]
+    dms_disabled_until: Optional[str]
 
 
 DefaultMessageNotificationLevel = Literal[0, 1]
@@ -90,6 +91,8 @@ GuildFeature = Literal[
     'VIP_REGIONS',
     'WELCOME_SCREEN_ENABLED',
     'RAID_ALERTS_DISABLED',
+    'GUESTS_ENABLED',
+    'SOUNDBOARD',
 ]
 
 
@@ -103,11 +106,15 @@ class _BaseGuildPreview(UnavailableGuild):
     features: List[GuildFeature]
     description: Optional[str]
     incidents_data: Optional[IncidentData]
+    sticker_count: Optional[int]
 
 
 class _GuildPreviewUnique(TypedDict):
     approximate_member_count: int
     approximate_presence_count: int
+    emoji_count: Optional[int]
+    sticker_count: Optional[int]
+    primary_category_id: Optional[int]
 
 
 class GuildPreview(_BaseGuildPreview, _GuildPreviewUnique):
@@ -154,9 +161,11 @@ class Guild(_BaseGuildPreview):
     max_members: NotRequired[int]
     premium_subscription_count: NotRequired[int]
     max_video_channel_users: NotRequired[int]
+    soundboard_sounds: NotRequired[List[SoundboardSound]]
+    home_header: Optional[str]
 
 
-class InviteGuild(Guild, total=False):
+class InviteGuild(_GuildPreviewUnique, Guild, total=False):
     welcome_screen: WelcomeScreen
 
 
@@ -185,6 +194,12 @@ class _RolePositionRequired(TypedDict):
 
 class RolePositionUpdate(_RolePositionRequired, total=False):
     position: Optional[Snowflake]
+
+
+class DiscoveryCategory(TypedDict):
+    id: int
+    is_primary: bool
+    name: str
 
 
 class BulkBanUserResponse(TypedDict):

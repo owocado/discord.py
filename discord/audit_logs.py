@@ -43,7 +43,8 @@ from .stage_instance import StageInstance
 from .sticker import GuildSticker
 from .threads import Thread
 from .integrations import PartialIntegration
-from .channel import ForumChannel, StageChannel, ForumTag
+from .channel import ForumChannel, StageChannel, ForumTag, VocalGuildChannel
+from .onboarding import OnboardingPrompt, OnboardingPromptOption
 
 __all__ = (
     'AuditLogDiff',
@@ -69,10 +70,12 @@ if TYPE_CHECKING:
         DefaultReaction as DefaultReactionPayload,
     )
     from .types.invite import Invite as InvitePayload
+    from .types.emoji import PartialEmoji as PartialEmojiPayload
     from .types.role import Role as RolePayload
     from .types.snowflake import Snowflake
     from .types.command import ApplicationCommandPermissions
     from .types.automod import AutoModerationAction
+    from .types.onboarding import Prompt as PromptPayload, PromptOption as PromptOptionPayload
     from .user import User
     from .app_commands import AppCommand
     from .webhook import Webhook
@@ -103,7 +106,7 @@ def _transform_timestamp(entry: AuditLogEntry, data: Optional[str]) -> Optional[
 
 
 def _transform_color(entry: AuditLogEntry, data: int) -> Colour:
-    return Colour(data)
+    return Colour(int(data))
 
 
 def _transform_snowflake(entry: AuditLogEntry, data: Snowflake) -> int:
@@ -145,7 +148,7 @@ def _transform_applied_forum_tags(entry: AuditLogEntry, data: List[Snowflake]) -
     return [Object(id=tag_id, type=ForumTag) for tag_id in data]
 
 
-def _transform_overloaded_flags(entry: AuditLogEntry, data: int) -> Union[int, flags.ChannelFlags]:
+def _transform_overloaded_flags(entry: AuditLogEntry, data: int) -> Union[int, flags.ChannelFlags, flags.InviteFlags]:
     # The `flags` key is definitely overloaded. Right now it's for channels and threads but
     # I am aware of `member.flags` and `user.flags` existing. However, this does not impact audit logs
     # at the moment but better safe than sorry.
@@ -157,9 +160,16 @@ def _transform_overloaded_flags(entry: AuditLogEntry, data: int) -> Union[int, f
         enums.AuditLogAction.thread_update,
         enums.AuditLogAction.thread_delete,
     )
+    invite_audit_log_types = (
+        enums.AuditLogAction.invite_create,
+        enums.AuditLogAction.invite_update,
+        enums.AuditLogAction.invite_delete,
+    )
 
     if entry.action in channel_audit_log_types:
         return flags.ChannelFlags._from_value(data)
+    elif entry.action in invite_audit_log_types:
+        return flags.InviteFlags._from_value(data)
     return data
 
 
@@ -235,6 +245,31 @@ def _transform_automod_actions(entry: AuditLogEntry, data: List[AutoModerationAc
     return [AutoModRuleAction.from_data(action) for action in data]
 
 
+def _transform_onboarding_prompts(entry: AuditLogEntry, data: List[PromptPayload]) -> List[OnboardingPrompt]:
+    return [OnboardingPrompt(data=prompt, state=entry._state, guild=entry.guild) for prompt in data]
+
+
+def _transform_onboarding_prompt_options(
+    entry: AuditLogEntry, data: List[PromptOptionPayload]
+) -> List[OnboardingPromptOption]:
+    return [OnboardingPromptOption(data=option, state=entry._state, guild=entry.guild) for option in data]
+
+
+def _transform_default_emoji(entry: AuditLogEntry, data: str) -> PartialEmoji:
+    return PartialEmoji(name=data)
+
+
+def _transform_partial_emoji(entry: AuditLogEntry, data: PartialEmojiPayload) -> PartialEmoji:
+    return PartialEmoji(**data)
+
+
+def _transform_status(entry: AuditLogEntry, data: Union[int, str]) -> Union[enums.EventStatus, str]:
+    if entry.action.name.startswith('scheduled_event_'):
+        return enums.try_enum(enums.EventStatus, data)
+    else:
+        return data  # type: ignore  # voice channel status is str
+
+
 E = TypeVar('E', bound=enums.Enum)
 
 
@@ -257,13 +292,15 @@ def _flag_transformer(cls: Type[F]) -> Callable[[AuditLogEntry, Union[int, str]]
 
 def _transform_type(
     entry: AuditLogEntry, data: Union[int, str]
-) -> Union[enums.ChannelType, enums.StickerType, enums.WebhookType, str]:
+) -> Union[enums.ChannelType, enums.StickerType, enums.WebhookType, str, enums.OnboardingPromptType]:
     if entry.action.name.startswith('sticker_'):
         return enums.try_enum(enums.StickerType, data)
     elif entry.action.name.startswith('integration_'):
         return data  # type: ignore  # integration type is str
     elif entry.action.name.startswith('webhook_'):
         return enums.try_enum(enums.WebhookType, data)
+    elif entry.action.name.startswith('onboarding_question_'):
+        return enums.try_enum(enums.OnboardingPromptType, data)
     else:
         return enums.try_enum(enums.ChannelType, data)
 
@@ -328,7 +365,7 @@ class AuditLogChanges:
         'communication_disabled_until':          ('timed_out_until', _transform_timestamp),
         'expire_behavior':                       (None, _enum_transformer(enums.ExpireBehaviour)),
         'mfa_level':                             (None, _enum_transformer(enums.MFALevel)),
-        'status':                                (None, _enum_transformer(enums.EventStatus)),
+        'status':                                (None, _transform_status),
         'entity_type':                           (None, _enum_transformer(enums.EntityType)),
         'preferred_locale':                      (None, _enum_transformer(enums.Locale)),
         'image_hash':                            ('cover_image', _transform_cover_image),
@@ -341,6 +378,14 @@ class AuditLogChanges:
         'available_tags':                        (None, _transform_forum_tags),
         'flags':                                 (None, _transform_overloaded_flags),
         'default_reaction_emoji':                (None, _transform_default_reaction),
+        'options':                               (None, _transform_onboarding_prompt_options),
+        'prompts':                               (None, _transform_onboarding_prompts),
+        'mode':                                  (None, _enum_transformer(enums.OnboardingMode)),
+        'default_channel_ids':                   ('default_channels', _transform_channels_or_threads),
+        'emoji_name':                            ('emoji', _transform_default_emoji),
+        'user_id':                               ('user', _transform_member_id),
+        'theme_color':                           (None, _transform_color),
+        'icon_emoji':                            (None, _transform_partial_emoji)
     }
     # fmt: on
 
@@ -584,6 +629,11 @@ class _AuditLogProxyMemberKickOrMemberRoleUpdate(_AuditLogProxy):
     integration_type: Optional[str]
 
 
+class _AuditLogProxyVoiceChannelStatusAction(_AuditLogProxy):
+    channel: VocalGuildChannel
+    status: Optional[str]
+
+
 class AuditLogEntry(Hashable):
     r"""Represents an Audit Log entry.
 
@@ -671,6 +721,7 @@ class AuditLogEntry(Hashable):
             _AuditLogProxyMessageBulkDelete,
             _AuditLogProxyAutoModAction,
             _AuditLogProxyMemberKickOrMemberRoleUpdate,
+            _AuditLogProxyVoiceChannelStatusAction,
             Member, User, None, PartialIntegration,
             Role, Object
         ] = None
@@ -746,6 +797,18 @@ class AuditLogEntry(Hashable):
             elif self.action.name.startswith('app_command'):
                 app_id = int(extra['application_id'])
                 self.extra = self._get_integration_by_app_id(app_id) or Object(app_id, type=PartialIntegration)
+            elif self.action.name.startswith('harmful_link'):
+                channel_id = int(extra['channel_id'])
+                self.extra = _AuditLogProxyMemberMoveOrMessageDelete(
+                    channel=self.guild.get_channel_or_thread(channel_id) or Object(channel_id),
+                    count=0,
+                )
+            elif self.action.name.startswith('voice_channel_status'):
+                channel_id = int(extra['channel_id'])
+                self.extra = _AuditLogProxyVoiceChannelStatusAction(
+                    channel=self.guild.get_channel(channel_id) or Object(channel_id),
+                    status=extra.get('status'),
+                )
 
         # this key is not present when the above is present, typically.
         # It's a list of { new_value: a, old_value: b, key: c }
@@ -924,3 +987,6 @@ class AuditLogEntry(Hashable):
         from .webhook import Webhook
 
         return self._webhooks.get(target_id) or Object(target_id, type=Webhook)
+
+    def _convert_target_voice_channel_status(self, target_id: int) -> Union[abc.GuildChannel, Object]:
+        return self.guild.get_channel(target_id) or Object(id=target_id)

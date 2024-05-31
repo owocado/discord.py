@@ -24,10 +24,10 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Optional, Dict, Literal
 from typing_extensions import NotRequired
 
-from .user import User
+from .user import PartialUser, User
 from .team import Team
 from .snowflake import Snowflake
 
@@ -52,12 +52,14 @@ class BaseAppInfo(TypedDict):
     interactions_endpoint_url: NotRequired[Optional[str]]
     redirect_uris: NotRequired[List[str]]
     role_connections_verification_url: NotRequired[Optional[str]]
+    install_params: NotRequired[InstallParams]
 
 
 class AppInfo(BaseAppInfo):
     owner: User
     bot_public: bool
     bot_require_code_grant: bool
+    bot: NotRequired[User]
     team: NotRequired[Team]
     guild_id: NotRequired[Snowflake]
     primary_sku_id: NotRequired[Snowflake]
@@ -65,7 +67,6 @@ class AppInfo(BaseAppInfo):
     hook: NotRequired[bool]
     max_participants: NotRequired[int]
     tags: NotRequired[List[str]]
-    install_params: NotRequired[InstallParams]
     custom_install_url: NotRequired[str]
 
 
@@ -78,3 +79,43 @@ class PartialAppInfo(BaseAppInfo, total=False):
 class GatewayAppInfo(TypedDict):
     id: Snowflake
     flags: int
+
+
+class ApplicationInstallParams(TypedDict):
+    scopes: List[str]
+    permissions: int
+
+
+class BaseApplication(TypedDict):
+    id: Snowflake
+    name: str
+    description: str
+    icon: Optional[str]
+    cover_image: NotRequired[Optional[str]]
+    type: Optional[int]
+    primary_sku_id: NotRequired[Snowflake]
+    summary: NotRequired[Literal['']]
+
+
+class RoleConnectionApplication(BaseApplication):
+    bot: NotRequired[PartialUser]
+
+
+class RoleConnectionMetadata(TypedDict):
+    type: Literal[1, 2, 3, 4, 5, 6, 7, 8]
+    key: str
+    name: str
+    description: str
+    name_localizations: NotRequired[Dict[str, str]]
+    description_localizations: NotRequired[Dict[str, str]]
+
+
+class PartialRoleConnection(TypedDict):
+    platform_name: Optional[str]
+    platform_username: Optional[str]
+    metadata: Dict[str, str]
+
+
+class RoleConnection(PartialRoleConnection):
+    application: RoleConnectionApplication
+    application_metadata: List[RoleConnectionMetadata]

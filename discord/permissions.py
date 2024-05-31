@@ -209,6 +209,22 @@ class Permissions(BaseFlags):
         return base
 
     @classmethod
+    def _user_installed_permissions(cls, *, in_guild: bool) -> Self:
+        base = cls.none()
+        base.send_messages = True
+        base.attach_files = True
+        base.embed_links = True
+        base.external_emojis = True
+        base.send_voice_messages = True
+        if in_guild:
+            # Logically this is False but if not set to True,
+            # permissions just become 0.
+            base.read_messages = True
+            base.send_tts_messages = True
+            base.send_messages_in_threads = True
+        return base
+
+    @classmethod
     def all_channel(cls) -> Self:
         """A :class:`Permissions` with all channel-specific permissions set to
         ``True`` and the guild-specific ones set to ``False``. The guild-specific
@@ -298,8 +314,12 @@ class Permissions(BaseFlags):
     @classmethod
     def voice(cls) -> Self:
         """A factory method that creates a :class:`Permissions` with all
-        "Voice" permissions from the official Discord UI set to ``True``."""
-        return cls(0b0000_0000_0000_0000_0010_0100_1000_0000_0000_0011_1111_0000_0000_0011_0000_0000)
+        "Voice" permissions from the official Discord UI set to ``True``.
+
+        .. versionchanged:: 2.4
+            Added :attr:`set_voice_channel_status` permission.
+        """
+        return cls(0b0000_0000_0000_0001_0010_0100_1000_0000_0000_0011_1111_0000_0000_0011_0000_0000)
 
     @classmethod
     def stage(cls) -> Self:
@@ -745,6 +765,18 @@ class Permissions(BaseFlags):
         return 1 << 46
 
     @flag_value
+    def use_clyde_ai(self) -> int: # deprecated
+        return 1 << 47
+
+    @flag_value
+    def set_voice_channel_status(self) -> int:
+        """:class:`bool`: Returns ``True`` if a user can set the status of voice channels.
+
+        .. versionadded:: 2.4
+        """
+        return 1 << 48
+
+    @flag_value
     def send_polls(self) -> int:
         """:class:`bool`: Returns ``True`` if a user can send poll messages.
 
@@ -875,11 +907,13 @@ class PermissionOverwrite:
         use_external_stickers: Optional[bool]
         use_embedded_activities: Optional[bool]
         moderate_members: Optional[bool]
+        view_creator_monetization_analytics: Optional[bool]
         use_soundboard: Optional[bool]
         use_external_sounds: Optional[bool]
         send_voice_messages: Optional[bool]
         create_expressions: Optional[bool]
         create_events: Optional[bool]
+        set_voice_channel_status: Optional[bool]
         send_polls: Optional[bool]
         create_polls: Optional[bool]
 

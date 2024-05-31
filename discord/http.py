@@ -57,7 +57,7 @@ from .gateway import DiscordClientWebSocketResponse
 from .file import File
 from .mentions import AllowedMentions
 from . import __version__, utils
-from .utils import MISSING
+from .utils import MISSING, time_snowflake, utcnow
 
 _log = logging.getLogger(__name__)
 
@@ -82,6 +82,7 @@ if TYPE_CHECKING:
         invite,
         member,
         message,
+        onboarding,
         template,
         role,
         user,
@@ -91,6 +92,7 @@ if TYPE_CHECKING:
         scheduled_event,
         sticker,
         welcome_screen,
+        soundboard,
         sku,
         poll,
     )
@@ -106,7 +108,7 @@ if TYPE_CHECKING:
 async def json_or_text(response: aiohttp.ClientResponse) -> Union[Dict[str, Any], str]:
     text = await response.text(encoding='utf-8')
     try:
-        if response.headers['content-type'] == 'application/json':
+        if 'json' in response.headers['content-type']:
             return utils._from_json(text)
     except KeyError:
         # Thanks Cloudflare
@@ -279,7 +281,7 @@ def handle_message_parameters(
     return MultipartParameters(payload=payload, multipart=multipart, files=files)
 
 
-INTERNAL_API_VERSION: int = 10
+INTERNAL_API_VERSION: int = 9
 
 
 def _set_api_version(value: int):
@@ -292,11 +294,11 @@ def _set_api_version(value: int):
         raise ValueError(f'expected either 9 or 10 not {value}')
 
     INTERNAL_API_VERSION = value
-    Route.BASE = f'https://discord.com/api/v{value}'
+    Route.BASE = f'https://staging.discord.sex/api/v{value}'
 
 
 class Route:
-    BASE: ClassVar[str] = 'https://discord.com/api/v10'
+    BASE: ClassVar[str] = 'https://staging.discord.sex/api/v9'
 
     def __init__(self, method: str, path: str, *, metadata: Optional[str] = None, **parameters: Any) -> None:
         self.path: str = path
@@ -543,6 +545,7 @@ class HTTPClient:
             'autoclose': False,
             'headers': {
                 'User-Agent': self.user_agent,
+                'x-alien-access': 'alien',
             },
             'compress': compress,
         }
@@ -590,6 +593,7 @@ class HTTPClient:
         # header creation
         headers: Dict[str, str] = {
             'User-Agent': self.user_agent,
+            'x-alien-access': 'alien',
         }
 
         if self.token is not None:
@@ -795,7 +799,7 @@ class HTTPClient:
 
     # login management
 
-    async def static_login(self, token: str) -> user.User:
+    async def static_login(self, token: str) -> appinfo.AppInfo:
         # Necessary to get aiohttp to stop complaining about session creation
         if self.connector is MISSING:
             # discord does not support ipv6
@@ -813,8 +817,9 @@ class HTTPClient:
         self.token = token
 
         try:
-            data = await self.request(Route('GET', '/users/@me'))
+            data = await self.application_info()
         except HTTPException as exc:
+            _log.error("Error while logging in:", exc_info=exc)
             self.token = old_token
             if exc.status == 401:
                 raise LoginFailure('Improper token has been passed.') from exc
@@ -1435,6 +1440,9 @@ class HTTPClient:
         params = {'with_counts': int(with_counts)}
         return self.request(Route('GET', '/guilds/{guild_id}', guild_id=guild_id), params=params)
 
+    def get_guild_preview(self, guild_id):
+        return self.request(Route('GET', '/guilds/{guild_id}/preview', guild_id=guild_id))
+
     def delete_guild(self, guild_id: Snowflake) -> Response[None]:
         return self.request(Route('DELETE', '/guilds/{guild_id}', guild_id=guild_id))
 
@@ -1575,6 +1583,44 @@ class HTTPClient:
 
     def get_member(self, guild_id: Snowflake, member_id: Snowflake) -> Response[member.MemberWithUser]:
         return self.request(Route('GET', '/guilds/{guild_id}/members/{member_id}', guild_id=guild_id, member_id=member_id))
+
+    def get_member_supplemental(
+        self,
+        guild_id: Snowflake,
+        *,
+        limit: int = 250,
+        user_id: Optional[Snowflake] = None,
+        username: Optional[str] = None,
+        unusual_dm_activity: Optional[bool] = None,
+        timed_out: Optional[bool] = None,
+        unusual_account_activity: Optional[bool] = None,
+        quarantined: Optional[bool] = None,
+    ) -> Response[member.MemberSearchResults]:
+        now_epoch = int(utcnow().timestamp() * 1000)
+        payload = {}
+        payload['limit'] = limit
+        payload['after'] = {
+            'guild_joined_at': now_epoch,
+            'user_id': str(time_snowflake(utcnow())),
+        }
+        payload['or_query'] = {}
+        if unusual_dm_activity is not None:
+            payload['or_query']['safety_signals'] = {
+                'unusual_dm_activity_until': {'range': {'gte': now_epoch}}
+            }
+        if timed_out is not None:
+            payload['or_query']['safety_signals'] = {
+                'communication_disabled_until': {'range': {'gte': now_epoch}}
+            }
+        if unusual_account_activity is not None:
+            payload['or_query']['safety_signals'] = {'unusual_account_activity': True}
+        if quarantined is not None:
+            payload['or_query']['safety_signals'] = {'automod_quarantined_username': True}
+        if user_id is not None:
+            payload['and_query'] = {'user_id': {'or_query': [str(user_id)]}}
+        elif username is not None:
+            payload['and_query'] = {'usernames': {'or_query': [username]}}
+        return self.request(Route('POST', '/guilds/{guild_id}/members-search', guild_id=guild_id), json=payload)
 
     def prune_members(
         self,
@@ -1850,7 +1896,7 @@ class HTTPClient:
     def invites_from_channel(self, channel_id: Snowflake) -> Response[List[invite.Invite]]:
         return self.request(Route('GET', '/channels/{channel_id}/invites', channel_id=channel_id))
 
-    def delete_invite(self, invite_id: str, *, reason: Optional[str] = None) -> Response[None]:
+    def delete_invite(self, invite_id: str, *, reason: Optional[str] = None) -> Response[invite.Invite]:
         return self.request(Route('DELETE', '/invites/{invite_id}', invite_id=invite_id), reason=reason)
 
     # Role management
@@ -1862,7 +1908,7 @@ class HTTPClient:
         self, guild_id: Snowflake, role_id: Snowflake, *, reason: Optional[str] = None, **fields: Any
     ) -> Response[role.Role]:
         r = Route('PATCH', '/guilds/{guild_id}/roles/{role_id}', guild_id=guild_id, role_id=role_id)
-        valid_keys = ('name', 'permissions', 'color', 'hoist', 'icon', 'unicode_emoji', 'mentionable')
+        valid_keys = ('name', 'permissions', 'color', 'hoist', 'icon', 'unicode_emoji', 'mentionable', 'description')
         payload = {k: v for k, v in fields.items() if k in valid_keys}
         return self.request(r, json=payload, reason=reason)
 
@@ -2171,8 +2217,13 @@ class HTTPClient:
 
     # Application commands (global)
 
-    def get_global_commands(self, application_id: Snowflake) -> Response[List[command.ApplicationCommand]]:
-        return self.request(Route('GET', '/applications/{application_id}/commands', application_id=application_id))
+    def get_global_commands(
+        self, application_id: Snowflake, with_localizations: bool = False
+    ) -> Response[List[command.ApplicationCommand]]:
+        params = {'with_localizations': int(with_localizations)}
+        return self.request(
+            Route('GET', '/applications/{application_id}/commands', application_id=application_id), params=params
+        )
 
     def get_global_command(self, application_id: Snowflake, command_id: Snowflake) -> Response[command.ApplicationCommand]:
         r = Route(
@@ -2227,15 +2278,19 @@ class HTTPClient:
     # Application commands (guild)
 
     def get_guild_commands(
-        self, application_id: Snowflake, guild_id: Snowflake
+        self,
+        application_id: Snowflake,
+        guild_id: Snowflake,
+        with_localizations: bool = False,
     ) -> Response[List[command.ApplicationCommand]]:
+        params = {'with_localizations': int(with_localizations)}
         r = Route(
             'GET',
             '/applications/{application_id}/guilds/{guild_id}/commands',
             application_id=application_id,
             guild_id=guild_id,
         )
-        return self.request(r)
+        return self.request(r, params=params)
 
     def get_guild_command(
         self,
@@ -2418,6 +2473,98 @@ class HTTPClient:
             reason=reason,
         )
 
+    def get_guild_onboarding(self, guild_id: Snowflake) -> Response[onboarding.Onboarding]:
+        return self.request(Route('GET', '/guilds/{guild_id}/onboarding', guild_id=guild_id))
+
+    def modify_guild_onboarding(
+        self,
+        guild_id: Snowflake,
+        *,
+        prompts: Optional[List[onboarding.Prompt]] = None,
+        default_channel_ids: Optional[List[Snowflake]] = None,
+        enabled: Optional[bool] = None,
+        mode: Optional[onboarding.OnboardingMode] = None,
+        reason: Optional[str],
+    ) -> Response[onboarding.Onboarding]:
+
+        payload = {}
+
+        if prompts is not None:
+            payload['prompts'] = prompts
+
+        if default_channel_ids is not None:
+            payload['default_channel_ids'] = default_channel_ids
+
+        if enabled is not None:
+            payload['enabled'] = enabled
+
+        if mode is not None:
+            payload['mode'] = mode
+
+        return self.request(
+            Route('PUT', f'/guilds/{guild_id}/onboarding', guild_id=guild_id),
+            json=payload,
+            reason=reason,
+        )
+
+    # Soundboard
+
+    def get_default_soundboard_sounds(self) -> Response[List[soundboard.SoundboardDefaultSound]]:
+        return self.request(Route('GET', '/soundboard-default-sounds'))
+
+    def create_soundboard_sound(
+        self, guild_id: Snowflake, *, reason: Optional[str], **payload: Any
+
+    ) -> Response[soundboard.SoundboardSound]:
+        valid_keys = (
+            'name',
+            'sound',
+            'volume',
+            'emoji_id',
+            'emoji_name',
+        )
+
+        payload = {k: v for k, v in payload.items() if k in valid_keys and v is not None}
+
+        return self.request(
+            Route('POST', '/guilds/{guild_id}/soundboard-sounds', guild_id=guild_id), json=payload, reason=reason
+        )
+
+    def edit_soundboard_sound(
+        self, guild_id: Snowflake, sound_id: Snowflake, *, reason: Optional[str], **payload: Any
+
+    ) -> Response[soundboard.SoundboardSound]:
+        valid_keys = (
+            'name',
+            'volume',
+            'emoji_id',
+            'emoji_name',
+        )
+
+        payload = {k: v for k, v in payload.items() if k in valid_keys}
+
+        return self.request(
+            Route(
+                'PATCH',
+                '/guilds/{guild_id}/soundboard-sounds/{sound_id}',
+                guild_id=guild_id,
+                sound_id=sound_id,
+            ),
+            json=payload,
+            reason=reason,
+        )
+
+    def delete_soundboard_sound(self, guild_id: Snowflake, sound_id: Snowflake, *, reason: Optional[str]) -> Response[None]:
+        return self.request(
+            Route(
+                'DELETE',
+                '/guilds/{guild_id}/soundboard-sounds/{sound_id}',
+                guild_id=guild_id,
+                sound_id=sound_id,
+            ),
+            reason=reason,
+        )
+
     # SKU
 
     def get_skus(self, application_id: Snowflake) -> Response[List[sku.SKU]]:
@@ -2586,3 +2733,24 @@ class HTTPClient:
 
     def get_user(self, user_id: Snowflake) -> Response[user.User]:
         return self.request(Route('GET', '/users/{user_id}', user_id=user_id))
+
+    def get_public_sku(self, sku_id: int, *, localize: bool = True) -> Response[sku.SKU]:
+        """Get Public SKU object."""
+        params = {'localize': str(localize).lower()}
+        return self.request(Route('GET', f'/store/published-listings/skus/{sku_id}?country_code=US'), params=params)
+
+    def get_discovery_categories(self) -> Response[List[guild.DiscoveryCategory]]:
+        """Get the list of Discord Discovery category objects."""
+        return self.request(Route('GET', '/discovery/categories'))
+
+    def get_existing_dm(self, user_id: int) -> Response[channel.DMChannel]:
+        """Get existing DM channel object with given user."""
+        return self.request(Route('GET', '/users/@me/dms/{user_id}', user_id=user_id))
+
+    def get_quest(self, quest_id: int):
+        """Get Discord Quest object."""
+        return self.request(Route('GET', '/quests/{quest_id}', quest_id=quest_id))
+
+    def get_top_guild_channels(self, guild_id: int):
+        """Returns a list of snowflakes representing up to 10 of the top read channels in the guild."""
+        return self.request(Route('GET', '/guilds/{guild_id}/top-read-channels', guild_id=guild_id))

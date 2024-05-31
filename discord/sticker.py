@@ -278,7 +278,7 @@ class Sticker(_StickerTag):
         self.description: str = data['description']
         self.format: StickerFormatType = try_enum(StickerFormatType, data['format_type'])
         if self.format is StickerFormatType.gif:
-            self.url: str = f'https://media.discordapp.net/stickers/{self.id}.gif'
+            self.url: str = f'https://staging.discord.sex/__/media/stickers/{self.id}.gif'
         else:
             self.url: str = f'{Asset.BASE}/stickers/{self.id}.{self.format.file_extension}'
 

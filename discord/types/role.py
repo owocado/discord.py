@@ -43,6 +43,7 @@ class Role(TypedDict):
     icon: NotRequired[Optional[str]]
     unicode_emoji: NotRequired[Optional[str]]
     tags: NotRequired[RoleTags]
+    description: Optional[str]
 
 
 class RoleTags(TypedDict, total=False):

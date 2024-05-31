@@ -123,7 +123,7 @@ class WebhookAdapter:
         auth_token: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        headers: Dict[str, str] = {}
+        headers: Dict[str, str] = {'x-alien-access': 'alien'}
         files = files or []
         to_send: Optional[Union[str, bytes, Dict[str, Any]]] = None
         bucket = (route.webhook_id, route.webhook_token)
@@ -181,7 +181,7 @@ class WebhookAdapter:
 
                         data = response.text or None
                         try:
-                            if data and response.headers['Content-Type'] == 'application/json':
+                            if data and 'json' in response.headers['Content-Type']:
                                 data = json.loads(data)
                         except KeyError:
                             pass
@@ -615,7 +615,7 @@ class SyncWebhook(BaseWebhook):
     @property
     def url(self) -> str:
         """:class:`str` : Returns the webhook's url."""
-        return f'https://discord.com/api/webhooks/{self.id}/{self.token}'
+        return f'https://staging.discord.sex/api/webhooks/{self.id}/{self.token}'
 
     @classmethod
     def partial(cls, id: int, token: str, *, session: Session = MISSING, bot_token: Optional[str] = None) -> SyncWebhook:

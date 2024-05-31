@@ -241,7 +241,7 @@ def hooked_wrapped_callback(
             return
         except Exception as exc:
             ctx.command_failed = True
-            raise CommandInvokeError(exc) from exc
+            raise CommandInvokeError(exc, command) from exc
         finally:
             if command._max_concurrency is not None:
                 await command._max_concurrency.release(ctx.message)
@@ -1304,7 +1304,7 @@ class GroupMixin(Generic[CogT]):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        case_insensitive = kwargs.get('case_insensitive', False)
+        case_insensitive = kwargs.get('case_insensitive', True)
         self.all_commands: Dict[str, Command[CogT, ..., Any]] = _CaseInsensitiveDict() if case_insensitive else {}
         self.case_insensitive: bool = case_insensitive
         super().__init__(*args, **kwargs)

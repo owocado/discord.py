@@ -78,6 +78,7 @@ from .sticker import GuildSticker
 from .automod import AutoModRule, AutoModAction
 from .audit_logs import AuditLogEntry
 from ._types import ClientT
+from .soundboard import SoundboardSound
 
 if TYPE_CHECKING:
     from .abc import PrivateChannel
@@ -157,6 +158,53 @@ class ChunkRequest:
                 future.set_result(self.buffer)
 
 
+class SoundboardSoundRequest:
+    def __init__(
+        self,
+        guild_id: int,
+        loop: asyncio.AbstractEventLoop,
+        resolver: Callable[[int], Any],
+        *,
+        cache: bool = True,
+    ) -> None:
+        self.guild_id: int = guild_id
+        self.loop: asyncio.AbstractEventLoop = loop
+        self.resolver: Callable[[int], Any] = resolver
+        self.cache: bool = cache
+        self.buffer: List[SoundboardSound] = []
+        self.waiters: List[asyncio.Future[List[SoundboardSound]]] = []
+
+    def add_soundboard_sounds(self, sounds: List[SoundboardSound]) -> None:
+        self.buffer.extend(sounds)
+        if self.cache:
+            guild = self.resolver(self.guild_id)
+            if guild is None:
+                return
+
+            for sound in sounds:
+                existing = guild.get_soundboard_sound(sound.id)
+                if existing is None:
+                    guild._add_soundboard_sound(sound)
+
+    async def wait(self) -> List[SoundboardSound]:
+        future = self.loop.create_future()
+        self.waiters.append(future)
+        try:
+            return await future
+        finally:
+            self.waiters.remove(future)
+
+    def get_future(self) -> asyncio.Future[List[SoundboardSound]]:
+        future = self.loop.create_future()
+        self.waiters.append(future)
+        return future
+
+    def done(self) -> None:
+        for future in self.waiters:
+            if not future.done():
+                future.set_result(self.buffer)
+
+
 _log = logging.getLogger(__name__)
 
 
@@ -208,6 +256,7 @@ class ConnectionState(Generic[ClientT]):
 
         self.allowed_mentions: Optional[AllowedMentions] = allowed_mentions
         self._chunk_requests: Dict[Union[int, str], ChunkRequest] = {}
+        self._soundboard_sounds_requests: Dict[int, SoundboardSoundRequest] = {}
 
         activity = options.get('activity', None)
         if activity:
@@ -287,7 +336,7 @@ class ConnectionState(Generic[ClientT]):
         # Purposefully don't call `clear` because users rely on cache being available post-close
 
     def clear(self, *, views: bool = True) -> None:
-        self.user: Optional[ClientUser] = None
+        self.user: ClientUser = None
         self._users: weakref.WeakValueDictionary[int, User] = weakref.WeakValueDictionary()
         self._emojis: Dict[int, Emoji] = {}
         self._stickers: Dict[int, GuildSticker] = {}
@@ -327,6 +376,16 @@ class ConnectionState(Generic[ClientT]):
 
         for key in removed:
             del self._chunk_requests[key]
+
+    def process_soundboard_sounds_request(self, guild_id: int, sounds: List[SoundboardSound]) -> None:
+        request = self._soundboard_sounds_requests.get(guild_id)
+        if request is None:
+            return
+
+        request.add_soundboard_sounds(sounds)
+        request.done()
+
+        del self._soundboard_sounds_requests[guild_id]
 
     def call_handlers(self, key: str, *args: Any, **kwargs: Any) -> None:
         try:
@@ -455,6 +514,14 @@ class ConnectionState(Generic[ClientT]):
     def stickers(self) -> Sequence[GuildSticker]:
         return utils.SequenceProxy(self._stickers.values())
 
+    @property
+    def soundboard_sounds(self) -> List[SoundboardSound]:
+        all_sounds = []
+        for guild in self.guilds:
+            all_sounds.extend(guild.soundboard_sounds)
+
+        return all_sounds
+
     def get_emoji(self, emoji_id: Optional[int]) -> Optional[Emoji]:
         # the keys of self._emojis are ints
         return self._emojis.get(emoji_id)  # type: ignore
@@ -572,6 +639,22 @@ class ConnectionState(Generic[ClientT]):
             return await asyncio.wait_for(request.wait(), timeout=30.0)
         except asyncio.TimeoutError:
             _log.warning('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
+            raise
+
+    async def request_soundboard_sounds(self, guild: Guild, cache: bool) -> List[SoundboardSound]:
+        guild_id = guild.id
+        ws = self._get_websocket(guild_id)
+        if ws is None:
+                raise RuntimeError('Somehow do not have a websocket for this guild_id')
+
+        request = SoundboardSoundRequest(guild_id, self.loop, self._get_guild, cache=cache)
+        self._soundboard_sounds_requests[request.guild_id] = request
+
+        try:
+            await ws.request_soundboard_sounds(guild_ids=[guild_id])
+            return await asyncio.wait_for(request.wait(), timeout=30)
+        except asyncio.TimeoutError:
+            _log.warning('Timed out waiting for soundboard sounds request')
             raise
 
     async def _delay_ready(self) -> None:
@@ -1249,7 +1332,7 @@ class ConnectionState(Generic[ClientT]):
     def _chunk_timeout(self, guild: Guild) -> float:
         return max(5.0, (guild.member_count or 0) / 10000)
 
-    async def _chunk_and_dispatch(self, guild, unavailable):
+    async def _chunk_and_dispatch(self, guild: Guild, unavailable):
         timeout = self._chunk_timeout(guild)
 
         try:
@@ -1438,6 +1521,7 @@ class ConnectionState(Generic[ClientT]):
         guild = self._get_guild(guild_id)
         if guild is not None:
             raw = RawIntegrationDeleteEvent(data)
+            self.dispatch('rawest_integration_delete', data)
             self.dispatch('raw_integration_delete', raw)
         else:
             _log.debug('INTEGRATION_DELETE referencing an unknown guild ID: %s. Discarding.', guild_id)
@@ -1561,8 +1645,53 @@ class ConnectionState(Generic[ClientT]):
         else:
             _log.debug('SCHEDULED_EVENT_USER_REMOVE referencing unknown guild ID: %s. Discarding.', data['guild_id'])
 
+    def parse_guild_soundboard_sound_create(self, data: gw.GuildSoundBoardSoundCreateEvent) -> None:
+        guild_id = int(data['guild_id'])  # type: ignore # can't be None here
+        guild = self._get_guild(guild_id)
+        if guild is not None:
+            sound = SoundboardSound(guild=guild, state=self, data=data)
+            guild._add_soundboard_sound(sound)
+            self.dispatch('soundboard_sound_create', sound)
+        else:
+            _log.debug('GUILD_SOUNDBOARD_SOUND_CREATE referencing unknown guild ID: %s. Discarding.', guild_id)
+
+    def parse_guild_soundboard_sound_update(self, data: gw.GuildSoundBoardSoundCreateEvent) -> None:
+        guild_id = int(data['guild_id'])  # type: ignore # can't be None here
+        guild = self._get_guild(guild_id)
+        if guild is not None:
+            sound_id = int(data['sound_id'])
+            sound = guild.get_soundboard_sound(sound_id)
+            if sound is not None:
+                old_sound = copy.copy(sound)
+                sound._update(data)
+                self.dispatch('soundboard_sound_update', old_sound, sound)
+            else:
+                _log.warning('GUILD_SOUNDBOARD_SOUND_UPDATE referencing unknown sound ID: %s. Discarding.', sound_id)
+        else:
+            _log.debug('GUILD_SOUNDBOARD_SOUND_UPDATE referencing unknown guild ID: %s. Discarding.', guild_id)
+
+    def parse_guild_soundboard_sound_delete(self, data: gw.GuildSoundBoardSoundDeleteEvent) -> None:
+        guild = self._get_guild(int(data['guild_id']))
+        if guild is not None:
+            sound = guild.get_soundboard_sound(int(data['sound_id']))
+            if sound is not None:
+                guild._remove_soundboard_sound(sound)
+                self.dispatch('soundboard_sound_delete', sound)
+        else:
+            _log.debug('GUILD_SOUNDBOARD_SOUND_DELETE referencing unknown guild ID: %s. Discarding.', data['guild_id'])
+
+    def parse_soundboard_sounds(self, data: gw.SoundboardSoundsRequestEvent) -> None:
+        guild_id = int(data['guild_id'])
+        guild = self._get_guild(guild_id)
+        if guild is not None:
+            sounds = [SoundboardSound(guild=guild, state=self, data=sound) for sound in data['soundboard_sounds']]
+            self.process_soundboard_sounds_request(guild_id, sounds)
+        else:
+            _log.debug('SOUNDBOARD_SOUNDS referencing unknown guild ID: %s. Discarding.', guild_id)
+
     def parse_application_command_permissions_update(self, data: GuildApplicationCommandPermissionsPayload):
         raw = RawAppCommandPermissionsUpdateEvent(data=data, state=self)
+        self.dispatch('rawest_app_command_permissions_update', data)
         self.dispatch('raw_app_command_permissions_update', raw)
 
     def parse_voice_state_update(self, data: gw.VoiceStateUpdateEvent) -> None:
@@ -1621,15 +1750,29 @@ class ConnectionState(Generic[ClientT]):
 
         self.dispatch('raw_typing', raw)
 
+    def parse_voice_channel_status_update(self, data: gw.VoiceChannelStatusUpdate) -> None:
+        raw = RawVoiceChannelStatusUpdateEvent(data)
+        guild = self._get_guild(raw.guild_id)
+        if guild is not None:
+            channel = guild.get_channel(raw.channel_id)
+            if channel is not None:
+                raw.cached_status = channel.status  # type: ignore # must be a voice channel
+                channel.status = raw.status  # type: ignore # must be a voice channel
+
+        self.dispatch('raw_voice_channel_status_update', raw)
+
     def parse_entitlement_create(self, data: gw.EntitlementCreateEvent) -> None:
+        self.dispatch('raw_entitlement_create', data)
         entitlement = Entitlement(data=data, state=self)
         self.dispatch('entitlement_create', entitlement)
 
     def parse_entitlement_update(self, data: gw.EntitlementUpdateEvent) -> None:
+        self.dispatch('raw_entitlement_update', data)
         entitlement = Entitlement(data=data, state=self)
         self.dispatch('entitlement_update', entitlement)
 
     def parse_entitlement_delete(self, data: gw.EntitlementDeleteEvent) -> None:
+        self.dispatch('raw_entitlement_delete', data)
         entitlement = Entitlement(data=data, state=self)
         self.dispatch('entitlement_delete', entitlement)
 
@@ -1684,7 +1827,7 @@ class ConnectionState(Generic[ClientT]):
             return channel.guild.get_member(user_id)
         return self.get_user(user_id)
 
-    def get_reaction_emoji(self, data: PartialEmojiPayload) -> Union[Emoji, PartialEmoji, str]:
+    def get_emoji_from_partial_payload(self, data: PartialEmojiPayload) -> Union[Emoji, PartialEmoji, str]:
         emoji_id = utils._get_as_snowflake(data, 'id')
 
         if not emoji_id:
@@ -1697,6 +1840,14 @@ class ConnectionState(Generic[ClientT]):
             return PartialEmoji.with_state(
                 self, animated=data.get('animated', False), id=emoji_id, name=data['name']  # type: ignore
             )
+
+    @staticmethod
+    def emoji_to_partial_payload(emoji: Union[Emoji, PartialEmoji, str]) -> PartialEmojiPayload:
+        if isinstance(emoji, str):
+            return {'name': emoji}  # type: ignore
+        elif isinstance(emoji, Emoji):
+            emoji = emoji._to_partial()
+        return emoji.to_dict()
 
     def _upgrade_partial_emoji(self, emoji: PartialEmoji) -> Union[Emoji, PartialEmoji, str]:
         emoji_id = emoji.id
@@ -1722,6 +1873,15 @@ class ConnectionState(Generic[ClientT]):
 
     def create_message(self, *, channel: MessageableChannel, data: MessagePayload) -> Message:
         return Message(state=self, channel=channel, data=data)
+
+    def get_soundboard_sound(self, id: Optional[int]) -> Optional[SoundboardSound]:
+        if id is None:
+            return
+
+        for guild in self.guilds:
+            sound = guild._resolve_soundboard_sound(id)
+            if sound is not None:
+                return sound
 
 
 class AutoShardedConnectionState(ConnectionState[ClientT]):
@@ -1838,7 +1998,7 @@ class AutoShardedConnectionState(ConnectionState[ClientT]):
         if shard_id not in self._ready_states:
             self._ready_states[shard_id] = asyncio.Queue()
 
-        self.user: Optional[ClientUser]
+        self.user: ClientUser
         self.user = user = ClientUser(state=self, data=data['user'])
         # self._users is a list of Users, we're setting a ClientUser
         self._users[user.id] = user  # type: ignore

@@ -27,7 +27,7 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Generic, TYPE_CHECKING, Sequence, Tuple, Union, List
+from typing import Any, Dict, Literal, Optional, Generic, TYPE_CHECKING, Sequence, Tuple, Union, List
 import asyncio
 import datetime
 
@@ -66,6 +66,7 @@ if TYPE_CHECKING:
         Webhook as WebhookPayload,
     )
     from .types.snowflake import Snowflake
+    from .types.user import User as UserPayload, PartialUser as PartialUserPayload
     from .guild import Guild
     from .state import ConnectionState
     from .file import File
@@ -178,6 +179,7 @@ class Interaction(Generic[ClientT]):
         'channel',
         '_cs_namespace',
         '_cs_command',
+        '_raw_channel',
     )
 
     def __init__(self, *, data: InteractionPayload, state: ConnectionState[ClientT]):
@@ -227,6 +229,7 @@ class Interaction(Generic[ClientT]):
                 guild._add_member(Member._from_client_user(user=self._client.user, guild=guild, state=self._state))
 
         raw_channel = data.get('channel', {})
+        self._raw_channel = raw_channel
         channel_id = utils._get_as_snowflake(raw_channel, 'id')
         if channel_id is not None and guild is not None:
             self.channel = guild and guild._resolve_channel(channel_id)
@@ -1050,38 +1053,6 @@ class InteractionResponse(Generic[ClientT]):
             self._parent._state.store_view(modal)
         self._response_type = InteractionResponseType.modal
 
-    async def require_premium(self) -> None:
-        """|coro|
-
-        Sends a message to the user prompting them that a premium purchase is required for this interaction.
-
-        This type of response is only available for applications that have a premium SKU set up.
-
-        Raises
-        -------
-        HTTPException
-            Sending the response failed.
-        InteractionResponded
-            This interaction has already been responded to before.
-        """
-        if self._response_type:
-            raise InteractionResponded(self._parent)
-
-        parent = self._parent
-        adapter = async_context.get()
-        http = parent._state.http
-
-        params = interaction_response_params(InteractionResponseType.premium_required.value)
-        await adapter.create_interaction_response(
-            parent.id,
-            parent.token,
-            session=parent._session,
-            proxy=http.proxy,
-            proxy_auth=http.proxy_auth,
-            params=params,
-        )
-        self._response_type = InteractionResponseType.premium_required
-
     async def autocomplete(self, choices: Sequence[Choice[ChoiceT]]) -> None:
         """|coro|
 
@@ -1133,6 +1104,52 @@ class InteractionResponse(Generic[ClientT]):
 
         self._response_type = InteractionResponseType.autocomplete_result
 
+    async def send_iframe(
+        self, *, title: str, custom_id: str, modal_size: Literal[1, 2, 3] = 2, iframe_path: Optional[str] = "/"
+    ) -> None:
+        """|coro|
+
+        Responds to this interaction by sending an iframe modal.
+
+        Parameters
+        -----------
+        custom_id: :class:`str`
+            The custom ID of the iframe.
+        title: :class:`str`
+            The title of the iframe.
+        iframe_path: Optional[:class:`str`]
+            The path to the iframe. If ``None`` is passed then the iframe is removed.
+
+        Raises
+        -------
+        HTTPException
+            Sending the iframe failed.
+        InteractionResponded
+            This interaction has already been responded to before.
+        """
+        if self._response_type:
+            raise InteractionResponded(self._parent)
+
+        parent = self._parent
+
+        adapter = async_context.get()
+        http = parent._state.http
+
+        params = interaction_response_params(
+            InteractionResponseType.iframe.value,
+            {'iframe_path': iframe_path, 'title': title, 'modal_size': modal_size, 'custom_id': custom_id},
+        )
+        await adapter.create_interaction_response(
+            parent.id,
+            parent.token,
+            session=parent._session,
+            proxy=http.proxy,
+            proxy_auth=http.proxy_auth,
+            params=params,
+        )
+
+        self._response_type = InteractionResponseType.iframe
+
 
 class _InteractionMessageState:
     __slots__ = ('_parent', '_interaction')
@@ -1141,13 +1158,13 @@ class _InteractionMessageState:
         self._interaction: Interaction = interaction
         self._parent: ConnectionState = parent
 
-    def _get_guild(self, guild_id):
+    def _get_guild(self, guild_id: int):
         return self._parent._get_guild(guild_id)
 
-    def store_user(self, data, *, cache: bool = True):
+    def store_user(self, data: Union[UserPayload, PartialUserPayload], *, cache: bool = True):
         return self._parent.store_user(data, cache=cache)
 
-    def create_user(self, data):
+    def create_user(self, data: Union[UserPayload, PartialUserPayload]):
         return self._parent.create_user(data)
 
     @property

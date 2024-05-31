@@ -43,11 +43,21 @@ from typing import (
     overload,
 )
 import datetime
+from operator import attrgetter
 
 import discord.abc
 from .scheduled_event import ScheduledEvent
 from .permissions import PermissionOverwrite, Permissions
-from .enums import ChannelType, ForumLayoutType, ForumOrderType, PrivacyLevel, try_enum, VideoQualityMode, EntityType
+from .enums import (
+    ChannelType,
+    ForumLayoutType,
+    ForumOrderType,
+    PrivacyLevel,
+    try_enum,
+    VideoQualityMode,
+    EntityType,
+    VoiceChannelEffectAnimationType,
+)
 from .mixins import Hashable
 from . import utils
 from .utils import MISSING
@@ -58,6 +68,8 @@ from .threads import Thread
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .flags import ChannelFlags
 from .http import handle_message_parameters
+from .object import Object
+from .soundboard import BaseSoundboardSound
 
 __all__ = (
     'TextChannel',
@@ -69,6 +81,8 @@ __all__ = (
     'ForumChannel',
     'GroupChannel',
     'PartialMessageable',
+    'VoiceChannelEffect',
+    'VoiceChannelSoundEffect',
 )
 
 if TYPE_CHECKING:
@@ -76,7 +90,6 @@ if TYPE_CHECKING:
 
     from .types.threads import ThreadArchiveDuration
     from .role import Role
-    from .object import Object
     from .member import Member, VoiceState
     from .abc import Snowflake, SnowflakeTime
     from .embeds import Embed
@@ -100,8 +113,10 @@ if TYPE_CHECKING:
         ForumChannel as ForumChannelPayload,
         MediaChannel as MediaChannelPayload,
         ForumTag as ForumTagPayload,
+        VoiceChannelEffect as VoiceChannelEffectPayload,
     )
     from .types.snowflake import SnowflakeList
+    from .types.soundboard import BaseSoundboardSound as BaseSoundboardSoundPayload
 
     OverwriteKeyT = TypeVar('OverwriteKeyT', Role, BaseUser, Object, Union[Role, Member, Object])
 
@@ -109,6 +124,122 @@ if TYPE_CHECKING:
 class ThreadWithMessage(NamedTuple):
     thread: Thread
     message: Message
+
+
+class VoiceChannelEffectAnimation(NamedTuple):
+    id: int
+    type: VoiceChannelEffectAnimationType
+
+
+class VoiceChannelSoundEffect(BaseSoundboardSound):
+    """Represents a Discord voice channel sound effect.
+
+    .. versionadded:: 2.4
+
+    .. container:: operations
+
+        .. describe:: x == y
+
+            Checks if two sound effects are equal.
+
+        .. describe:: x != y
+
+            Checks if two sound effects are not equal.
+
+        .. describe:: hash(x)
+
+            Returns the sound effect's hash.
+
+    Attributes
+    ------------
+    id: :class:`int`
+        The ID of the sound.
+    volume: :class:`float`
+        The volume of the sound as floating point percentage (e.g. ``1.0`` for 100%).
+    """
+
+    __slots__ = ()
+
+    def __init__(self, *, state: ConnectionState, id: int, volume: float):
+        self._state: ConnectionState = state
+        data: BaseSoundboardSoundPayload = {
+            'sound_id': id,
+            'volume': volume,
+        }
+        super().__init__(state=state, data=data)
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} id={self.id} volume={self.volume}>'
+
+    @property
+    def created_at(self) -> Optional[datetime.datetime]:
+        """:class:`datetime.datetime`: Returns the snowflake's creation time in UTC.
+        Returns ``None`` if it's a default sound."""
+        if self.is_default():
+            return None
+        else:
+            return utils.snowflake_time(self.id)
+
+    def is_default(self) -> bool:
+        """:class:`bool`: Whether it's a default sound or not."""
+        # if it's smaller than the Discord Epoch it cannot be a snowflake
+        return self.id < utils.DISCORD_EPOCH
+
+
+class VoiceChannelEffect:
+    """Represents a Discord voice channel effect.
+
+    .. versionadded:: 2.4
+
+    Attributes
+    ------------
+    channel: :class:`VoiceChannel`
+        The channel in which the effect is sent.
+    user: Optional[:class:`Member`]
+        The user who sent the effect. ``None`` if not found in cache.
+    animation: Optional[:class:`VoiceChannelEffectAnimation`]
+        The animation the effect has. Returns ``None`` if the effect has no animation.
+    emoji: Optional[:class:`PartialEmoji`]
+        The emoji of the effect.
+    sound: Optional[:class:`VoiceChannelSoundEffect`]
+        The sound of the effect. Returns ``None`` if it's an emoji effect.
+    """
+
+    __slots__ = ('channel', 'user', 'animation', 'emoji', 'sound')
+
+    def __init__(self, *, state: ConnectionState, data: VoiceChannelEffectPayload, guild: Guild):
+        self.channel: VoiceChannel = guild.get_channel(int(data['channel_id']))  # type: ignore # will always be a VoiceChannel
+        self.user: Optional[Member] = guild.get_member(int(data['user_id']))
+        self.animation: Optional[VoiceChannelEffectAnimation] = None
+
+        animation_id = data.get('animation_id')
+        if animation_id is not None:
+            animation_type = try_enum(VoiceChannelEffectAnimationType, data['animation_type'])  # type: ignore # cannot be None here
+            self.animation = VoiceChannelEffectAnimation(id=animation_id, type=animation_type)
+
+        emoji = data['emoji']
+        self.emoji: Optional[PartialEmoji] = PartialEmoji.from_dict(emoji) if emoji is not None else None
+        self.sound: Optional[VoiceChannelSoundEffect] = None
+
+        sound_id: Optional[int] = utils._get_as_snowflake(data, 'sound_id')
+        if sound_id is not None:
+            sound_volume = data.get('sound_volume') or 0.0
+            self.sound = VoiceChannelSoundEffect(state=state, id=sound_id, volume=sound_volume)
+
+    def __repr__(self) -> str:
+        attrs = [
+            ('channel', self.channel),
+            ('user', self.user),
+            ('animation', self.animation),
+            ('emoji', self.emoji),
+            ('sound', self.sound),
+        ]
+        inner = ' '.join('%s=%r' % t for t in attrs)
+        return f"<{self.__class__.__name__} {inner}>"
+
+    def is_sound(self) -> bool:
+        """:class:`bool`: Whether the effect is a sound or not."""
+        return self.sound is not None
 
 
 class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
@@ -182,6 +313,10 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         'last_message_id',
         'default_auto_archive_duration',
         'default_thread_slowmode_delay',
+        'icon_emoji',
+        'last_pin_timestamp',
+        '_theme_color',
+        '_flags',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[TextChannelPayload, NewsChannelPayload]):
@@ -215,6 +350,15 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         self.default_thread_slowmode_delay: int = data.get('default_thread_rate_limit_per_user', 0)
         self._type: Literal[0, 5] = data.get('type', self._type)
         self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
+        self.last_pin_timestamp: Optional[datetime.datetime] = utils.parse_time(data.get('last_pin_timestamp'))
+
+        self._flags: int = data.get('flags', 0)
+        self._theme_color: Optional[int] = data.get('theme_color')
+        self.icon_emoji: Optional[PartialEmoji] = None
+        icon_emoji = data.get('icon_emoji')
+        if icon_emoji:
+            _id = utils._get_as_snowflake(icon_emoji, 'id') or None
+            self.icon_emoji = PartialEmoji.with_state(self._state, id=_id, name=icon_emoji.get('name') or '')
         self._fill_overwrites(data)
 
     async def _get_channel(self) -> Self:
@@ -236,7 +380,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         return None
 
     @utils.copy_doc(discord.abc.GuildChannel.permissions_for)
-    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
         base = super().permissions_for(obj)
         self._apply_implicit_permissions(base)
 
@@ -244,6 +388,14 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         denied = Permissions.voice()
         base.value &= ~denied.value
         return base
+
+    @property
+    def flags(self) -> ChannelFlags:
+        """:class:`ChannelFlags`: The flags associated with this thread.
+
+        .. versionadded:: 2.4
+        """
+        return ChannelFlags._from_value(self._flags)
 
     @property
     def members(self) -> List[Member]:
@@ -905,6 +1057,9 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         'rtc_region',
         'video_quality_mode',
         'last_message_id',
+        'icon_emoji',
+        '_theme_color',
+        '_flags',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[VoiceChannelPayload, StageChannelPayload]):
@@ -933,6 +1088,14 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         self.slowmode_delay = data.get('rate_limit_per_user', 0)
         self.bitrate: int = data['bitrate']
         self.user_limit: int = data['user_limit']
+
+        self._flags: int = data.get('flags', 0)
+        self._theme_color: Optional[int] = data.get('theme_color')
+        self.icon_emoji: Optional[PartialEmoji] = None
+        icon_emoji = data.get('icon_emoji')
+        if icon_emoji:
+            _id = utils._get_as_snowflake(icon_emoji, 'id') or None
+            self.icon_emoji = PartialEmoji.with_state(self._state, id=_id, name=icon_emoji.get('name') or '')
         self._fill_overwrites(data)
 
     @property
@@ -990,7 +1153,7 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         return [event for event in self.guild.scheduled_events if event.channel_id == self.id]
 
     @utils.copy_doc(discord.abc.GuildChannel.permissions_for)
-    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
         base = super().permissions_for(obj)
         self._apply_implicit_permissions(base)
 
@@ -1001,6 +1164,14 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
             denied.update(manage_channels=True, manage_roles=True)
             base.value &= ~denied.value
         return base
+
+    @property
+    def flags(self) -> ChannelFlags:
+        """:class:`ChannelFlags`: The flags associated with this channel.
+
+        .. versionadded:: 2.4
+        """
+        return ChannelFlags._from_value(self._flags)
 
     @property
     def last_message(self) -> Optional[Message]:
@@ -1316,9 +1487,19 @@ class VoiceChannel(VocalGuildChannel):
         :attr:`~Permissions.manage_messages` bypass slowmode.
 
         .. versionadded:: 2.2
+    status: Optional[:class:`str`]
+        The status of the voice channel. ``None`` if no status is set.
+        This is not available for the fetch methods such as :func:`Guild.fetch_channel`
+        or :func:`Client.fetch_channel`
+
+        .. versionadded:: 2.4
     """
 
-    __slots__ = ()
+    __slots__ = ('status',)
+
+    def __init__(self, *, state: ConnectionState, guild: Guild, data: VoiceChannelPayload) -> None:
+        super().__init__(state=state, guild=guild, data=data)
+        self.status: Optional[str] = data.get('status') or None  # empty string -> None
 
     def __repr__(self) -> str:
         attrs = [
@@ -1969,14 +2150,14 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
     def text_channels(self) -> List[TextChannel]:
         """List[:class:`TextChannel`]: Returns the text channels that are under this category."""
         ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, TextChannel)]
-        ret.sort(key=lambda c: (c.position, c.id))
+        ret.sort(key=attrgetter('position', 'id'))
         return ret
 
     @property
     def voice_channels(self) -> List[VoiceChannel]:
         """List[:class:`VoiceChannel`]: Returns the voice channels that are under this category."""
         ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, VoiceChannel)]
-        ret.sort(key=lambda c: (c.position, c.id))
+        ret.sort(key=attrgetter('position', 'id'))
         return ret
 
     @property
@@ -1986,7 +2167,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         .. versionadded:: 1.7
         """
         ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, StageChannel)]
-        ret.sort(key=lambda c: (c.position, c.id))
+        ret.sort(key=attrgetter('position', 'id'))
         return ret
 
     @property
@@ -1996,7 +2177,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         .. versionadded:: 2.4
         """
         r = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, ForumChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     async def create_text_channel(self, name: str, **options: Any) -> TextChannel:
@@ -2117,6 +2298,8 @@ class ForumTag(Hashable):
             self.emoji = None
         else:
             self.emoji = PartialEmoji.with_state(state=state, name=emoji_name, id=emoji_id)
+            if e := state.get_emoji(emoji_id):
+                self.emoji.animated = e.animated
         return self
 
     def to_dict(self) -> Dict[str, Any]:
@@ -2232,8 +2415,9 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         'default_reaction_emoji',
         'default_layout',
         'default_sort_order',
+        'icon_emoji',
         '_available_tags',
-        '_flags',
+        '_theme_color',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[ForumChannelPayload, MediaChannelPayload]):
@@ -2284,6 +2468,13 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
             self.default_sort_order = try_enum(ForumOrderType, default_sort_order)
 
         self._flags: int = data.get('flags', 0)
+        self._theme_color: Optional[int] = data.get('theme_color')
+        self.icon_emoji: Optional[PartialEmoji] = None
+        icon_emoji = data.get('icon_emoji')
+        if icon_emoji:
+            _id = utils._get_as_snowflake(icon_emoji, 'id') or None
+            self.icon_emoji = PartialEmoji.with_state(self._state, id=_id, name=icon_emoji.get('name') or '')
+        self._type: Literal[15, 16] = data.get('type', self._type)
         self._fill_overwrites(data)
 
     @property
@@ -2295,14 +2486,14 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
 
     @property
     def _sorting_bucket(self) -> int:
-        return ChannelType.text.value
+        return ChannelType.media.value if self._type == 16 else ChannelType.forum.value
 
     @property
     def _scheduled_event_entity_type(self) -> Optional[EntityType]:
         return None
 
     @utils.copy_doc(discord.abc.GuildChannel.permissions_for)
-    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
         base = super().permissions_for(obj)
         self._apply_implicit_permissions(base)
 
@@ -2985,7 +3176,12 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
 
         .. versionadded:: 2.0
         """
-        return f'https://discord.com/channels/@me/{self.id}'
+        return f'https://staging.discord.sex/channels/@me/{self.id}'
+
+    @property
+    def mention(self) -> str:
+        """:class:`str`: The string that allows you to mention the channel."""
+        return f'<#{self.id}>'
 
     @property
     def created_at(self) -> datetime.datetime:
@@ -3056,6 +3252,10 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
 
         return PartialMessage(channel=self, id=message_id)
 
+    def is_nsfw(self) -> bool:
+        """:class:`bool`: Checks if the channel is NSFW."""
+        return False
+
 
 class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
     """Represents a Discord group channel.
@@ -3096,7 +3296,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         The group channel's name if provided.
     """
 
-    __slots__ = ('id', 'recipients', 'owner_id', 'owner', '_icon', 'name', 'me', '_state')
+    __slots__ = ('id', 'recipients', 'owner_id', '_icon', 'name', 'me', '_state', 'last_message_id')
 
     def __init__(self, *, me: ClientUser, state: ConnectionState, data: GroupChannelPayload):
         self._state: ConnectionState = state
@@ -3109,12 +3309,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         self._icon: Optional[str] = data.get('icon')
         self.name: Optional[str] = data.get('name')
         self.recipients: List[User] = [self._state.store_user(u) for u in data.get('recipients', [])]
-
-        self.owner: Optional[BaseUser]
-        if self.owner_id == self.me.id:
-            self.owner = self.me
-        else:
-            self.owner = utils.find(lambda u: u.id == self.owner_id, self.recipients)
+        self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
 
     async def _get_channel(self) -> Self:
         return self
@@ -3129,7 +3324,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         return ', '.join(map(lambda x: x.name, self.recipients))
 
     def __repr__(self) -> str:
-        return f'<GroupChannel id={self.id} name={self.name!r}>'
+        return f'<GroupChannel id={self.id} name={self.name!r} owner_id={self.owner_id!r}>'
 
     @property
     def type(self) -> Literal[ChannelType.group]:
@@ -3164,7 +3359,18 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
 
         .. versionadded:: 2.0
         """
-        return f'https://discord.com/channels/@me/{self.id}'
+        return f'https://staging.discord.sex/channels/@me/{self.id}'
+
+    @property
+    def mention(self) -> str:
+        """:class:`str`: The string that allows you to mention the channel."""
+        return f'<#{self.id}>'
+
+    @property
+    def owner(self) -> Optional[User]:
+        """Optional[:class:`User`]: The owner that owns the group channel."""
+        # Only reason it wouldn't be in recipients is if it's a managed channel
+        return utils.get(self.recipients, id=self.owner_id) or self._state.get_user(self.owner_id)
 
     def permissions_for(self, obj: Snowflake, /) -> Permissions:
         """Handles permission resolution for a :class:`User`.
@@ -3226,6 +3432,14 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
 
         await self._state.http.leave_group(self.id)
 
+    def get_partial_message(self, message_id: int, /) -> PartialMessage:
+        from .message import PartialMessage
+
+        return PartialMessage(channel=self, id=message_id)
+
+    def is_nsfw(self) -> bool:
+        return False
+
 
 class PartialMessageable(discord.abc.Messageable, Hashable):
     """Represents a partial messageable to aid with working messageable channels when
@@ -3281,9 +3495,12 @@ class PartialMessageable(discord.abc.Messageable, Hashable):
     @property
     def jump_url(self) -> str:
         """:class:`str`: Returns a URL that allows the client to jump to the channel."""
-        if self.guild_id is None:
-            return f'https://discord.com/channels/@me/{self.id}'
-        return f'https://discord.com/channels/{self.guild_id}/{self.id}'
+        return f'https://staging.discord.sex/channels/{self.guild_id or "@me"}/{self.id}'
+
+    @property
+    def mention(self) -> str:
+        """:class:`str`: The string that allows you to mention the channel."""
+        return f'<#{self.id}>'
 
     @property
     def created_at(self) -> datetime.datetime:
@@ -3332,6 +3549,9 @@ class PartialMessageable(discord.abc.Messageable, Hashable):
         from .message import PartialMessage
 
         return PartialMessage(channel=self, id=message_id)
+
+    def is_nsfw(self) -> bool:
+        return False
 
 
 def _guild_channel_factory(channel_type: int):

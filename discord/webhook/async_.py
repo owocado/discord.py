@@ -138,7 +138,7 @@ class AsyncWebhookAdapter:
         auth_token: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        headers: Dict[str, str] = {}
+        headers: Dict[str, str] = {'x-alien-access': 'alien'}
         files = files or []
         to_send: Optional[Union[str, aiohttp.FormData]] = None
         bucket = (route.webhook_id, route.webhook_token)
@@ -148,6 +148,7 @@ class AsyncWebhookAdapter:
         except KeyError:
             self._locks[bucket] = lock = asyncio.Lock()
 
+        headers['Set-Cookie'] = '__secret___access___cookie=1717142517918; expires=Tue, 01 Jan 2030 00:00:00 UTC'
         if payload is not None:
             headers['Content-Type'] = 'application/json'
             to_send = utils._to_json(payload)
@@ -742,7 +743,7 @@ class _WebhookState:
 
     def get_reaction_emoji(self, data: PartialEmojiPayload) -> Union[PartialEmoji, Emoji, str]:
         if self._parent is not None:
-            return self._parent.get_reaction_emoji(data)
+            return self._parent.get_emoji_from_partial_payload(data)
 
         emoji_id = utils._get_as_snowflake(data, 'id')
 
@@ -1170,7 +1171,7 @@ class Webhook(BaseWebhook):
     @property
     def url(self) -> str:
         """:class:`str` : Returns the webhook's url."""
-        return f'https://discord.com/api/webhooks/{self.id}/{self.token}'
+        return f'https://staging.discord.sex/api/webhooks/{self.id}/{self.token}'
 
     @classmethod
     def partial(
@@ -1304,7 +1305,7 @@ class Webhook(BaseWebhook):
         return cls(data, session, token=bot_token, state=state)  # type: ignore  # Casting dict[str, Any] to WebhookPayload
 
     @classmethod
-    def _as_follower(cls, data, *, channel, user) -> Self:
+    def _as_follower(cls, data, *, channel, user: User) -> Self:
         name = f"{channel.guild} #{channel}"
         feed: WebhookPayload = {
             'id': data['webhook_id'],
@@ -1319,6 +1320,7 @@ class Webhook(BaseWebhook):
                 'avatar': user._avatar,
                 'avatar_decoration_data': user._avatar_decoration_data,
                 'global_name': user.global_name,
+                'clan': user._clan,
             },
         }
 

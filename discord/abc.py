@@ -245,7 +245,7 @@ class User(Snowflake, Protocol):
         raise NotImplementedError
 
     @property
-    def avatar(self) -> Optional[Asset]:
+    def avatar(self) -> Asset:
         """Optional[:class:`~discord.Asset`]: Returns an Asset that represents the user's avatar, if present."""
         raise NotImplementedError
 
@@ -579,7 +579,7 @@ class GuildChannel:
 
         .. versionadded:: 2.0
         """
-        return f'https://discord.com/channels/{self.guild.id}/{self.id}'
+        return f'https://staging.discord.sex/channels/{self.guild.id}/{self.id}'
 
     @property
     def created_at(self) -> datetime:
@@ -699,6 +699,7 @@ class GuildChannel:
         - Member overrides
         - Implicit permissions
         - Member timeout
+        - User installed app
 
         If a :class:`~discord.Role` is passed, then it checks the permissions
         someone with that role would have, which is essentially:
@@ -713,6 +714,12 @@ class GuildChannel:
 
         .. versionchanged:: 2.0
             ``obj`` parameter is now positional-only.
+
+        .. versionchanged:: 2.4
+            User installed apps are now taken into account.
+            The permissions returned for a user installed app mirrors the
+            permissions Discord returns in :attr:`~discord.Interaction.app_permissions`,
+            though it is recommended to use that attribute instead.
 
         Parameters
         ----------
@@ -745,6 +752,9 @@ class GuildChannel:
             return Permissions.all()
 
         default = self.guild.default_role
+        if default is None:
+            return Permissions._user_installed_permissions(in_guild=True)
+
         base = Permissions(default.permissions.value)
 
         # Handle the role case first

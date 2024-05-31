@@ -125,7 +125,7 @@ class Emoji(_EmojiTag, AssetMixin):
         self.user: Optional[User] = User(state=self._state, data=user) if user else None
 
     def _to_partial(self) -> PartialEmoji:
-        return PartialEmoji(name=self.name, animated=self.animated, id=self.id)
+        return PartialEmoji.with_state(self._state, name=self.name, animated=self.animated, id=self.id)
 
     def __iter__(self) -> Iterator[Tuple[str, Any]]:
         for attr in self.__slots__:
@@ -169,7 +169,7 @@ class Emoji(_EmojiTag, AssetMixin):
         If roles is empty, the emoji is unrestricted.
         """
         guild = self.guild
-        if guild is None:
+        if not self._roles or guild is None:
             return []
 
         return [role for role in guild.roles if self._roles.has(role.id)]
@@ -178,6 +178,15 @@ class Emoji(_EmojiTag, AssetMixin):
     def guild(self) -> Optional[Guild]:
         """:class:`Guild`: The guild this emoji belongs to."""
         return self._state._get_guild(self.guild_id)
+
+    def is_premium(self) -> bool:
+        """:class:`bool`: Whether the emoji is premium emoji added via Server Subscriptions.
+
+        .. versionadded:: 2.4
+        """
+        if not self.roles:
+            return False
+        return any((r for r in self.roles if r.tags and r.tags.subscription_listing_id))
 
     def is_usable(self) -> bool:
         """:class:`bool`: Whether the bot can use this emoji.

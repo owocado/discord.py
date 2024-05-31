@@ -311,7 +311,7 @@ class Activity(BaseActivity):
 
     def _image_url(self, image: str) -> Optional[str]:
         if image.startswith('mp:'):
-            return f'https://media.discordapp.net/{image[3:]}'
+            return f'https://staging-cdn.discord.co/{image[3:]}'
         elif self.application_id is not None:
             return Asset.BASE + f'/app-assets/{self.application_id}/{image}.png'
 

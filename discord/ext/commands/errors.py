@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from ._types import BotT
     from .context import Context
     from .converter import Converter
+    from .core import Command
     from .cooldowns import BucketType, Cooldown
     from .flags import Flag
     from .parameters import Parameter
@@ -395,7 +396,7 @@ class ChannelNotReadable(BadArgument):
 
     def __init__(self, argument: Union[GuildChannel, Thread]) -> None:
         self.argument: Union[GuildChannel, Thread] = argument
-        super().__init__(f"Can't read messages in {argument.mention}.")
+        super().__init__(f"I cannot read messages in {argument.mention}")
 
 
 class ChannelNotFound(BadArgument):
@@ -649,9 +650,13 @@ class CommandInvokeError(CommandError):
         the ``__cause__`` attribute.
     """
 
-    def __init__(self, e: Exception) -> None:
+    def __init__(self, e: Exception, command: Optional[Command[Any, ..., Any]] = None) -> None:
         self.original: Exception = e
-        super().__init__(f'Command raised an exception: {e.__class__.__name__}: {e}')
+        self.command: Optional[Command[Any, ..., Any]] = command
+        if command is not None:
+            super().__init__(f'Command {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
+        else:
+            super().__init__(f'Command raised an exception: {e.__class__.__name__}: {e}')
 
 
 class CommandOnCooldown(CommandError):

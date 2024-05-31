@@ -31,6 +31,7 @@ from .asset import Asset
 from .flags import ApplicationFlags
 from .permissions import Permissions
 from .utils import MISSING
+from .enums import ApplicationIntegrationType, try_enum
 
 if TYPE_CHECKING:
     from typing import Dict, Any
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
         Team as TeamPayload,
         InstallParams as InstallParamsPayload,
     )
+    from .types.user import User as UserPayload
     from .user import User
     from .state import ConnectionState
 
@@ -157,6 +159,7 @@ class AppInfo:
         'rpc_origins',
         'bot_public',
         'bot_require_code_grant',
+        'bot',
         'owner',
         '_icon',
         'verify_key',
@@ -193,6 +196,9 @@ class AppInfo:
         team: Optional[TeamPayload] = data.get('team')
         self.team: Optional[Team] = Team(state, team) if team else None
 
+        bot: Optional[UserPayload] = data.get('bot')
+        self.bot: Optional[User] = state.create_user(bot) if bot else None
+
         self.verify_key: str = data['verify_key']
 
         self.guild_id: Optional[int] = utils._get_as_snowflake(data, 'guild_id')
@@ -208,7 +214,7 @@ class AppInfo:
         self.role_connections_verification_url: Optional[str] = data.get('role_connections_verification_url')
 
         params = data.get('install_params')
-        self.install_params: Optional[AppInstallParams] = AppInstallParams(params) if params else None
+        self.install_params: Optional[AppInstallParams] = AppInstallParams(params, self.id) if params else None
         self.interactions_endpoint_url: Optional[str] = data.get('interactions_endpoint_url')
         self.redirect_uris: List[str] = data.get('redirect_uris', [])
         self.approximate_guild_count: int = data.get('approximate_guild_count', 0)
@@ -445,6 +451,9 @@ class PartialAppInfo:
         'redirect_uris',
         'interactions_endpoint_url',
         'role_connections_verification_url',
+        'install_params',
+        'integration_type',
+        'integration_types_config',
     )
 
     def __init__(self, *, state: ConnectionState, data: PartialAppInfoPayload):
@@ -463,6 +472,20 @@ class PartialAppInfo:
         self.redirect_uris: List[str] = data.get('redirect_uris', [])
         self.interactions_endpoint_url: Optional[str] = data.get('interactions_endpoint_url')
         self.role_connections_verification_url: Optional[str] = data.get('role_connections_verification_url')
+
+        params = data.get('install_params')
+        self.install_params: Optional[AppInstallParams] = AppInstallParams(params, self.id) if params else None
+        self.integration_type: Optional[int] = data.get('integration_type')
+        self.integration_types_config: Dict[ApplicationIntegrationType, AppInstallParams] = {}
+        for _type, config in (data.get('integration_types_config') or {}).items():
+            if not config:
+                continue
+            integration_type = try_enum(ApplicationIntegrationType, int(_type))
+            self.integration_types_config[integration_type] = AppInstallParams(
+                config['oauth2_install_params'],
+                self.id,
+                integration_type=integration_type,
+            )
 
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} id={self.id} name={self.name!r} description={self.description!r}>'
@@ -509,8 +532,34 @@ class AppInstallParams:
         The permissions to give to application in the guild.
     """
 
-    __slots__ = ('scopes', 'permissions')
+    __slots__ = ('scopes', 'permissions', '_app_id', '_integration_type')
 
-    def __init__(self, data: InstallParamsPayload) -> None:
+    def __init__(
+        self,
+        data: InstallParamsPayload,
+        app_id: int,
+        *,
+        integration_type: Optional[ApplicationIntegrationType] = None,
+    ) -> None:
         self.scopes: List[str] = data.get('scopes', [])
         self.permissions: Permissions = Permissions(int(data['permissions']))
+        self._app_id: int = app_id
+        self._integration_type = integration_type
+
+    def __repr__(self) -> str:
+        return f'<InstallParams scopes={self.scopes!r} permissions={self.permissions!r}>'
+
+    def to_url(self) -> str:
+        """Return the oauth2 invite URL that can be used to add this application to a server or user.
+
+        Returns
+        -------
+        :class:`str`
+            The invite url.
+        """
+        return utils.oauth_url(
+            self._app_id,
+            scopes=self.scopes,
+            permissions=self.permissions,
+            integration_type=self._integration_type.value if self._integration_type is not None else 0,
+        )

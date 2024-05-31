@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from .message import Message
     from .state import ConnectionState
     from .types.channel import DMChannel as DMChannelPayload
-    from .types.user import PartialUser as PartialUserPayload, User as UserPayload, AvatarDecorationData
+    from .types.user import PartialUser as PartialUserPayload, User as UserPayload, AvatarDecorationData, Clan as ClanPayload
 
 
 __all__ = (
@@ -71,6 +71,8 @@ class BaseUser(_UserTag):
         '_public_flags',
         '_state',
         '_avatar_decoration_data',
+        'bio',
+        '_clan',
     )
 
     if TYPE_CHECKING:
@@ -86,6 +88,7 @@ class BaseUser(_UserTag):
         _accent_colour: Optional[int]
         _public_flags: int
         _avatar_decoration_data: Optional[AvatarDecorationData]
+        _clan: Optional[ClanPayload]
 
     def __init__(self, *, state: ConnectionState, data: Union[UserPayload, PartialUserPayload]) -> None:
         self._state = state
@@ -94,7 +97,7 @@ class BaseUser(_UserTag):
     def __repr__(self) -> str:
         return (
             f"<BaseUser id={self.id} name={self.name!r} global_name={self.global_name!r}"
-            f" bot={self.bot} system={self.system}>"
+            f" bot={self.bot} system={self.system}> discriminator={self.discriminator!r}"
         )
 
     def __str__(self) -> str:
@@ -123,6 +126,8 @@ class BaseUser(_UserTag):
         self.bot = data.get('bot', False)
         self.system = data.get('system', False)
         self._avatar_decoration_data = data.get('avatar_decoration_data')
+        self.bio = data.get('bio', '')
+        self._clan = data.get('clan')
 
     @classmethod
     def _copy(cls, user: Self) -> Self:
@@ -139,6 +144,8 @@ class BaseUser(_UserTag):
         self._state = user._state
         self._public_flags = user._public_flags
         self._avatar_decoration_data = user._avatar_decoration_data
+        self.bio = user.bio
+        self._clan = user._clan
 
         return self
 
@@ -158,15 +165,15 @@ class BaseUser(_UserTag):
         return PublicUserFlags._from_value(self._public_flags)
 
     @property
-    def avatar(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: Returns an :class:`Asset` for the avatar the user has.
+    def avatar(self) -> Asset:
+        """:class:`Asset`: Returns an :class:`Asset` for the avatar the user has.
 
-        If the user has not uploaded a global avatar, ``None`` is returned.
+        If the user has not uploaded a global avatar, then :attr:`default_avatar` is returned.
         If you want the avatar that a user has displayed, consider :attr:`display_avatar`.
         """
         if self._avatar is not None:
             return Asset._from_avatar(self._state, self.id, self._avatar)
-        return None
+        return self.default_avatar
 
     @property
     def default_avatar(self) -> Asset:
@@ -568,3 +575,15 @@ class User(BaseUser, discord.abc.Messageable):
         state = self._state
         data: DMChannelPayload = await state.http.start_private_message(self.id)
         return state.add_dm_channel(data)
+
+    def has_default_avatar(self) -> bool:
+        return self.avatar == self.default_avatar
+
+    def is_deleted(self) -> bool:
+        import re
+
+        if self.bot:
+            check = bool(self.discriminator and re.match(r"Deleted User [a-z0-9]{8}", self.name))
+        else:
+            check = bool(re.match(r"deleted_user_[a-f0-9]{12}", self.name) and not self.mutual_guilds)
+        return bool(self.has_default_avatar() and check)

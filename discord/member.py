@@ -38,7 +38,7 @@ from .utils import MISSING
 from .user import BaseUser, ClientUser, User, _UserTag
 from .activity import create_activity, ActivityTypes
 from .permissions import Permissions
-from .enums import Status, try_enum
+from .enums import MemberJoinType, Status, try_enum
 from .errors import ClientException
 from .colour import Colour
 from .object import Object
@@ -47,6 +47,7 @@ from .flags import MemberFlags
 __all__ = (
     'VoiceState',
     'Member',
+    'MemberSearch',
 )
 
 T = TypeVar('T', bound=type)
@@ -65,9 +66,10 @@ if TYPE_CHECKING:
         MemberWithUser as MemberWithUserPayload,
         Member as MemberPayload,
         UserWithMember as UserWithMemberPayload,
+        MemberSearch as MemberSearchPayload,
     )
     from .types.gateway import GuildMemberUpdateEvent
-    from .types.user import User as UserPayload, AvatarDecorationData
+    from .types.user import User as UserPayload, AvatarDecorationData, Clan as ClanPayload
     from .abc import Snowflake
     from .state import ConnectionState
     from .message import Message
@@ -250,6 +252,40 @@ def flatten_user(cls: T) -> T:
     return cls
 
 
+class MemberSearch:
+    """Represents a fetched member from member search.
+
+    .. versionadded:: 2.4
+
+    Attributes
+    ----------
+    member: :class:`Member`
+        The member associated with this search.
+    invite_code: Optional[:class:`str`]
+        The Invite code this user joined with.
+    join_type: :class:`JoinType`
+        The join source type.
+    inviter: Optional[:class:`User`]
+        The inviter, or `None` if not cached or
+        not present.
+    """
+
+    __slots__ = (
+        'member',
+        'invite_code',
+        'join_type',
+        'inviter',
+    )
+
+    def __init__(self, *, data: MemberSearchPayload, guild: Guild, state: ConnectionState) -> None:
+        self.member: Member = Member(data=data.get('member'), guild=guild, state=state)
+        self.invite_code: Optional[str] = data.get('source_invite_code')
+        self.join_type: MemberJoinType = try_enum(MemberJoinType, data.get('join_source_type'))
+        self.inviter: Optional[Union[Object, User]] = None
+        if data.get('inviter_id') is not None:
+            self.inviter = state.get_user(int(data['inviter_id'])) or Object(int(data['inviter_id']))  # type: ignore
+
+
 @flatten_user
 class Member(discord.abc.Messageable, _UserTag):
     """Represents a Discord member to a :class:`Guild`.
@@ -306,6 +342,11 @@ class Member(discord.abc.Messageable, _UserTag):
         This will be set to ``None`` if the user is not timed out.
 
         .. versionadded:: 2.0
+    unusual_dm_activity_until: Optional[:class:`datetime.datetime`]
+        An aware datetime object that specifies the date and time in UTC that the member's unusual DM activity will expire.
+        This will be set to ``None`` if the user does not have unusual DM activity.
+
+        .. versionadded:: 2.4
     """
 
     __slots__ = (
@@ -324,6 +365,10 @@ class Member(discord.abc.Messageable, _UserTag):
         '_avatar',
         '_flags',
         '_avatar_decoration_data',
+        'unusual_dm_activity_until',
+        '_banner',
+        '_clan',
+        'bio',
     )
 
     if TYPE_CHECKING:
@@ -335,14 +380,11 @@ class Member(discord.abc.Messageable, _UserTag):
         system: bool
         created_at: datetime.datetime
         default_avatar: Asset
-        avatar: Optional[Asset]
+        avatar: Asset
         dm_channel: Optional[DMChannel]
         create_dm: Callable[[], Awaitable[DMChannel]]
         mutual_guilds: List[Guild]
         public_flags: PublicUserFlags
-        banner: Optional[Asset]
-        accent_color: Optional[Colour]
-        accent_colour: Optional[Colour]
         avatar_decoration: Optional[Asset]
         avatar_decoration_sku_id: Optional[int]
 
@@ -359,14 +401,18 @@ class Member(discord.abc.Messageable, _UserTag):
         self.pending: bool = data.get('pending', False)
         self._avatar: Optional[str] = data.get('avatar')
         self._permissions: Optional[int]
-        self._flags: int = data['flags']
+        self._flags: int = data.get('flags', 0)
         self._avatar_decoration_data: Optional[AvatarDecorationData] = data.get('avatar_decoration_data')
+        self._banner: Optional[str] = data.get('banner')
         try:
             self._permissions = int(data['permissions'])
         except KeyError:
             self._permissions = None
 
         self.timed_out_until: Optional[datetime.datetime] = utils.parse_time(data.get('communication_disabled_until'))
+        self.unusual_dm_activity_until: Optional[datetime.datetime] = utils.parse_time(data.get('unusual_dm_activity_until'))
+        self._clan: Optional[ClanPayload] = data.get('clan')
+        self.bio: str = data.get('bio')
 
     def __str__(self) -> str:
         return str(self._user)
@@ -409,6 +455,8 @@ class Member(discord.abc.Messageable, _UserTag):
         self.pending = data.get('pending', False)
         self.timed_out_until = utils.parse_time(data.get('communication_disabled_until'))
         self._flags = data.get('flags', 0)
+        self.unusual_dm_activity_until = utils.parse_time(data.get('unusual_dm_activity_until'))
+        self._clan = data.get('clan')
 
     @classmethod
     def _try_upgrade(cls, *, data: UserWithMemberPayload, guild: Guild, state: ConnectionState) -> Union[User, Self]:
@@ -439,6 +487,8 @@ class Member(discord.abc.Messageable, _UserTag):
         self._state = member._state
         self._avatar = member._avatar
         self._avatar_decoration_data = member._avatar_decoration_data
+        self.unusual_dm_activity_until = member.unusual_dm_activity_until
+        self._clan = member._clan
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -468,6 +518,8 @@ class Member(discord.abc.Messageable, _UserTag):
         self._avatar = data.get('avatar')
         self._flags = data.get('flags', 0)
         self._avatar_decoration_data = data.get('avatar_decoration_data')
+        self.unusual_dm_activity_until = utils.parse_time(data.get('unusual_dm_activity_until'))
+        self._clan = data.get('clan')
 
     def _presence_update(self, data: PartialPresenceUpdate, user: UserPayload) -> Optional[Tuple[User, User]]:
         self.activities = tuple(create_activity(d, self._state) for d in data['activities'])
@@ -486,6 +538,7 @@ class Member(discord.abc.Messageable, _UserTag):
             u.global_name,
             u._public_flags,
             u._avatar_decoration_data['sku_id'] if u._avatar_decoration_data is not None else None,
+            u._clan,
         )
 
         decoration_payload = user.get('avatar_decoration_data')
@@ -497,16 +550,18 @@ class Member(discord.abc.Messageable, _UserTag):
             user.get('global_name'),
             user.get('public_flags', 0),
             decoration_payload['sku_id'] if decoration_payload is not None else None,
+            user.get('clan'),
         )
         if original != modified:
             to_return = User._copy(self._user)
-            u.name, u.discriminator, u._avatar, u.global_name, u._public_flags, u._avatar_decoration_data = (
+            u.name, u.discriminator, u._avatar, u.global_name, u._public_flags, u._avatar_decoration_data, u._clan = (
                 user['username'],
                 user['discriminator'],
                 user['avatar'],
                 user.get('global_name'),
                 user.get('public_flags', 0),
                 decoration_payload,
+                user.get('clan'),
             )
             # Signal to dispatch on_user_update
             return to_return, u
@@ -547,6 +602,17 @@ class Member(discord.abc.Messageable, _UserTag):
     def is_on_mobile(self) -> bool:
         """:class:`bool`: A helper function that determines if a member is active on a mobile device."""
         return self._client_status.mobile is not None
+
+    @property
+    def banner(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns an :class:`Asset` for the guild banner
+        the member has. If unavailable, ``None`` is returned.
+
+        .. versionadded:: 2.4
+        """
+        if self._banner is None:
+            return None
+        return Asset._from_guild_banner(self._state, self.guild.id, self.id, self._banner)
 
     @property
     def colour(self) -> Colour:
@@ -1157,3 +1223,57 @@ class Member(discord.abc.Messageable, _UserTag):
         if self.timed_out_until is not None:
             return utils.utcnow() < self.timed_out_until
         return False
+
+    def has_unusual_dm_activity(self) -> bool:
+        """Returns whether this member has unusual DM activity.
+
+        .. versionadded:: 2.4
+
+        Returns
+        --------
+        :class:`bool`
+            ``True`` if the member has unusual DM activity. ``False`` otherwise.
+        """
+        if self.unusual_dm_activity_until is not None:
+            return utils.utcnow() < self.unusual_dm_activity_until
+        return False
+
+    def is_guest(self) -> bool:
+        """Returns whether this member is a guest."""
+        return self.flags.guest
+
+    async def safety_metadata(self) -> Optional[MemberSearch]:
+        r"""|coro|
+
+        Fetches the safety information for this member.
+
+        You must have __any__ of the following permissions:
+        - :attr:`Permissions.administrator`
+        - :attr:`Permissions.manage_guild`
+        - :attr:`Permissions.manage_roles`
+        - :attr:`Permissions.manage_nicknames`
+        - :attr:`Permissions.ban_members`
+        - :attr:`Permissions.moderate_members`
+        - :attr:`Permissions.kick_members`
+
+        .. versionadded:: 2.4
+
+        Raises
+        ------
+        Forbidden
+            You do not have permission to view member safety
+            information.
+        HTTPException
+            Fetching the information failed.
+
+        Returns
+        -------
+        Optional[:class:`MemberSearch`]
+            The member safety information, or `None` if there
+            isn't.
+        """
+        data = await self._state.http.get_member_supplemental(self.guild.id, user_id=self.id)
+        if not data.get('members'):
+            return None
+        return MemberSearch(state=self._state, guild=self.guild, data=data['members'][0])
+

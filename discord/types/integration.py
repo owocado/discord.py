@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import Literal, Optional, TypedDict, Union
 from typing_extensions import NotRequired
 
+from .guild import Guild
 from .snowflake import Snowflake
 from .user import User
 
@@ -80,3 +81,7 @@ class BotIntegration(BaseIntegration):
 
 
 Integration = Union[BaseIntegration, StreamIntegration, BotIntegration]
+
+
+class ConnectionIntegration(BaseIntegration):
+    guild: Guild

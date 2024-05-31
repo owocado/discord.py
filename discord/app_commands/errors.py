@@ -135,7 +135,7 @@ class TransformerError(AppCommandError):
         self.type: AppCommandOptionType = opt_type
         self.transformer: Transformer = transformer
 
-        super().__init__(f'Failed to convert {value} to {transformer._error_display_name!s}')
+        super().__init__(f'Failed to convert {value!r} to {transformer._error_display_name!s}')
 
 
 class TranslationError(AppCommandError):
