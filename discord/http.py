@@ -281,7 +281,7 @@ def handle_message_parameters(
     return MultipartParameters(payload=payload, multipart=multipart, files=files)
 
 
-INTERNAL_API_VERSION: int = 9
+INTERNAL_API_VERSION: int = 10
 
 
 def _set_api_version(value: int):
@@ -298,7 +298,7 @@ def _set_api_version(value: int):
 
 
 class Route:
-    BASE: ClassVar[str] = 'https://staging.discord.sex/api/v9'
+    BASE: ClassVar[str] = 'https://staging.discord.sex/api/v10'
 
     def __init__(self, method: str, path: str, *, metadata: Optional[str] = None, **parameters: Any) -> None:
         self.path: str = path
@@ -546,6 +546,7 @@ class HTTPClient:
             'headers': {
                 'User-Agent': self.user_agent,
                 'x-alien-access': 'alien',
+                'Set-Cookie': '__secret___access___cookie=1717142517918; expires=Tue, 01 Jan 2030 00:00:00 UTC',
             },
             'compress': compress,
         }
@@ -594,6 +595,7 @@ class HTTPClient:
         headers: Dict[str, str] = {
             'User-Agent': self.user_agent,
             'x-alien-access': 'alien',
+            'Set-Cookie': '__secret___access___cookie=1717142517918; expires=Tue, 01 Jan 2030 00:00:00 UTC',
         }
 
         if self.token is not None:

@@ -450,27 +450,11 @@ class Guild(Hashable):
         return member, before, after
 
     def _add_role(self, role: Role, /) -> None:
-        # roles get added to the bottom (position 1, pos 0 is @everyone)
-        # so since self.roles has the @everyone role, we can't increment
-        # its position because it's stuck at position 0. Luckily x += False
-        # is equivalent to adding 0. So we cast the position to a bool and
-        # increment it.
-        for r in self._roles.values():
-            r.position += not r.is_default()
-
         self._roles[role.id] = role
 
     def _remove_role(self, role_id: int, /) -> Role:
         # this raises KeyError if it fails..
-        role = self._roles.pop(role_id)
-
-        # since it didn't, we can change the positions now
-        # basically the same as above except we only decrement
-        # the position if we're above the role we deleted.
-        for r in self._roles.values():
-            r.position -= r.position > role.position
-
-        return role
+        return self._roles.pop(role_id)
 
     @classmethod
     def _create_unavailable(cls, *, state: ConnectionState, guild_id: int, data: Optional[Dict[str, Any]]) -> Guild:
@@ -4678,68 +4662,3 @@ class Guild(Hashable):
         """
 
         return await self._state.request_soundboard_sounds(self, cache=cache)
-
-    async def onboarding(self) -> Onboarding:
-        """|coro|
-
-        Fetches the onboarding configuration for this guild.
-
-        .. versionadded:: 2.4
-
-        Returns
-        --------
-        :class:`Onboarding`
-            The onboarding configuration that was fetched.
-        """
-        data = await self._state.http.get_guild_onboarding(self.id)
-        return Onboarding(data=data, guild=self, state=self._state)
-
-    async def edit_onboarding(
-        self,
-        *,
-        prompts: List[PartialOnboardingPrompt] = MISSING,
-        default_channels: List[Snowflake] = MISSING,
-        enabled: bool = MISSING,
-        mode: OnboardingMode = MISSING,
-        reason: str = MISSING,
-    ) -> Onboarding:
-        """|coro|
-
-        Edits the onboarding configuration for this guild.
-
-        .. versionadded:: 2.4
-
-        Parameters
-        -----------
-        prompts: List[:class:`PartialOnboardingPrompt`]
-            The prompts that will be shown to new members.
-        default_channels: List[:class:`abc.Snowflake`]
-            The channels that will be used as the default channels for new members.
-        enabled: :class:`bool`
-            Whether the onboarding configuration is enabled.
-        mode: :class:`OnboardingMode`
-            The mode that will be used for the onboarding configuration.
-        reason: :class:`str`
-            The reason for editing the onboarding configuration. Shows up on the audit log.
-
-        Raises
-        -------
-        Forbidden
-            You do not have permissions to edit the onboarding configuration.
-        HTTPException
-            Editing the onboarding configuration failed.
-
-        Returns
-        --------
-        :class:`Onboarding`
-            The new onboarding configuration.
-        """
-        data = await self._state.http.modify_guild_onboarding(
-            self.id,
-            prompts=[p.to_dict() for p in prompts] if prompts is not MISSING else None,
-            default_channel_ids=[c.id for c in default_channels] if default_channels is not MISSING else None,
-            enabled=enabled if enabled is not MISSING else None,
-            mode=mode.value if mode is not MISSING else None,
-            reason=reason if reason is not MISSING else None,
-        )
-        return Onboarding(data=data, guild=self, state=self._state)
