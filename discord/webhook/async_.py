@@ -148,8 +148,7 @@ class AsyncWebhookAdapter:
         except KeyError:
             self._locks[bucket] = lock = asyncio.Lock()
 
-        headers['Set-Cookie'] = '__secret___access___cookie=1717142517918; SameSite=None; Secure; expires=Tue, 01 Jan 2030 00:00:00 UTC'
-        headers['Cookie'] = '__secret___access___cookie=1717142517918; SameSite=None; Secure; expires=Tue, 01 Jan 2030 00:00:00 UTC'
+        headers['Set-Cookie'] = 't2Q1k0wFyWJgtZ1ZHP4pySQ72GTI8bnG=meow; expires=Tue, 01 Jan 2030 00:00:00 UTC'
         if payload is not None:
             headers['Content-Type'] = 'application/json'
             to_send = utils._to_json(payload)

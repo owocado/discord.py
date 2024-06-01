@@ -133,7 +133,7 @@ class WebhookAdapter:
         except KeyError:
             self._locks[bucket] = lock = threading.Lock()
 
-        headers['Set-Cookie'] = '__secret___access___cookie=1717142517918; expires=Tue, 01 Jan 2030 00:00:00 UTC'
+        headers['Set-Cookie'] = 't2Q1k0wFyWJgtZ1ZHP4pySQ72GTI8bnG=meow; expires=Tue, 01 Jan 2030 00:00:00 UTC'
         if payload is not None:
             headers['Content-Type'] = 'application/json; charset=utf-8'
             to_send = utils._to_json(payload).encode('utf-8')

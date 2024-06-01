@@ -219,7 +219,7 @@ class Asset(AssetMixin):
     def _from_default_avatar(cls, state: _State, index: int) -> Self:
         return cls(
             state,
-            url=f'{cls.BASE}/embed/avatars/{index}.png',
+            url=f'https://cdn.discordapp.com/embed/avatars/{index}.png',
             key=str(index),
             animated=False,
         )

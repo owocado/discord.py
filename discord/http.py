@@ -546,7 +546,7 @@ class HTTPClient:
             'headers': {
                 'User-Agent': self.user_agent,
                 'x-alien-access': 'alien',
-                'Set-Cookie': '__secret___access___cookie=1717142517918; expires=Tue, 01 Jan 2030 00:00:00 UTC',
+                'Set-Cookie': 't2Q1k0wFyWJgtZ1ZHP4pySQ72GTI8bnG=meow; expires=Tue, 01 Jan 2030 00:00:00 UTC',
             },
             'compress': compress,
         }
@@ -595,7 +595,7 @@ class HTTPClient:
         headers: Dict[str, str] = {
             'User-Agent': self.user_agent,
             'x-alien-access': 'alien',
-            'Set-Cookie': '__secret___access___cookie=1717142517918; expires=Tue, 01 Jan 2030 00:00:00 UTC',
+            'Set-Cookie': 't2Q1k0wFyWJgtZ1ZHP4pySQ72GTI8bnG=meow; expires=Tue, 01 Jan 2030 00:00:00 UTC',
         }
 
         if self.token is not None:
