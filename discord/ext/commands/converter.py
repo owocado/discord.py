@@ -448,19 +448,36 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
 
     1. Lookup by ID.
     2. Lookup by mention.
-    3. Lookup by name.
+    3. Lookup by channel URL.
+    4. Lookup by name.
 
     .. versionadded:: 2.0
+
+    .. versionchanged:: 2.4
+        Add lookup by channel URL, accessed via "Copy Link" in the Discord client within channels.
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.abc.GuildChannel:
         return self._resolve_channel(ctx, argument, 'channels', discord.abc.GuildChannel)
 
     @staticmethod
+    def _parse_from_url(argument: str) -> Optional[re.Match[str]]:
+        link_regex = re.compile(
+            r'https?://(?:(?:ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
+            r'(?:[0-9]{15,20}|@me)'
+            r'/([0-9]{15,20})(?:/(?:[0-9]{15,20})/?)?$'
+        )
+        return link_regex.match(argument)
+
+    @staticmethod
     def _resolve_channel(ctx: Context[BotT], argument: str, attribute: str, type: Type[CT]) -> CT:
         bot = ctx.bot
 
-        match = IDConverter._get_id_match(argument) or re.search(r'<#([0-9]{15,20})>$', argument)
+        match = (
+            IDConverter._get_id_match(argument)
+            or re.match(r'<#([0-9]{15,20})>$', argument)
+            or GuildChannelConverter._parse_from_url(argument)
+        )
         result = None
         guild = ctx.guild
 
@@ -490,7 +507,11 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
 
     @staticmethod
     def _resolve_thread(ctx: Context[BotT], argument: str, attribute: str, type: Type[TT]) -> TT:
-        match = IDConverter._get_id_match(argument) or re.search(r'<#([0-9]{15,20})>$', argument)
+        match = (
+            IDConverter._get_id_match(argument)
+            or re.match(r'<#([0-9]{15,20})>$', argument)
+            or GuildChannelConverter._parse_from_url(argument)
+        )
         result = None
         guild = ctx.guild
 
@@ -520,10 +541,14 @@ class TextChannelConverter(IDConverter[discord.TextChannel]):
 
     1. Lookup by ID.
     2. Lookup by mention.
-    3. Lookup by name
+    3. Lookup by channel URL.
+    4. Lookup by name
 
     .. versionchanged:: 1.5
          Raise :exc:`.ChannelNotFound` instead of generic :exc:`.BadArgument`
+
+    .. versionchanged:: 2.4
+        Add lookup by channel URL, accessed via "Copy Link" in the Discord client within channels.
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.TextChannel:
@@ -540,10 +565,14 @@ class VoiceChannelConverter(IDConverter[discord.VoiceChannel]):
 
     1. Lookup by ID.
     2. Lookup by mention.
-    3. Lookup by name
+    3. Lookup by channel URL.
+    4. Lookup by name
 
     .. versionchanged:: 1.5
          Raise :exc:`.ChannelNotFound` instead of generic :exc:`.BadArgument`
+
+    .. versionchanged:: 2.4
+        Add lookup by channel URL, accessed via "Copy Link" in the Discord client within channels.
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.VoiceChannel:
@@ -562,7 +591,11 @@ class StageChannelConverter(IDConverter[discord.StageChannel]):
 
     1. Lookup by ID.
     2. Lookup by mention.
-    3. Lookup by name
+    3. Lookup by channel URL.
+    4. Lookup by name
+
+    .. versionchanged:: 2.4
+        Add lookup by channel URL, accessed via "Copy Link" in the Discord client within channels.
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.StageChannel:
@@ -579,7 +612,11 @@ class CategoryChannelConverter(IDConverter[discord.CategoryChannel]):
 
     1. Lookup by ID.
     2. Lookup by mention.
-    3. Lookup by name
+    3. Lookup by channel URL.
+    4. Lookup by name
+
+    .. versionchanged:: 2.4
+        Add lookup by channel URL, accessed via "Copy Link" in the Discord client within channels.
 
     .. versionchanged:: 1.5
          Raise :exc:`.ChannelNotFound` instead of generic :exc:`.BadArgument`
@@ -598,9 +635,13 @@ class ThreadConverter(IDConverter[discord.Thread]):
 
     1. Lookup by ID.
     2. Lookup by mention.
-    3. Lookup by name.
+    3. Lookup by channel URL.
+    4. Lookup by name.
 
     .. versionadded: 2.0
+
+    .. versionchanged:: 2.4
+        Add lookup by channel URL, accessed via "Copy Link" in the Discord client within channels.
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.Thread:
@@ -617,9 +658,13 @@ class ForumChannelConverter(IDConverter[discord.ForumChannel]):
 
     1. Lookup by ID.
     2. Lookup by mention.
-    3. Lookup by name
+    3. Lookup by channel URL.
+    4. Lookup by name
 
     .. versionadded:: 2.0
+
+    .. versionchanged:: 2.4
+        Add lookup by channel URL, accessed via "Copy Link" in the Discord client within channels.
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.ForumChannel:
