@@ -2323,6 +2323,16 @@ class Message(PartialMessage, Hashable):
                 "Glad you're here, {0}.",
                 "Good to see you, {0}.",
                 "Yay you made it, {0}!",
+                "Everyone welcome {0} to the Guild!",
+                "Rolling out the red carpet for {0}. Say hi!",
+                "{0} just joined the Guild. We hope you brought pizza.",
+                "Yahaha! {0} found us!",
+                "Glad you're here, {0}, welcome to the Guild.",
+                "New recruit! {0} joined the Guild.",
+                "Roses are red, violets are blue, {0} just joined the Guild with you.",
+                "Round of applause for the newest Guild member, {0}. Just for being here.",
+                "A new member has spawned. Say hi to {0}.",
+                "Get ready everyone -- a {0} has appeared!",
             ]
 
             created_at_ms = int(self.created_at.timestamp() * 1000)

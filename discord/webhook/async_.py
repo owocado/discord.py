@@ -1563,7 +1563,7 @@ class Webhook(BaseWebhook):
             state=self._state,
         )
 
-    def _create_message(self, data, *, thread: Snowflake):
+    def _create_message(self, data: MessagePayload, *, thread: Snowflake):
         state = _WebhookState(self, parent=self._state, thread=thread)
         # state may be artificial (unlikely at this point...)
         if thread is MISSING:

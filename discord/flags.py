@@ -488,7 +488,8 @@ class MessageFlags(BaseFlags):
         return 256
 
     @flag_value
-    def unknown_flag_9(self):
+    def guild_feed_hidden(self):
+        """:class:`bool`: Returns ``True`` if the message is hidden from the guild's feed."""
         return 512
 
     @flag_value
@@ -525,8 +526,12 @@ class MessageFlags(BaseFlags):
         return 8192
 
     @flag_value
-    def ui_kit_component(self):
+    def has_snapshot(self):
         return 16384
+
+    @flag_value
+    def ui_kit_component(self):
+        return 32768
 
 
 @fill_with_flags()

@@ -1691,7 +1691,6 @@ class ConnectionState(Generic[ClientT]):
 
     def parse_application_command_permissions_update(self, data: GuildApplicationCommandPermissionsPayload):
         raw = RawAppCommandPermissionsUpdateEvent(data=data, state=self)
-        self.dispatch('rawest_app_command_permissions_update', data)
         self.dispatch('raw_app_command_permissions_update', raw)
 
     def parse_voice_state_update(self, data: gw.VoiceStateUpdateEvent) -> None:

@@ -276,6 +276,7 @@ class MessageType(Enum):
     voice_hangout_invite = 45
     poll_result = 46
     changelog = 47
+    nitro_notification = 48
 
 
 class SpeakingState(Enum):
@@ -679,6 +680,7 @@ class InteractionResponseType(Enum):
     autocomplete_result = 8
     modal = 9  # for modals
     # premium_required = 10 (deprecated)
+    iframe = 11 # for iframe modals
 
 
 class VideoQualityMode(Enum):
