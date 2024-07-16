@@ -363,6 +363,7 @@ class Member(discord.abc.Messageable, _UserTag):
         '_user',
         '_state',
         '_avatar',
+        '_banner',
         '_flags',
         '_avatar_decoration_data',
         'unusual_dm_activity_until',
@@ -400,6 +401,7 @@ class Member(discord.abc.Messageable, _UserTag):
         self.nick: Optional[str] = data.get('nick', None)
         self.pending: bool = data.get('pending', False)
         self._avatar: Optional[str] = data.get('avatar')
+        self._banner: Optional[str] = data.get('banner')
         self._permissions: Optional[int]
         self._flags: int = data.get('flags', 0)
         self._avatar_decoration_data: Optional[AvatarDecorationData] = data.get('avatar_decoration_data')
@@ -714,6 +716,28 @@ class Member(discord.abc.Messageable, _UserTag):
         if self._avatar is None:
             return None
         return Asset._from_guild_avatar(self._state, self.guild.id, self.id, self._avatar)
+
+    @property
+    def display_banner(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the member's displayed banner, if any.
+
+        This is the member's guild banner if available, otherwise it's their
+        global banner. If the member has no banner set then ``None`` is returned.
+
+        .. versionadded:: 2.5
+        """
+        return self.guild_banner or self._user.banner
+
+    @property
+    def guild_banner(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns an :class:`Asset` for the guild banner
+        the member has. If unavailable, ``None`` is returned.
+
+        .. versionadded:: 2.5
+        """
+        if self._banner is None:
+            return None
+        return Asset._from_guild_banner(self._state, self.guild.id, self.id, self._banner)
 
     @property
     def activity(self) -> Optional[ActivityTypes]:

@@ -1199,7 +1199,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: Literal[ChannelType.text],
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, TextChannelPayload]:
@@ -1210,7 +1210,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: Literal[ChannelType.voice],
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, VoiceChannelPayload]:
@@ -1221,7 +1221,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: Literal[ChannelType.stage_voice],
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, StageChannelPayload]:
@@ -1232,7 +1232,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: Literal[ChannelType.category],
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, CategoryChannelPayload]:
@@ -1243,7 +1243,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: Literal[ChannelType.news],
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, NewsChannelPayload]:
@@ -1254,7 +1254,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: Literal[ChannelType.news, ChannelType.text],
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, Union[TextChannelPayload, NewsChannelPayload]]:
@@ -1264,8 +1264,8 @@ class Guild(Hashable):
     def _create_channel(
         self,
         name: str,
-        channel_type: Literal[ChannelType.forum, ChannelType.media],
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        channel_type: Literal[ChannelType.forum],
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, ForumChannelPayload]:
@@ -1276,7 +1276,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: ChannelType,
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = ...,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
     ) -> Coroutine[Any, Any, GuildChannelPayload]:
@@ -1286,7 +1286,7 @@ class Guild(Hashable):
         self,
         name: str,
         channel_type: ChannelType,
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = MISSING,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = MISSING,
         category: Optional[Snowflake] = None,
         **options: Any,
     ) -> Coroutine[Any, Any, GuildChannelPayload]:
@@ -1326,7 +1326,7 @@ class Guild(Hashable):
         topic: str = MISSING,
         slowmode_delay: int = MISSING,
         nsfw: bool = MISSING,
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = MISSING,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = MISSING,
         default_auto_archive_duration: int = MISSING,
         default_thread_slowmode_delay: int = MISSING,
     ) -> TextChannel:
@@ -1468,7 +1468,7 @@ class Guild(Hashable):
         user_limit: int = MISSING,
         rtc_region: Optional[str] = MISSING,
         video_quality_mode: VideoQualityMode = MISSING,
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = MISSING,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = MISSING,
     ) -> VoiceChannel:
         """|coro|
 
@@ -1561,7 +1561,7 @@ class Guild(Hashable):
         user_limit: int = MISSING,
         rtc_region: Optional[str] = MISSING,
         video_quality_mode: VideoQualityMode = MISSING,
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = MISSING,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = MISSING,
     ) -> StageChannel:
         """|coro|
 
@@ -1654,7 +1654,7 @@ class Guild(Hashable):
         self,
         name: str,
         *,
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = MISSING,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = MISSING,
         reason: Optional[str] = None,
         position: int = MISSING,
     ) -> CategoryChannel:
@@ -1709,7 +1709,7 @@ class Guild(Hashable):
         category: Optional[CategoryChannel] = None,
         slowmode_delay: int = MISSING,
         nsfw: bool = MISSING,
-        overwrites: Mapping[Union[Role, Member], PermissionOverwrite] = MISSING,
+        overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = MISSING,
         reason: Optional[str] = None,
         default_auto_archive_duration: int = MISSING,
         default_thread_slowmode_delay: int = MISSING,
