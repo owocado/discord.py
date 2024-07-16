@@ -1449,3 +1449,9 @@ def _find_y(x: int, z: int) -> Optional[int]:
     # No integer solution found
     return None
 
+
+def _fuzzy_find(query: str, choices: Any, *, score: int = 80):
+    from rapidfuzz import process
+
+    return process.extract(query, choices, limit=None, score_cutoff=score)
+

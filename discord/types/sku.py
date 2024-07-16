@@ -27,6 +27,8 @@ from __future__ import annotations
 from typing import TypedDict, Optional, Literal
 from typing_extensions import NotRequired
 
+from .appinfo import PartialAppInfo
+
 
 class SKU(TypedDict):
     id: str
@@ -48,6 +50,34 @@ class Entitlement(TypedDict):
     ends_at: NotRequired[str]
     guild_id: NotRequired[str]
     consumed: NotRequired[bool]
+
+
+class Price(TypedDict):
+    amount: int
+    currency: str
+    currency_exponent: int
+    premium: Optional[dict[str, dict[str, int]]]
+
+
+class PublicSKU(SKU):
+    product_line: int
+    dependent_sku_id: Optional[int]
+    manifest_labels: Optional[str]
+    access_type: int
+    features: list[str]
+    release_date: Optional[str]
+    premium: bool
+    application: PartialAppInfo
+    show_age_gate: bool
+    price: Price
+
+
+class PublishedSKU(TypedDict):
+    id: str
+    summary: Optional[str]
+    sku: PublicSKU
+    description: Optional[str]
+    benefits: list[str]
 
 
 EntitlementOwnerType = Literal[1, 2]

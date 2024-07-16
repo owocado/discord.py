@@ -119,3 +119,18 @@ class PartialRoleConnection(TypedDict):
 class RoleConnection(PartialRoleConnection):
     application: RoleConnectionApplication
     application_metadata: List[RoleConnectionMetadata]
+
+
+class AppRPC(TypedDict):
+    id: Snowflake
+    name: str
+    icon: Optional[str]
+    description: str
+    summary: str
+    type: Optional[int]
+    is_monetized: bool
+    hook: bool
+    storefront_available: bool
+    integration_types_config: Dict[Literal["0", "1"], Dict[str, str]]
+    verify_key: str
+    flags: int

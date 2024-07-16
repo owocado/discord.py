@@ -363,7 +363,6 @@ class Member(discord.abc.Messageable, _UserTag):
         '_user',
         '_state',
         '_avatar',
-        '_banner',
         '_flags',
         '_avatar_decoration_data',
         'unusual_dm_activity_until',
@@ -405,7 +404,6 @@ class Member(discord.abc.Messageable, _UserTag):
         self._permissions: Optional[int]
         self._flags: int = data.get('flags', 0)
         self._avatar_decoration_data: Optional[AvatarDecorationData] = data.get('avatar_decoration_data')
-        self._banner: Optional[str] = data.get('banner')
         try:
             self._permissions = int(data['permissions'])
         except KeyError:
@@ -604,17 +602,6 @@ class Member(discord.abc.Messageable, _UserTag):
     def is_on_mobile(self) -> bool:
         """:class:`bool`: A helper function that determines if a member is active on a mobile device."""
         return self._client_status.mobile is not None
-
-    @property
-    def banner(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: Returns an :class:`Asset` for the guild banner
-        the member has. If unavailable, ``None`` is returned.
-
-        .. versionadded:: 2.4
-        """
-        if self._banner is None:
-            return None
-        return Asset._from_guild_banner(self._state, self.guild.id, self.id, self._banner)
 
     @property
     def colour(self) -> Colour:
@@ -1251,7 +1238,7 @@ class Member(discord.abc.Messageable, _UserTag):
     def has_unusual_dm_activity(self) -> bool:
         """Returns whether this member has unusual DM activity.
 
-        .. versionadded:: 2.4
+        .. versionadded:: 2.5
 
         Returns
         --------
@@ -1263,7 +1250,7 @@ class Member(discord.abc.Messageable, _UserTag):
         return False
 
     def is_guest(self) -> bool:
-        """Returns whether this member is a guest."""
+        """Returns whether this member is a guest who joined via guest invites."""
         return self.flags.guest
 
     async def safety_metadata(self) -> Optional[MemberSearch]:
@@ -1280,7 +1267,7 @@ class Member(discord.abc.Messageable, _UserTag):
         - :attr:`Permissions.moderate_members`
         - :attr:`Permissions.kick_members`
 
-        .. versionadded:: 2.4
+        .. versionadded:: 2.5
 
         Raises
         ------

@@ -46,7 +46,6 @@ from typing import (
 import types
 
 import discord
-from rapidfuzz import fuzz, process
 from unidecode import unidecode
 
 from .errors import *
@@ -149,13 +148,7 @@ class Converter(Protocol[T_co]):
         raise NotImplementedError('Derived classes need to implement this.')
 
 
-_ID_REGEX: re.Pattern[str] = re.compile(r'\"?([0-9]{15,20})\"?')
-MESSAGE_ID_REGEX: re.Pattern[str] = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
-MESSAGE_LINK_REGEX: re.Pattern[str] = re.compile(
-    r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
-    r'(?P<guild_id>[0-9]{15,20}|@me)'
-    r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
-)
+_ID_REGEX = re.compile(r'\"?([0-9]{15,20})\"?')
 _DELETED_USER_ID: int = 456226577798135808
 
 
@@ -267,20 +260,11 @@ class MemberConverter(IDConverter[discord.Member]):
             # not a mention...
             if guild:
                 users = []
-                for user_name in process.extract(
-                    argument,
-                    {user: user.name for user in guild.members},
-                    limit=None,
-                    score_cutoff=80,
-                    scorer=fuzz.WRatio,
-                ):
+                for user_name in discord.utils._fuzzy_find(argument, {user: user.name for user in guild.members}):
                     users.append(user_name[2])
-                for user_nick in process.extract(
+                for user_nick in discord.utils._fuzzy_find(
                     argument,
                     {obj: unidecode(obj.nick).casefold() for obj in guild.members if obj.nick and obj not in users},
-                    limit=None,
-                    score_cutoff=80,
-                    scorer=fuzz.WRatio,
                 ):
                     users.append(user_nick[2])
                 result = users[0] if users else guild.get_member_named(argument)
@@ -356,6 +340,13 @@ class UserConverter(IDConverter[discord.User]):
             raise UserNotFound(argument)
 
         return result
+
+
+MESSAGE_ID_REGEX: re.Pattern[str] = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
+MESSAGE_LINK_REGEX: re.Pattern[str] = re.compile(
+    r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
+    r'(?P<guild_id>[0-9]{15,20}|@me)/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
+)
 
 
 class PartialMessageConverter(Converter[discord.PartialMessage]):
@@ -741,13 +732,7 @@ class RoleConverter(IDConverter[discord.Role]):
             result = guild.get_role(int(match.group(1)))
         else:
             roles = []
-            for res in process.extract(
-                argument,
-                {r: unidecode(r.name).casefold() for r in guild.roles},
-                limit=None,
-                score_cutoff=80,
-                scorer=fuzz.WRatio,
-            ):
+            for res in discord.utils._fuzzy_find(argument, {r: unidecode(r.name).casefold() for r in guild.roles}):
                 roles.append(res[2])
 
             result = roles[0] if roles else discord.utils.get(guild._roles.values(), name=argument)
@@ -1097,7 +1082,7 @@ class Greedy(List[T]):
         converter = getattr(self.converter, '__name__', repr(self.converter))
         return f'Greedy[{converter}]'
 
-    def __class_getitem__(cls, params: Union[Tuple[T], T]) -> Greedy[T]:  # type: ignore
+    def __class_getitem__(cls, params: Union[Tuple[T], T]) -> Greedy[T]:
         if not isinstance(params, tuple):
             params = (params,)
         if len(params) != 1:
@@ -1105,7 +1090,7 @@ class Greedy(List[T]):
         converter = params[0]
 
         args = getattr(converter, '__args__', ())
-        if discord.utils.PY_310 and converter.__class__ is types.UnionType:
+        if discord.utils.PY_310 and converter.__class__ is types.UnionType:  # type: ignore
             converter = Union[args]  # type: ignore
 
         origin = getattr(converter, '__origin__', None)

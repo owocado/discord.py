@@ -274,7 +274,7 @@ class Thread(Messageable, Hashable):
         .. versionadded:: 2.1
         """
         tags = []
-        if self.parent is None or self.parent.type not in {ChannelType.forum, ChannelType.media}:
+        if self.parent is None or self.parent.type not in (ChannelType.forum, ChannelType.media):
             return tags
 
         parent = self.parent

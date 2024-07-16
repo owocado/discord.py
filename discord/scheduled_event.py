@@ -179,6 +179,8 @@ class ScheduledEvent(Hashable):
     @property
     def channel(self) -> Optional[Union[VoiceChannel, StageChannel]]:
         """Optional[Union[:class:`VoiceChannel`, :class:`StageChannel`]]: The channel this scheduled event is in."""
+        if self.guild is None:
+            return None
         return self.guild.get_channel(self.channel_id)  # type: ignore
 
     @property

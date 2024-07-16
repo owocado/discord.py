@@ -945,6 +945,7 @@ class MemberJoinType(Enum):
     hub = 4
     invite = 5
     vanity_url = 6
+    manual_member_verification = 7
 
 
 # TODO: `guild` vs `guild_install`
@@ -997,6 +998,7 @@ class ConnectionType(Enum):
     domain = 'domain'
     bungie = 'bungie'
     roblox = 'roblox'
+    amazon_music = 'amazonmusic'
 
     def __str__(self) -> str:
         return self.value

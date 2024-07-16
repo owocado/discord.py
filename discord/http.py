@@ -2731,7 +2731,7 @@ class HTTPClient:
     def get_user(self, user_id: Snowflake) -> Response[user.User]:
         return self.request(Route('GET', '/users/{user_id}', user_id=user_id))
 
-    def get_public_sku(self, sku_id: int, *, localize: bool = True) -> Response[sku.SKU]:
+    def get_public_sku(self, sku_id: int, *, localize: bool = True) -> Response[sku.PublishedSKU]:
         """Get Public SKU object."""
         params = {'localize': str(localize).lower()}
         return self.request(Route('GET', f'/store/published-listings/skus/{sku_id}?country_code=US'), params=params)
@@ -2751,3 +2751,7 @@ class HTTPClient:
     def get_top_guild_channels(self, guild_id: int):
         """Returns a list of snowflakes representing up to 10 of the top read channels in the guild."""
         return self.request(Route('GET', '/guilds/{guild_id}/top-read-channels', guild_id=guild_id))
+
+    def application_rpc(self, application_id: int) -> Response[appinfo.AppRPC]:
+        return self.request(Route('GET', '/application/{id}/rpc', id=application_id))
+

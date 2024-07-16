@@ -252,7 +252,7 @@ class Asset(AssetMixin):
         format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f"{cls.BASE}/guilds/{guild_id}/users/{member_id}/banners/{banner}.{format}?size=1024",
+            url=f"{cls.BASE}/guilds/{guild_id}/users/{member_id}/banners/{banner}.{format}?size=4096",
             key=banner,
             animated=animated,
         )
@@ -261,7 +261,7 @@ class Asset(AssetMixin):
     def _from_avatar_decoration(cls, state: _State, avatar_decoration: str) -> Self:
         return cls(
             state,
-            url=f'{cls.BASE}/avatar-decoration-presets/{avatar_decoration}.png?size=4096',
+            url=f'{cls.BASE}/avatar-decoration-presets/{avatar_decoration}.png?size=96',
             key=avatar_decoration,
             animated=True,
         )
@@ -347,21 +347,10 @@ class Asset(AssetMixin):
         )
 
     @classmethod
-    def _from_guild_banner(cls, state: _State, guild_id: int, member_id: int, banner: str) -> Self:
-        animated = banner.startswith('a_')
-        format = 'gif' if animated else 'png'
-        return cls(
-            state,
-            url=f"{cls.BASE}/guilds/{guild_id}/users/{member_id}/banners/{banner}.{format}?size=4096",
-            key=banner,
-            animated=animated,
-        )
-
-    @classmethod
     def _from_achievement_icon(cls, state: _State, app_id: int, achievement_id: int, icon_hash: str) -> Self:
         return cls(
             state,
-            url=f'{cls.BASE}/app-assets/{app_id}/achievements/{achievement_id}/icons/{icon_hash}.png',
+            url=f'{cls.BASE}/app-assets/{app_id}/achievements/{achievement_id}/icons/{icon_hash}.png?size=4096',
             key=icon_hash,
             animated=False,
         )

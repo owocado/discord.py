@@ -77,7 +77,6 @@ from .enums import (
     AutoModRuleEventType,
     ForumOrderType,
     ForumLayoutType,
-    OnboardingMode,
 )
 from .mixins import Hashable
 from .user import User
@@ -94,7 +93,6 @@ from .file import File
 from .audit_logs import AuditLogEntry
 from .object import OLDEST_OBJECT, Object
 from .welcome_screen import WelcomeScreen, WelcomeChannel
-from .onboarding import Onboarding, PartialOnboardingPrompt
 from .automod import AutoModRule, AutoModTrigger, AutoModRuleAction
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .soundboard import SoundboardSound
@@ -1264,7 +1262,7 @@ class Guild(Hashable):
     def _create_channel(
         self,
         name: str,
-        channel_type: Literal[ChannelType.forum],
+        channel_type: Literal[ChannelType.forum, ChannelType.media],
         overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
@@ -4568,162 +4566,3 @@ class Guild(Hashable):
             return False
 
         return self.raid_detected_at > utils.utcnow()
-
-    async def create_soundboard_sound(
-        self,
-        *,
-        name: str,
-        sound: bytes,
-        volume: float = 1,
-        emoji: Optional[EmojiInputType] = None,
-        reason: Optional[str] = None,
-    ) -> SoundboardSound:
-        """|coro|
-
-        Creates a :class:`SoundboardSound` for the guild.
-        You must have :attr:`Permissions.manage_expressions` to do this.
-
-        ..versionadded:: 2.4
-
-        Parameters
-        ----------
-        name: :class:`str`
-            The name of the sound. Must be between 2 and 32 characters.
-        sound: :class:`bytes`
-            The :term:`py:bytes-like object` representing the sound data.
-            Only MP3 sound files that don't exceed the duration of 5.2s are supported.
-        volume: :class:`float`
-            The volume of the sound. Must be between 0 and 1. Defaults to ``1``.
-        emoji: Optional[Union[:class:`Emoji`, :class:`PartialEmoji`, :class:`str`]]
-            The emoji of the sound.
-        reason: Optional[:class:`str`]
-            The reason for creating the sound. Shows up on the audit log.
-
-        Raises
-        -------
-        Forbidden
-            You do not have permissions to create a soundboard sound.
-        HTTPException
-            Creating the soundboard sound failed.
-
-        Returns
-        -------
-        :class:`SoundboardSound`
-            The newly created soundboard sound.
-        """
-        payload: Dict[str, Any] = {
-            'name': name,
-            'sound': utils._bytes_to_base64_data(sound, audio=True),
-            'volume': volume,
-            'emoji_id': None,
-            'emoji_name': None,
-        }
-
-        if emoji is not None:
-            if isinstance(emoji, _EmojiTag):
-                partial_emoji = emoji._to_partial()
-            elif isinstance(emoji, str):
-                partial_emoji = PartialEmoji.from_str(emoji)
-            else:
-                partial_emoji = None
-
-            if partial_emoji is not None:
-                if partial_emoji.id is None:
-                    payload['emoji_name'] = partial_emoji.name
-                else:
-                    payload['emoji_id'] = partial_emoji.id
-
-        data = await self._state.http.create_soundboard_sound(self.id, reason=reason, **payload)
-        return SoundboardSound(guild=self, state=self._state, data=data)
-
-    async def request_soundboard_sounds(self, *, cache: bool = True) -> List[SoundboardSound]:
-        """|coro|
-
-        Requests the soundboard sounds of the guild.
-
-        This is a websocket operation and can be slow.
-
-        .. versionadded:: 2.4
-
-        Parameters
-        ----------
-        cache: :class:`bool`
-            Whether to cache the soundboard sounds internally. Defaults to ``True``.
-
-        Raises
-        -------
-        asyncio.TimeoutError
-            The query timed out waiting for the sounds.
-
-        Returns
-        --------
-        List[:class:`SoundboardSound`]
-            A list of guilds with it's requested soundboard sounds.
-        """
-
-        return await self._state.request_soundboard_sounds(self, cache=cache)
-
-    async def onboarding(self) -> Onboarding:
-        """|coro|
-
-        Fetches the onboarding configuration for this guild.
-
-        .. versionadded:: 2.4
-
-        Returns
-        --------
-        :class:`Onboarding`
-            The onboarding configuration that was fetched.
-        """
-        data = await self._state.http.get_guild_onboarding(self.id)
-        return Onboarding(data=data, guild=self, state=self._state)
-
-    async def edit_onboarding(
-        self,
-        *,
-        prompts: List[PartialOnboardingPrompt] = MISSING,
-        default_channels: List[Snowflake] = MISSING,
-        enabled: bool = MISSING,
-        mode: OnboardingMode = MISSING,
-        reason: str = MISSING,
-    ) -> Onboarding:
-        """|coro|
-
-        Edits the onboarding configuration for this guild.
-
-        .. versionadded:: 2.4
-
-        Parameters
-        -----------
-        prompts: List[:class:`PartialOnboardingPrompt`]
-            The prompts that will be shown to new members.
-        default_channels: List[:class:`abc.Snowflake`]
-            The channels that will be used as the default channels for new members.
-        enabled: :class:`bool`
-            Whether the onboarding configuration is enabled.
-        mode: :class:`OnboardingMode`
-            The mode that will be used for the onboarding configuration.
-        reason: :class:`str`
-            The reason for editing the onboarding configuration. Shows up on the audit log.
-
-        Raises
-        -------
-        Forbidden
-            You do not have permissions to edit the onboarding configuration.
-        HTTPException
-            Editing the onboarding configuration failed.
-
-        Returns
-        --------
-        :class:`Onboarding`
-            The new onboarding configuration.
-        """
-        data = await self._state.http.modify_guild_onboarding(
-            self.id,
-            prompts=[p.to_dict() for p in prompts] if prompts is not MISSING else None,
-            default_channel_ids=[c.id for c in default_channels] if default_channels is not MISSING else None,
-            enabled=enabled if enabled is not MISSING else None,
-            mode=mode.value if mode is not MISSING else None,
-            reason=reason if reason is not MISSING else None,
-        )
-        return Onboarding(data=data, guild=self, state=self._state)
