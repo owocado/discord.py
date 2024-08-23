@@ -48,7 +48,7 @@ class ProfileMetadata(TypedDict):
 
 
 class MutualGuild(TypedDict):
-    id: Snowflake
+    id: str
     nick: Optional[str]
 
 

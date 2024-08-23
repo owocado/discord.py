@@ -707,6 +707,14 @@ class PublicUserFlags(BaseFlags):
         """
         return UserFlags.active_developer.value
 
+    @flag_value
+    def provisional_account(self):
+        """:class:`bool`: Returns ``True`` if the user is a provisional account used with the social layer integration.
+
+        .. versionadded:: 2.5
+        """
+        return UserFlags.provisional_account.value
+
     def all(self) -> List[UserFlags]:
         """List[:class:`UserFlags`]: Returns all public flags the user has."""
         return [public_flag for public_flag in UserFlags if self._has_flag(public_flag.value)]
@@ -914,34 +922,52 @@ class Intents(BaseFlags):
 
     @alias_flag_value
     def emojis(self):
-        """:class:`bool`: Alias of :attr:`.emojis_and_stickers`.
+        """:class:`bool`: Alias of :attr:`.expressions`.
 
         .. versionchanged:: 2.0
             Changed to an alias.
         """
         return 1 << 3
 
-    @flag_value
+    @alias_flag_value
     def emojis_and_stickers(self):
-        """:class:`bool`: Whether guild emoji and sticker related events are enabled.
+        """:class:`bool`: Alias of :attr:`.expressions`.
 
         .. versionadded:: 2.0
+
+        .. versionchanged:: 2.5
+            Changed to an alias.
+        """
+        return 1 << 3
+
+    @flag_value
+    def expressions(self):
+        """:class:`bool`: Whether guild emoji, sticker, and soundboard sound related events are enabled.
+
+        .. versionadded:: 2.5
 
         This corresponds to the following events:
 
         - :func:`on_guild_emojis_update`
         - :func:`on_guild_stickers_update`
+        - :func:`on_soundboard_sound_create`
+        - :func:`on_soundboard_sound_update`
+        - :func:`on_soundboard_sound_delete`
 
         This also corresponds to the following attributes and classes in terms of cache:
 
         - :class:`Emoji`
         - :class:`GuildSticker`
+        - :class:`SoundboardSound`
         - :meth:`Client.get_emoji`
         - :meth:`Client.get_sticker`
+        - :meth:`Client.get_soundboard_sound`
         - :meth:`Client.emojis`
         - :meth:`Client.stickers`
+        - :meth:`Client.soundboard_sounds`
         - :attr:`Guild.emojis`
         - :attr:`Guild.stickers`
+        - :attr:`Guild.soundboard_sounds`
         """
         return 1 << 3
 
@@ -1722,8 +1748,24 @@ class ApplicationFlags(BaseFlags):
 
     @flag_value
     def iframe_modal(self):
-        """:class:`bool`: Returns ``True`` if the application can use IFrame modals."""
+        """:class:`bool`: Returns ``True`` if the application can use iframe modals."""
         return 1 << 26
+
+    @flag_value
+    def social_layer_integration(self):
+        return 1 << 27
+
+    @flag_value
+    def unknown_flag_28(self):
+        return 1 << 28
+
+    @flag_value
+    def promoted(self):
+        return 1 << 29
+
+    @flag_value
+    def partner(self):
+        return 1 << 30
 
 
 @fill_with_flags()
@@ -2240,6 +2282,58 @@ class MemberFlags(BaseFlags):
     def automod_quarantined_bio(self):
         return 1 << 8
 
+    @flag_value
+    def dm_settings_upsell_acknowledged(self):
+        return 1 << 9
+
+    @flag_value
+    def automod_quarantined_clan_tag(self):
+        return 1 << 10
+
+    @flag_value
+    def unknown_flag_11(self):
+        return 1 << 11
+
+    @flag_value
+    def unknown_flag_12(self):
+        return 1 << 12
+
+    @flag_value
+    def unknown_flag_13(self):
+        return 1 << 13
+
+    @flag_value
+    def unknown_flag_14(self):
+        return 1 << 14
+
+    @flag_value
+    def unknown_flag_15(self):
+        return 1 << 15
+
+    @flag_value
+    def unknown_flag_16(self):
+        return 1 << 16
+
+    @flag_value
+    def unknown_flag_17(self):
+        return 1 << 17
+
+    @flag_value
+    def unknown_flag_18(self):
+        return 1 << 18
+
+    @flag_value
+    def unknown_flag_19(self):
+        return 1 << 19
+
+    @flag_value
+    def unknown_flag_20(self):
+        return 1 << 20
+
+    @flag_value
+    def unknown_flag_21(self):
+        return 1 << 21
+
 
 @fill_with_flags()
 class AttachmentFlags(BaseFlags):
@@ -2322,6 +2416,10 @@ class AttachmentFlags(BaseFlags):
     @flag_value
     def contains_explicit_media(self):
         return 1 << 4
+
+    @flag_value
+    def content_inventory_entry(self):
+        return 1 << 5
 
 
 @fill_with_flags()

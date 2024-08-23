@@ -302,7 +302,7 @@ def deprecated(instead: Optional[str] = None) -> Callable[[Callable[P, T]], Call
             else:
                 fmt = '{0.__name__} is deprecated.'
 
-            warnings.warn(fmt.format(func, instead), stacklevel=3, category=DeprecationWarning)
+            warnings.warn(fmt.format(func, instead), stacklevel=2, category=DeprecationWarning)
             warnings.simplefilter('default', DeprecationWarning)  # reset filter
             return func(*args, **kwargs)
 
@@ -320,7 +320,6 @@ def oauth_url(
     scopes: Iterable[str] = MISSING,
     disable_guild_select: bool = False,
     state: str = MISSING,
-    integration_type: Optional[Literal[0, 1]] = None,
 ) -> str:
     """A helper function that returns the OAuth2 URL for authorizing the bot
     into guilds.
@@ -911,7 +910,7 @@ def resolve_template(code: Union[Template, str]) -> str:
 
 _MARKDOWN_ESCAPE_SUBREGEX = '|'.join(r'\{0}(?=([\s\S]*((?<!\{0})\{0})))'.format(c) for c in ('*', '`', '_', '~', '|'))
 
-_MARKDOWN_ESCAPE_COMMON = r'^>(?:>>)?\s|\[.+\]\(.+\)|^#{1,3}|^\s*-'
+_MARKDOWN_ESCAPE_COMMON = r'^>(?:>>)?\s|\[.*?\]\(.*?\)|^#{1,3}|^\s*-'
 
 _MARKDOWN_ESCAPE_REGEX = re.compile(fr'(?P<markdown>{_MARKDOWN_ESCAPE_SUBREGEX}|{_MARKDOWN_ESCAPE_COMMON})', re.MULTILINE)
 
@@ -1131,7 +1130,7 @@ def evaluate_annotation(
         cache[tp] = evaluated
         return evaluated
 
-    if PY_312 and getattr(tp.__repr__, '__objclass__', None) is typing.TypeAliasType:  # type: ignore
+    if PY_312 and getattr(tp.__repr__, '__objclass__', None) is typing.TypeAliasType:
         temp_locals = dict(**locals, **{t.__name__: t for t in tp.__type_params__})
         annotation = evaluate_annotation(tp.__value__, globals, temp_locals, cache.copy())
         if hasattr(tp, '__args__'):
@@ -1176,7 +1175,7 @@ def evaluate_annotation(
         try:
             return tp.copy_with(evaluated_args)
         except AttributeError:
-            return tp.__origin__[evaluated_args]
+            return tp.__origin__[evaluated_args]  # type: ignore
 
     return tp
 

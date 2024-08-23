@@ -323,6 +323,14 @@ GuildScheduledEventUserAdd = GuildScheduledEventUserRemove = _GuildScheduledEven
 VoiceStateUpdateEvent = GuildVoiceState
 VoiceChannelEffectSendEvent = VoiceChannelEffect
 
+GuildSoundBoardSoundCreateEvent = GuildSoundBoardSoundUpdateEvent = SoundboardSound
+GuildSoundBoardSoundsUpdateEvent = List[SoundboardSound]
+
+
+class GuildSoundBoardSoundDeleteEvent(TypedDict):
+    sound_id: Snowflake
+    guild_id: Snowflake
+
 
 class VoiceServerUpdateEvent(TypedDict):
     token: str
@@ -356,20 +364,6 @@ class GuildAuditLogEntryCreate(AuditLogEntry):
     guild_id: Snowflake
 
 
-GuildSoundBoardSoundCreateEvent = SoundboardSound
-
-
-class GuildSoundBoardSoundDeleteEvent(TypedDict):
-    sound_id: Snowflake
-    guild_id: Snowflake
-
-
-class VoiceChannelStatusUpdate(TypedDict):
-    id: Snowflake
-    guild_id: Snowflake
-    status: Optional[str]
-
-
 EntitlementCreateEvent = EntitlementUpdateEvent = EntitlementDeleteEvent = Entitlement
 
 
@@ -384,3 +378,9 @@ class PollVoteActionEvent(TypedDict):
 class SoundboardSoundsRequestEvent(TypedDict):
     guild_id: Snowflake
     soundboard_sounds: List[SoundboardSound]
+
+
+class VoiceChannelStatusUpdate(TypedDict):
+    id: Snowflake
+    guild_id: Snowflake
+    status: Optional[str]

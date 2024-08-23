@@ -30,6 +30,7 @@ from typing_extensions import NotRequired
 class AvatarDecorationData(TypedDict):
     asset: str
     sku_id: Snowflake
+    expires_at: Optional[str]
 
 
 class Clan(TypedDict):

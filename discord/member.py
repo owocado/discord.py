@@ -363,10 +363,10 @@ class Member(discord.abc.Messageable, _UserTag):
         '_user',
         '_state',
         '_avatar',
+        '_banner',
         '_flags',
         '_avatar_decoration_data',
         'unusual_dm_activity_until',
-        '_banner',
         '_clan',
         'bio',
     )
@@ -540,6 +540,7 @@ class Member(discord.abc.Messageable, _UserTag):
             u.global_name,
             u._public_flags,
             u._avatar_decoration_data['sku_id'] if u._avatar_decoration_data is not None else None,
+            u._avatar_decoration_data.get('expires_at') if u._avatar_decoration_data else None,
             u._clan,
         )
 
@@ -552,6 +553,7 @@ class Member(discord.abc.Messageable, _UserTag):
             user.get('global_name'),
             user.get('public_flags', 0),
             decoration_payload['sku_id'] if decoration_payload is not None else None,
+            decoration_payload.get('expires_at') if decoration_payload else None,
             user.get('clan'),
         )
         if original != modified:
@@ -716,6 +718,8 @@ class Member(discord.abc.Messageable, _UserTag):
         .. versionadded:: 2.5
         """
         return self.guild_banner or self._user.banner
+
+    banner = display_banner
 
     @property
     def guild_banner(self) -> Optional[Asset]:
@@ -1205,6 +1209,38 @@ class Member(discord.abc.Messageable, _UserTag):
             user_id = self.id
             for role in roles:
                 await req(guild_id, user_id, role.id, reason=reason)
+
+    async def fetch_voice(self) -> VoiceState:
+        """|coro|
+
+        Retrieves the current voice state from this member.
+
+        .. versionadded:: 2.5
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to get a voice state.
+        HTTPException
+            Retrieving the voice state failed.
+
+        Returns
+        -------
+        :class:`VoiceState`
+            The current voice state of the member.
+        """
+        guild_id = self.guild.id
+        if self._state.self_id == self.id:
+            data = await self._state.http.get_my_voice_state(guild_id)
+        else:
+            data = await self._state.http.get_voice_state(guild_id, self.id)
+
+        channel_id = data.get('channel_id')
+        channel: Optional[VocalGuildChannel] = None
+        if channel_id is not None:
+            channel = self.guild.get_channel(int(channel_id))  # type: ignore # must be voice channel here
+
+        return VoiceState(data=data, channel=channel)
 
     def get_role(self, role_id: int, /) -> Optional[Role]:
         """Returns a role with the given ID from roles which the member has.

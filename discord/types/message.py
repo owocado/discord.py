@@ -102,7 +102,11 @@ class MessageApplication(TypedDict):
     cover_image: NotRequired[str]
 
 
+MessageReferenceType = Literal[0, 1]
+
+
 class MessageReference(TypedDict, total=False):
+    type: MessageReferenceType
     message_id: Snowflake
     channel_id: Required[Snowflake]
     guild_id: Snowflake
@@ -114,6 +118,11 @@ class RoleSubscriptionData(TypedDict):
     tier_name: str
     total_months_subscribed: int
     is_renewal: bool
+
+
+class MessageCall(TypedDict):
+    participants: SnowflakeList
+    ended_timestamp: NotRequired[Optional[str]]
 
 
 MessageType = Literal[
@@ -154,6 +163,18 @@ MessageType = Literal[
 ]
 
 
+class MessageSnapshot(TypedDict):
+    type: MessageType
+    content: str
+    embeds: List[Embed]
+    attachments: List[Attachment]
+    timestamp: str
+    edited_timestamp: Optional[str]
+    flags: NotRequired[int]
+    mentions: List[UserWithMember]
+    mention_roles: SnowflakeList
+
+
 class Message(PartialMessage):
     id: Snowflake
     author: User
@@ -187,6 +208,7 @@ class Message(PartialMessage):
     position: NotRequired[int]
     role_subscription_data: NotRequired[RoleSubscriptionData]
     thread: NotRequired[Thread]
+    call: NotRequired[MessageCall]
 
 
 AllowedMentionType = Literal['roles', 'users', 'everyone']

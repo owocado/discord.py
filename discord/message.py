@@ -32,6 +32,7 @@ from os import PathLike
 from typing import (
     Dict,
     TYPE_CHECKING,
+    Literal,
     Sequence,
     Union,
     List,
@@ -49,7 +50,7 @@ from .asset import Asset
 from .reaction import Reaction
 from .emoji import Emoji
 from .partial_emoji import PartialEmoji
-from .enums import InteractionType, MessageType, ChannelType, try_enum
+from .enums import InteractionType, MessageReferenceType, MessageType, ChannelType, try_enum, InteractionEphemeralityReason
 from .errors import HTTPException
 from .components import _component_factory
 from .embeds import Embed
@@ -72,10 +73,12 @@ if TYPE_CHECKING:
         Message as MessagePayload,
         Attachment as AttachmentPayload,
         MessageReference as MessageReferencePayload,
+        MessageSnapshot as MessageSnapshotPayload,
         MessageApplication as MessageApplicationPayload,
         MessageActivity as MessageActivityPayload,
         RoleSubscriptionData as RoleSubscriptionDataPayload,
         MessageInteractionMetadata as MessageInteractionMetadataPayload,
+        MessageCall as MessageCallPayload,
     )
 
     from .types.interactions import MessageInteraction as MessageInteractionPayload
@@ -108,10 +111,12 @@ __all__ = (
     'PartialMessage',
     'MessageInteraction',
     'MessageReference',
+    'MessageSnapshot',
     'DeletedReferencedMessage',
     'MessageApplication',
     'RoleSubscriptionInfo',
     'MessageInteractionMetadata',
+    'MessageCall',
 )
 
 
@@ -194,6 +199,10 @@ class Attachment(Hashable):
         The waveform (amplitudes) of the audio in bytes. Returns ``None`` if it's not a voice message.
 
         .. versionadded:: 2.3
+    title: Optional[:class:`str`]
+        The normalised version of the attachment's filename.
+
+        .. versionadded:: 2.5
     """
 
     __slots__ = (
@@ -211,6 +220,7 @@ class Attachment(Hashable):
         'duration',
         'waveform',
         '_flags',
+        'title',
     )
 
     def __init__(self, *, data: AttachmentPayload, state: ConnectionState):
@@ -226,6 +236,7 @@ class Attachment(Hashable):
         self.description: Optional[str] = data.get('description')
         self.ephemeral: bool = data.get('ephemeral', False)
         self.duration: Optional[float] = data.get('duration_secs')
+        self.title: Optional[str] = data.get('title')
 
         waveform = data.get('waveform')
         self.waveform: Optional[bytes] = utils._base64_to_bytes(waveform) if waveform is not None else None
@@ -459,6 +470,91 @@ class DeletedReferencedMessage:
         return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.id}'
 
 
+class MessageSnapshot:
+    """Represents a message snapshot attached to a forwarded message.
+
+    Attributes
+    -----------
+    type: :class:`MessageType`
+        The type of the forwarded message.
+    content: :class:`str`
+        The actual contents of the forwarded message.
+    embeds: List[:class:`Embed`]
+        A list of embeds the forwarded message has.
+    attachments: List[:class:`Attachment`]
+        A list of attachments given to the forwarded message.
+    created_at: :class:`datetime.datetime`
+        The forwarded message's time of creation.
+    flags: :class:`MessageFlags`
+        Extra features of the the message snapshot.
+    """
+
+    __slots__ = (
+        '_cs_raw_channel_mentions',
+        '_cs_raw_mentions',
+        '_cs_raw_role_mentions',
+        '_edited_timestamp',
+        'attachments',
+        'content',
+        'embeds',
+        'flags',
+        'created_at',
+        'type',
+    )
+
+    @classmethod
+    def _from_value(
+        cls,
+        state: ConnectionState,
+        message_snapshots: Optional[List[Dict[Literal['message'], MessageSnapshotPayload]]],
+    ):
+        if not message_snapshots:
+            return None
+
+        return [MessageSnapshot(state, snapshot['message']) for snapshot in message_snapshots]
+
+    def __init__(self, state: ConnectionState, data: MessageSnapshotPayload):
+        self.type: MessageType = try_enum(MessageType, data['type'])
+        self.content: str = data['content']
+        self.embeds: List[Embed] = [Embed.from_dict(a) for a in data['embeds']]
+        self.attachments: List[Attachment] = [Attachment(data=a, state=state) for a in data['attachments']]
+        self.created_at: datetime.datetime = utils.parse_time(data['timestamp'])
+        self._edited_timestamp: Optional[datetime.datetime] = utils.parse_time(data['edited_timestamp'])
+        self.flags: MessageFlags = MessageFlags._from_value(data.get('flags', 0))
+
+    def __repr__(self) -> str:
+        name = self.__class__.__name__
+        return f'<{name} type={self.type!r} created_at={self.created_at!r} flags={self.flags!r}>'
+
+    @utils.cached_slot_property('_cs_raw_mentions')
+    def raw_mentions(self) -> List[int]:
+        """List[:class:`int`]: A property that returns an array of user IDs matched with
+        the syntax of ``<@user_id>`` in the message content.
+        This allows you to receive the user IDs of mentioned users
+        even in a private message context.
+        """
+        return [int(x) for x in re.findall(r'<@!?([0-9]{15,20})>', self.content)]
+
+    @utils.cached_slot_property('_cs_raw_channel_mentions')
+    def raw_channel_mentions(self) -> List[int]:
+        """List[:class:`int`]: A property that returns an array of channel IDs matched with
+        the syntax of ``<#channel_id>`` in the message content.
+        """
+        return [int(x) for x in re.findall(r'<#([0-9]{15,20})>', self.content)]
+
+    @utils.cached_slot_property('_cs_raw_role_mentions')
+    def raw_role_mentions(self) -> List[int]:
+        """List[:class:`int`]: A property that returns an array of role IDs matched with
+        the syntax of ``<@&role_id>`` in the message content.
+        """
+        return [int(x) for x in re.findall(r'<@&([0-9]{15,20})>', self.content)]
+
+    @property
+    def edited_at(self) -> Optional[datetime.datetime]:
+        """Optional[:class:`datetime.datetime`]: An aware UTC datetime object containing the edited time of the forwarded message."""
+        return self._edited_timestamp
+
+
 class MessageReference:
     """Represents a reference to a :class:`~discord.Message`.
 
@@ -469,6 +565,8 @@ class MessageReference:
 
     Attributes
     -----------
+    type: :class:`MessageReferenceType`
+        The type of message reference.
     message_id: Optional[:class:`int`]
         The id of the message referenced.
     channel_id: :class:`int`
@@ -493,10 +591,19 @@ class MessageReference:
         .. versionadded:: 1.6
     """
 
-    __slots__ = ('message_id', 'channel_id', 'guild_id', 'fail_if_not_exists', 'resolved', '_state')
+    __slots__ = ('type','message_id', 'channel_id', 'guild_id', 'fail_if_not_exists', 'resolved', '_state')
 
-    def __init__(self, *, message_id: int, channel_id: int, guild_id: Optional[int] = None, fail_if_not_exists: bool = False):
+    def __init__(
+        self,
+        *,
+        type: MessageReferenceType,
+        message_id: int,
+        channel_id: int,
+        guild_id: Optional[int] = None,
+        fail_if_not_exists: bool = True,
+    ):
         self._state: Optional[ConnectionState] = None
+        self.type: MessageReferenceType = type
         self.resolved: Optional[Union[Message, DeletedReferencedMessage]] = None
         self.message_id: Optional[int] = message_id
         self.channel_id: int = channel_id
@@ -506,6 +613,7 @@ class MessageReference:
     @classmethod
     def with_state(cls, state: ConnectionState, data: MessageReferencePayload) -> Self:
         self = cls.__new__(cls)
+        self.type = try_enum(MessageReferenceType, data.get('type', 0))
         self.message_id = utils._get_as_snowflake(data, 'message_id')
         self.channel_id = int(data['channel_id'])
         self.guild_id = utils._get_as_snowflake(data, 'guild_id')
@@ -536,6 +644,7 @@ class MessageReference:
             A reference to the message.
         """
         self = cls(
+            type=MessageReferenceType.default,
             message_id=message.id,
             channel_id=message.channel.id,
             guild_id=getattr(message.guild, 'id', None),
@@ -677,6 +786,7 @@ class MessageInteractionMetadata(Hashable):
         'original_response_message_id',
         'interacted_message_id',
         'modal_interaction',
+        'ephemerality_reason',
         '_integration_owners',
         '_state',
         '_guild',
@@ -712,6 +822,7 @@ class MessageInteractionMetadata(Hashable):
             )
         except KeyError:
             pass
+        self.ephemerality_reason = try_enum(InteractionEphemeralityReason, data.get('ephemerality_reason') or 0)
 
     def __repr__(self) -> str:
         return f'<MessageInteraction id={self.id} type={self.type!r} user={self.user!r}>'
@@ -809,6 +920,49 @@ class MessageApplication:
                 state=self._state, object_id=self.id, icon_hash=self._cover_image, asset_type='cover_image'
             )
         return None
+
+
+class MessageCall:
+    """Represents a message's call data in a private channel from a :class:`~discord.Message`.
+
+    .. versionadded:: 2.5
+
+    Attributes
+    -----------
+    ended_timestamp: Optional[:class:`datetime.datetime`]
+        The timestamp the call has ended.
+    participants: List[Optional[:class:`User`]]
+        A list of users that participated in the call.
+    """
+
+    __slots__ = ('_message', 'ended_timestamp', 'participants')
+
+    def __repr__(self) -> str:
+        return f'<MessageCall participants={self.participants!r}>'
+
+    def __init__(self, *, state: ConnectionState, message: Message, data: MessageCallPayload):
+        self._message: Message = message
+        self.ended_timestamp: Optional[datetime.datetime] = utils.parse_time(data.get('ended_timestamp'))
+        self.participants: List[Optional[User]] = []
+
+        for user_id in data['participants']:
+            user_id = int(user_id)
+            if user_id == self._message.author.id:
+                self.participants.append(self._message.author)  # type: ignore # can't be a Member here
+            else:
+                self.participants.append(state.get_user(user_id))
+
+    @property
+    def duration(self) -> datetime.timedelta:
+        """:class:`datetime.timedelta`: The duration the call has lasted or is already ongoing."""
+        if self.ended_timestamp is None:
+            return utils.utcnow() - self._message.created_at
+        else:
+            return self.ended_timestamp - self._message.created_at
+
+    def is_ended(self) -> bool:
+        """:class:`bool`: Whether the call is ended or not."""
+        return self.ended_timestamp is not None
 
 
 class RoleSubscriptionInfo:
@@ -1017,6 +1171,8 @@ class PartialMessage(Hashable):
         delete_after: Optional[float] = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
+        suppress: bool = ...,
+        suppress_embeds: bool = ...,
     ) -> Message:
         ...
 
@@ -1030,6 +1186,8 @@ class PartialMessage(Hashable):
         delete_after: Optional[float] = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
+        suppress: bool = ...,
+        suppress_embeds: bool = ...,
     ) -> Message:
         ...
 
@@ -1043,6 +1201,8 @@ class PartialMessage(Hashable):
         delete_after: Optional[float] = None,
         allowed_mentions: Optional[AllowedMentions] = MISSING,
         view: Optional[View] = MISSING,
+        suppress: bool = MISSING,
+        suppress_embeds: bool = MISSING,
     ) -> Message:
         """|coro|
 
@@ -1095,6 +1255,11 @@ class PartialMessage(Hashable):
         view: Optional[:class:`~discord.ui.View`]
             The updated view to update this message with. If ``None`` is passed then
             the view is removed.
+        suppress: :class:`bool`
+            Whether to suppress embeds for the message. This removes
+            all the embeds if set to ``True``. If set to ``False``
+            this brings the embeds back if they were suppressed.
+            Using this parameter requires :attr:`~.Permissions.manage_messages`.
 
         Raises
         -------
@@ -1120,6 +1285,15 @@ class PartialMessage(Hashable):
         if view is not MISSING:
             self._state.prevent_view_updates_for(self.id)
 
+        if suppress is not MISSING:
+            flags = MessageFlags._from_value(0)
+            flags.suppress_embeds = suppress
+        elif suppress_embeds is not MISSING:
+            flags = MessageFlags._from_value(0)
+            flags.suppress_embeds = suppress_embeds
+        else:
+            flags = MISSING
+
         with handle_message_parameters(
             content=content,
             embed=embed,
@@ -1128,6 +1302,7 @@ class PartialMessage(Hashable):
             view=view,
             allowed_mentions=allowed_mentions,
             previous_allowed_mentions=previous_allowed_mentions,
+            flags=flags,
         ) as params:
             data = await self._state.http.edit_message(self.channel.id, self.id, params=params)
             message = Message(state=self._state, channel=self.channel, data=data)
@@ -1769,9 +1944,15 @@ class Message(PartialMessage, Hashable):
         The poll attached to this message.
 
         .. versionadded:: 2.4
+    call: Optional[:class:`MessageCall`]
+        The call associated with this message.
+
+        .. versionadded:: 2.5
+    message_snapshots: Optional[List[:class:`MessageSnapshot`]]
+        The message snapshots attached to this message.
     """
 
-    __slots__ = (
+    __slots__: Tuple[str, ...] = (
         '_edited_timestamp',
         '_cs_channel_mentions',
         '_cs_raw_mentions',
@@ -1805,6 +1986,8 @@ class Message(PartialMessage, Hashable):
         'position',
         'interaction_metadata',
         'poll',
+        'call',
+        'message_snapshots',
         '_data',
     )
 
@@ -1844,6 +2027,9 @@ class Message(PartialMessage, Hashable):
         self.position: Optional[int] = data.get('position')
         self.application_id: Optional[int] = utils._get_as_snowflake(data, 'application_id')
         self.stickers: List[StickerItem] = [StickerItem(data=d, state=state) for d in data.get('sticker_items', [])]
+        self.message_snapshots: Optional[List[MessageSnapshot]] = MessageSnapshot._from_value(
+            state, data.get('message_snapshots')
+        )
 
         # This updates the poll so it has the counts, if the message
         # was previously cached.
@@ -1933,7 +2119,7 @@ class Message(PartialMessage, Hashable):
         else:
             self.role_subscription = RoleSubscriptionInfo(role_subscription)
 
-        for handler in ('author', 'member', 'mentions', 'mention_roles', 'components'):
+        for handler in ('author', 'member', 'mentions', 'mention_roles', 'components', 'call'):
             try:
                 getattr(self, f'_handle_{handler}')(data[handler])
             except KeyError:
@@ -2119,6 +2305,13 @@ class Message(PartialMessage, Hashable):
 
     def _handle_interaction_metadata(self, data: MessageInteractionMetadataPayload):
         self.interaction_metadata = MessageInteractionMetadata(state=self._state, guild=self.guild, data=data)
+
+    def _handle_call(self, data: Optional[MessageCallPayload]):
+        self.call: Optional[MessageCall]
+        if data is not None:
+            self.call = MessageCall(state=self._state, message=self, data=data)
+        else:
+            self.call = None
 
     def _rebind_cached_references(
         self,
@@ -2448,6 +2641,7 @@ class Message(PartialMessage, Hashable):
         delete_after: Optional[float] = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
+        suppress_embeds: bool = ...,
     ) -> Message:
         ...
 
@@ -2462,6 +2656,7 @@ class Message(PartialMessage, Hashable):
         delete_after: Optional[float] = ...,
         allowed_mentions: Optional[AllowedMentions] = ...,
         view: Optional[View] = ...,
+        suppress_embeds: bool = ...,
     ) -> Message:
         ...
 
@@ -2476,6 +2671,7 @@ class Message(PartialMessage, Hashable):
         delete_after: Optional[float] = None,
         allowed_mentions: Optional[AllowedMentions] = MISSING,
         view: Optional[View] = MISSING,
+        suppress_embeds: bool = False,
     ) -> Message:
         """|coro|
 
@@ -2561,6 +2757,9 @@ class Message(PartialMessage, Hashable):
         if suppress is not MISSING:
             flags = MessageFlags._from_value(self.flags.value)
             flags.suppress_embeds = suppress
+        elif suppress_embeds is not MISSING:
+            flags = MessageFlags._from_value(self.flags.value)
+            flags.suppress_embeds = suppress_embeds
         else:
             flags = MISSING
 

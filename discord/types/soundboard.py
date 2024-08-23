@@ -47,5 +47,3 @@ class SoundboardSound(BaseSoundboardSound):
 class SoundboardDefaultSound(BaseSoundboardSound):
     name: str
     emoji_name: str
-    emoji_id: Optional[Snowflake]
-    user_id: Snowflake

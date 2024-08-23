@@ -149,6 +149,10 @@ class AppInfo:
         The approximate count of the guilds the bot was added to.
 
         .. versionadded:: 2.4
+    approximate_user_install_count: Optional[:class:`int`]
+        The approximate count of the user-level installations the bot has.
+
+        .. versionadded:: 2.5
     """
 
     __slots__ = (
@@ -178,6 +182,7 @@ class AppInfo:
         'interactions_endpoint_url',
         'redirect_uris',
         'approximate_guild_count',
+        'approximate_user_install_count',
     )
 
     def __init__(self, state: ConnectionState, data: AppInfoPayload):
@@ -218,6 +223,7 @@ class AppInfo:
         self.interactions_endpoint_url: Optional[str] = data.get('interactions_endpoint_url')
         self.redirect_uris: List[str] = data.get('redirect_uris', [])
         self.approximate_guild_count: int = data.get('approximate_guild_count', 0)
+        self.approximate_user_install_count: Optional[int] = data.get('approximate_user_install_count')
 
     def __repr__(self) -> str:
         return (
@@ -482,7 +488,7 @@ class PartialAppInfo:
                 continue
             integration_type = try_enum(ApplicationIntegrationType, int(_type))
             self.integration_types_config[integration_type] = AppInstallParams(
-                config['oauth2_install_params'],
+                config.get('oauth2_install_params'),
                 self.id,
                 integration_type=integration_type,
             )
@@ -536,13 +542,13 @@ class AppInstallParams:
 
     def __init__(
         self,
-        data: InstallParamsPayload,
+        data: Optional[InstallParamsPayload],
         app_id: int,
         *,
         integration_type: Optional[ApplicationIntegrationType] = None,
     ) -> None:
-        self.scopes: List[str] = data.get('scopes', [])
-        self.permissions: Permissions = Permissions(int(data['permissions']))
+        self.scopes: List[str] = data.get('scopes', []) if data else []
+        self.permissions: Permissions = Permissions(int(data['permissions']) if data else 0)
         self._app_id: int = app_id
         self._integration_type = integration_type
 
@@ -563,3 +569,4 @@ class AppInstallParams:
             permissions=self.permissions,
             integration_type=self._integration_type.value if self._integration_type is not None else 0,
         )
+

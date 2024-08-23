@@ -74,6 +74,7 @@ __all__ = (
     'EntitlementType',
     'EntitlementOwnerType',
     'PollLayoutType',
+    'HangStatusType',
     'VoiceChannelEffectAnimationType',
     'OnboardingPromptType',
     'OnboardingMode',
@@ -225,6 +226,11 @@ class ChannelType(Enum):
 
     def __str__(self) -> str:
         return self.name
+
+
+class MessageReferenceType(Enum):
+    default = 0
+    forward = 1
 
 
 class MessageType(Enum):
@@ -589,6 +595,7 @@ class UserFlags(Enum):
     bot_http_interactions = 524288
     spammer = 1048576
     active_developer = 4194304
+    provisional_account = 8388608
 
 
 class ActivityType(Enum):
@@ -599,9 +606,21 @@ class ActivityType(Enum):
     watching = 3
     custom = 4
     competing = 5
+    hang = 6
 
     def __int__(self) -> int:
         return self.value
+
+
+class HangStatusType(Enum):
+    chilling = 'chilling'
+    gaming = 'gaming'
+    focusing = 'focusing'
+    brb = 'brb'
+    eating = 'eating'
+    in_transit = 'in-transit'
+    watching = 'watching'
+    custom = 'custom'
 
 
 class TeamMembershipState(Enum):
@@ -952,6 +971,28 @@ class MemberJoinType(Enum):
 class ApplicationIntegrationType(Enum):
     guild = 0
     user = 1
+
+
+class InteractionEphemeralityReason(Enum):
+    none = 0
+    feature_limited = 1
+    guild_feature_limited = 2
+    user_feature_limited = 3
+    slowmode = 4
+    rate_limit = 5
+    cannot_message_user = 6
+    user_verification_level = 7
+    cannot_unarchive_thread = 8
+    cannot_join_thread = 9
+    missing_permissions = 10
+    cannot_send_attachments = 11
+    cannot_send_embeds = 12
+    cannot_send_stickers = 13
+    automod_blocked = 14
+    harmful_link = 15
+    cannot_use_command = 16
+    beta_guild_size = 17
+    cannot_use_external_apps = 18
 
 
 def create_unknown_value(cls: Type[E], val: Any) -> E:

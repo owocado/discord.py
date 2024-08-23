@@ -360,7 +360,13 @@ class Client:
 
     @property
     def emojis(self) -> Sequence[Emoji]:
-        """Sequence[:class:`.Emoji`]: The emojis that the connected client has."""
+        """Sequence[:class:`.Emoji`]: The emojis that the connected client has.
+
+        .. note::
+
+            This does not include the emojis that are owned by the application.
+            Use :meth:`.fetch_emojis` to get those.
+        """
         return self._connection.emojis
 
     @property
@@ -375,7 +381,7 @@ class Client:
     def soundboard_sounds(self) -> List[SoundboardSound]:
         """List[:class:`.SoundboardSound`]: The soundboard sounds that the connected client has.
 
-        .. versionadded:: 2.4
+        .. versionadded:: 2.5
         """
         return self._connection.soundboard_sounds
 
@@ -1147,7 +1153,7 @@ class Client:
     def get_soundboard_sound(self, id: int, /) -> Optional[SoundboardSound]:
         """Returns a soundboard sound with the given ID.
 
-        .. versionadded:: 2.4
+        .. versionadded:: 2.5
 
         Parameters
         ----------
@@ -2993,12 +2999,39 @@ class Client:
         data = await self.http.list_premium_sticker_packs()
         return [StickerPack(state=self._connection, data=pack) for pack in data['sticker_packs']]
 
-    async def fetch_default_soundboard_sounds(self) -> List[SoundboardDefaultSound]:
+    async def fetch_premium_sticker_pack(self, sticker_pack_id: int, /) -> StickerPack:
+        """|coro|
+
+        Retrieves a premium sticker pack with the specified ID.
+
+        .. versionadded:: 2.5
+
+        Parameters
+        ----------
+        sticker_pack_id: :class:`int`
+            The sticker pack's ID to fetch from.
+
+        Raises
+        -------
+        NotFound
+            A sticker pack with this ID does not exist.
+        HTTPException
+            Retrieving the sticker pack failed.
+
+        Returns
+        -------
+        :class:`.StickerPack`
+            The retrieved premium sticker pack.
+        """
+        data = await self.http.get_sticker_pack(sticker_pack_id)
+        return StickerPack(state=self._connection, data=data)
+
+    async def fetch_soundboard_default_sounds(self) -> List[SoundboardDefaultSound]:
         """|coro|
 
         Retrieves all default soundboard sounds.
 
-        .. versionadded:: 2.4
+        .. versionadded:: 2.5
 
         Raises
         -------
@@ -3010,7 +3043,7 @@ class Client:
         List[:class:`.SoundboardDefaultSound`]
             All default soundboard sounds.
         """
-        data = await self.http.get_default_soundboard_sounds()
+        data = await self.http.get_soundboard_default_sounds()
         return [SoundboardDefaultSound(state=self._connection, data=sound) for sound in data]
 
     async def create_dm(self, user: Snowflake) -> DMChannel:
@@ -3133,3 +3166,100 @@ class Client:
         .. versionadded:: 2.0
         """
         return self._connection.persistent_views
+
+    async def create_emoji(
+        self,
+        *,
+        name: str,
+        image: bytes,
+    ) -> Emoji:
+        """|coro|
+
+        Create an emoji for the current application.
+
+        .. versionadded:: 2.5
+
+        Parameters
+        ----------
+        name: :class:`str`
+            The emoji name. Must be at least 2 characters.
+        image: :class:`bytes`
+            The :term:`py:bytes-like object` representing the image data to use.
+            Only JPG, PNG and GIF images are supported.
+
+        Raises
+        ------
+        MissingApplicationID
+            The application ID could not be found.
+        HTTPException
+            Creating the emoji failed.
+
+        Returns
+        -------
+        :class:`.Emoji`
+            The emoji that was created.
+        """
+        if self.application_id is None:
+            raise MissingApplicationID
+
+        img = utils._bytes_to_base64_data(image)
+        data = await self.http.create_application_emoji(self.application_id, name, img)
+        guild = self._connection._get_or_create_unavailable_guild(0)
+        return Emoji(guild=guild, state=self._connection, data=data)
+
+    async def fetch_emoji(self, emoji_id: int, /) -> Emoji:
+        """|coro|
+
+        Retrieves an emoji for the current application.
+
+        .. versionadded:: 2.5
+
+        Parameters
+        ----------
+        emoji_id: :class:`int`
+            The emoji ID to retrieve.
+
+        Raises
+        ------
+        MissingApplicationID
+            The application ID could not be found.
+        HTTPException
+            Retrieving the emoji failed.
+
+        Returns
+        -------
+        :class:`.Emoji`
+            The emoji requested.
+        """
+        if self.application_id is None:
+            raise MissingApplicationID
+
+        data = await self.http.get_application_emoji(self.application_id, emoji_id)
+        guild = self._connection._get_or_create_unavailable_guild(0)
+        return Emoji(guild=guild, state=self._connection, data=data)
+
+    async def fetch_emojis(self) -> List[Emoji]:
+        """|coro|
+
+        Retrieves all emojis for the current application.
+
+        .. versionadded:: 2.5
+
+        Raises
+        -------
+        MissingApplicationID
+            The application ID could not be found.
+        HTTPException
+            Retrieving the emojis failed.
+
+        Returns
+        -------
+        List[:class:`.Emoji`]
+            The list of emojis for the current application.
+        """
+        if self.application_id is None:
+            raise MissingApplicationID
+
+        data = await self.http.get_application_emojis(self.application_id)
+        guild = self._connection._get_or_create_unavailable_guild(0)
+        return [Emoji(guild=guild, state=self._connection, data=emoji) for emoji in data['items']]

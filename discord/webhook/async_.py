@@ -38,7 +38,7 @@ import aiohttp
 from .. import utils
 from ..errors import HTTPException, Forbidden, NotFound, DiscordServerError
 from ..message import Message
-from ..enums import try_enum, WebhookType, ChannelType
+from ..enums import try_enum, WebhookType, ChannelType, DefaultAvatar
 from ..user import BaseUser, User
 from ..flags import MessageFlags
 from ..asset import Asset
@@ -360,7 +360,7 @@ class AsyncWebhookAdapter:
         multipart: Optional[List[Dict[str, Any]]] = None,
         files: Optional[Sequence[File]] = None,
         thread_id: Optional[int] = None,
-    ) -> Response[Message]:
+    ) -> Response[MessagePayload]:
         route = Route(
             'PATCH',
             '/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}',
@@ -705,8 +705,8 @@ class _FriendlyHttpAttributeErrorHelper:
 class _WebhookState:
     __slots__ = ('_parent', '_webhook', '_thread')
 
-    def __init__(self, webhook: Any, parent: Optional[_State], thread: Snowflake = MISSING):
-        self._webhook: Any = webhook
+    def __init__(self, webhook: "Webhook", parent: Optional[_State], thread: Snowflake = MISSING):
+        self._webhook: "Webhook" = webhook
 
         self._parent: Optional[ConnectionState]
         if isinstance(parent, _WebhookState):
@@ -791,6 +791,7 @@ class WebhookMessage(Message):
         attachments: Sequence[Union[Attachment, File]] = MISSING,
         view: Optional[View] = MISSING,
         allowed_mentions: Optional[AllowedMentions] = None,
+        suppress_embeds: bool = False,
     ) -> WebhookMessage:
         """|coro|
 
@@ -849,6 +850,13 @@ class WebhookMessage(Message):
         :class:`WebhookMessage`
             The newly edited message.
         """
+
+        if suppress_embeds is not MISSING:
+            flags = MessageFlags._from_value(self.flags.value)
+            flags.suppress_embeds = suppress_embeds
+        else:
+            flags = MISSING
+
         return await self._state._webhook.edit_message(
             self.id,
             content=content,
@@ -858,6 +866,7 @@ class WebhookMessage(Message):
             view=view,
             allowed_mentions=allowed_mentions,
             thread=self._state._thread,
+            suppress_embeds=suppress_embeds,
         )
 
     async def add_files(self, *files: File) -> WebhookMessage:
@@ -1049,12 +1058,11 @@ class BaseWebhook(Hashable):
     @property
     def default_avatar(self) -> Asset:
         """
-        :class:`Asset`: Returns the default avatar. This is always the blurple avatar.
+        :class:`Asset`: Returns the default avatar.
 
         .. versionadded:: 2.0
         """
-        # Default is always blurple apparently
-        return Asset._from_default_avatar(self._state, 0)
+        return Asset._from_default_avatar(self._state, (self.id >> 22) % len(DefaultAvatar))
 
     @property
     def display_avatar(self) -> Asset:
@@ -1928,6 +1936,7 @@ class Webhook(BaseWebhook):
         view: Optional[View] = MISSING,
         allowed_mentions: Optional[AllowedMentions] = None,
         thread: Snowflake = MISSING,
+        suppress_embeds: bool = False,
     ) -> WebhookMessage:
         """|coro|
 
@@ -2003,6 +2012,12 @@ class Webhook(BaseWebhook):
 
             self._state.prevent_view_updates_for(message_id)
 
+        if suppress_embeds is not MISSING:
+            flags = MessageFlags._from_value(0)
+            flags.suppress_embeds = suppress_embeds
+        else:
+            flags = MISSING
+
         previous_mentions: Optional[AllowedMentions] = getattr(self._state, 'allowed_mentions', None)
         with handle_message_parameters(
             content=content,
@@ -2012,6 +2027,7 @@ class Webhook(BaseWebhook):
             view=view,
             allowed_mentions=allowed_mentions,
             previous_allowed_mentions=previous_mentions,
+            flags=flags,
         ) as params:
             thread_id: Optional[int] = None
             if thread is not MISSING:

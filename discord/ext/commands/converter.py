@@ -319,8 +319,6 @@ class UserConverter(IDConverter[discord.User]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.User:
-        if argument.isdigit() and int(argument) == _DELETED_USER_ID:
-            raise BadArgument('oh hey, it’s the ID that Discord assigns to deleted users.')
         match = self._get_id_match(argument) or re.search(r'<@!?([0-9]{15,20})>$', argument)
         result = None
 
@@ -810,7 +808,7 @@ class EmojiConverter(IDConverter[discord.Emoji]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.Emoji:
-        match = self._get_id_match(argument) or re.match(r'<a?:[a-zA-Z0-9\_]{1,32}:([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<a?:[a-zA-Z0-9\_]{1,32}:([0-9]{15,20})>', argument)
         result = None
         bot = ctx.bot
         guild = ctx.guild
@@ -844,7 +842,7 @@ class PartialEmojiConverter(Converter[discord.PartialEmoji]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.PartialEmoji:
-        match = re.match(r'<(a?):([a-zA-Z0-9\_]{1,32}):([0-9]{15,20})>$', argument)
+        match = re.search(r'<(a?):([a-zA-Z0-9\_]{1,32}):([0-9]{15,20})>', argument)
 
         if match:
             emoji_animated = bool(match.group(1))
