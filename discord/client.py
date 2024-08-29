@@ -250,6 +250,11 @@ class Client:
         set to is ``30.0`` seconds.
 
         .. versionadded:: 2.0
+    connector: Optional[:class:`aiohttp.BaseConnector`]
+        The aiohhtp connector to use for this client. This can be used to control underlying aiohttp
+        behavior, such as setting a dns resolver or sslcontext.
+
+        .. versionadded:: 2.5
 
     Attributes
     -----------
@@ -265,6 +270,7 @@ class Client:
         self.shard_id: Optional[int] = options.get('shard_id')
         self.shard_count: Optional[int] = options.get('shard_count')
 
+        connector: Optional[aiohttp.BaseConnector] = options.get('connector', None)
         proxy: Optional[str] = options.pop('proxy', None)
         proxy_auth: Optional[aiohttp.BasicAuth] = options.pop('proxy_auth', None)
         unsync_clock: bool = options.pop('assume_unsync_clock', True)
@@ -272,6 +278,7 @@ class Client:
         max_ratelimit_timeout: Optional[float] = options.pop('max_ratelimit_timeout', None)
         self.http: HTTPClient = HTTPClient(
             self.loop,
+            connector,
             proxy=proxy,
             proxy_auth=proxy_auth,
             unsync_clock=unsync_clock,
@@ -364,8 +371,8 @@ class Client:
 
         .. note::
 
-            This does not include the emojis that are owned by the application.
-            Use :meth:`.fetch_emojis` to get those.
+            This not include the emojis that are owned by the application.
+            Use :meth:`.fetch_application_emoji` to get those.
         """
         return self._connection.emojis
 
@@ -637,6 +644,11 @@ class Client:
         self._application = AppInfo(self._connection, data)
         if self._connection.application_id is None:
             self._connection.application_id = self._application.id
+
+        if self._application.interactions_endpoint_url is not None:
+            _log.warning(
+                'Application has an interaction endpoint URL set, this means registered components and app commands will not be received by the library.'
+            )
 
         if not self._connection.application_flags:
             self._connection.application_flags = self._application.flags
@@ -3026,26 +3038,6 @@ class Client:
         data = await self.http.get_sticker_pack(sticker_pack_id)
         return StickerPack(state=self._connection, data=data)
 
-    async def fetch_soundboard_default_sounds(self) -> List[SoundboardDefaultSound]:
-        """|coro|
-
-        Retrieves all default soundboard sounds.
-
-        .. versionadded:: 2.5
-
-        Raises
-        -------
-        HTTPException
-            Retrieving the default soundboard sounds failed.
-
-        Returns
-        ---------
-        List[:class:`.SoundboardDefaultSound`]
-            All default soundboard sounds.
-        """
-        data = await self.http.get_soundboard_default_sounds()
-        return [SoundboardDefaultSound(state=self._connection, data=sound) for sound in data]
-
     async def create_dm(self, user: Snowflake) -> DMChannel:
         """|coro|
 
@@ -3167,7 +3159,7 @@ class Client:
         """
         return self._connection.persistent_views
 
-    async def create_emoji(
+    async def create_application_emoji(
         self,
         *,
         name: str,
@@ -3204,10 +3196,9 @@ class Client:
 
         img = utils._bytes_to_base64_data(image)
         data = await self.http.create_application_emoji(self.application_id, name, img)
-        guild = self._connection._get_or_create_unavailable_guild(0)
-        return Emoji(guild=guild, state=self._connection, data=data)
+        return Emoji(guild=Object(0), state=self._connection, data=data)
 
-    async def fetch_emoji(self, emoji_id: int, /) -> Emoji:
+    async def fetch_application_emoji(self, emoji_id: int, /) -> Emoji:
         """|coro|
 
         Retrieves an emoji for the current application.
@@ -3235,10 +3226,9 @@ class Client:
             raise MissingApplicationID
 
         data = await self.http.get_application_emoji(self.application_id, emoji_id)
-        guild = self._connection._get_or_create_unavailable_guild(0)
-        return Emoji(guild=guild, state=self._connection, data=data)
+        return Emoji(guild=Object(0), state=self._connection, data=data)
 
-    async def fetch_emojis(self) -> List[Emoji]:
+    async def fetch_application_emojis(self) -> List[Emoji]:
         """|coro|
 
         Retrieves all emojis for the current application.
@@ -3261,5 +3251,4 @@ class Client:
             raise MissingApplicationID
 
         data = await self.http.get_application_emojis(self.application_id)
-        guild = self._connection._get_or_create_unavailable_guild(0)
-        return [Emoji(guild=guild, state=self._connection, data=emoji) for emoji in data['items']]
+        return [Emoji(guild=Object(0), state=self._connection, data=emoji) for emoji in data['items']]
