@@ -185,15 +185,6 @@ class Emoji(_EmojiTag, AssetMixin):
         """:class:`Guild`: The guild this emoji belongs to."""
         return self._state._get_guild(self.guild_id)
 
-    def is_premium(self) -> bool:
-        """:class:`bool`: Whether the emoji is premium emoji added via Server Subscriptions.
-
-        .. versionadded:: 2.4
-        """
-        if not self.roles:
-            return False
-        return any((r for r in self.roles if r.tags and r.tags.subscription_listing_id))
-
     def is_usable(self) -> bool:
         """:class:`bool`: Whether the bot can use this emoji.
 
@@ -309,3 +300,9 @@ class Emoji(_EmojiTag, AssetMixin):
         .. versionadded:: 2.5
         """
         return self.guild_id == 0
+
+    def is_premium(self) -> bool:
+        """:class:`bool`: Whether the emoji is premium emoji added via Server Subscriptions."""
+        if not self.roles:
+            return False
+        return any((r for r in self.roles if r.tags and r.tags.subscription_listing_id))

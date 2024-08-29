@@ -3038,6 +3038,26 @@ class Client:
         data = await self.http.get_sticker_pack(sticker_pack_id)
         return StickerPack(state=self._connection, data=data)
 
+    async def fetch_soundboard_default_sounds(self) -> List[SoundboardDefaultSound]:
+        """|coro|
+
+        Retrieves all default soundboard sounds.
+
+        .. versionadded:: 2.5
+
+        Raises
+        -------
+        HTTPException
+            Retrieving the default soundboard sounds failed.
+
+        Returns
+        ---------
+        List[:class:`.SoundboardDefaultSound`]
+            All default soundboard sounds.
+        """
+        data = await self.http.get_soundboard_default_sounds()
+        return [SoundboardDefaultSound(state=self._connection, data=sound) for sound in data]
+
     async def create_dm(self, user: Snowflake) -> DMChannel:
         """|coro|
 

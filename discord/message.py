@@ -506,10 +506,10 @@ class MessageSnapshot:
     def _from_value(
         cls,
         state: ConnectionState,
-        message_snapshots: Optional[List[Dict[Literal['message'], MessageSnapshotPayload]]],
-    ):
+        message_snapshots: List[Dict[Literal['message'], MessageSnapshotPayload]],
+    ) -> List[MessageSnapshot]:
         if not message_snapshots:
-            return None
+            return []
 
         return [MessageSnapshot(state, snapshot['message']) for snapshot in message_snapshots]
 
@@ -2027,8 +2027,8 @@ class Message(PartialMessage, Hashable):
         self.position: Optional[int] = data.get('position')
         self.application_id: Optional[int] = utils._get_as_snowflake(data, 'application_id')
         self.stickers: List[StickerItem] = [StickerItem(data=d, state=state) for d in data.get('sticker_items', [])]
-        self.message_snapshots: Optional[List[MessageSnapshot]] = MessageSnapshot._from_value(
-            state, data.get('message_snapshots')
+        self.message_snapshots: List[MessageSnapshot] = MessageSnapshot._from_value(
+            state, data.get('message_snapshots') or []
         )
 
         # This updates the poll so it has the counts, if the message

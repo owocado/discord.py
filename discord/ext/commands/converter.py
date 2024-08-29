@@ -361,6 +361,12 @@ class PartialMessageConverter(Converter[discord.PartialMessage]):
 
     @staticmethod
     def _get_id_matches(ctx: Context[BotT], argument: str) -> Tuple[Optional[int], int, int]:
+        #  id_regex = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
+        #  link_regex = re.compile(
+            #  r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
+            #  r'(?P<guild_id>[0-9]{15,20}|@me)'
+            #  r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
+        #  )
         match = MESSAGE_ID_REGEX.match(argument) or MESSAGE_LINK_REGEX.match(argument)
         if not match:
             raise MessageNotFound(argument)

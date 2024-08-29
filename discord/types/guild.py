@@ -51,8 +51,8 @@ class UnavailableGuild(TypedDict):
 
 
 class IncidentData(TypedDict):
-    invites_disabled_until: Optional[str]
-    dms_disabled_until: Optional[str]
+    invites_disabled_until: NotRequired[Optional[str]]
+    dms_disabled_until: NotRequired[Optional[str]]
 
 
 DefaultMessageNotificationLevel = Literal[0, 1]

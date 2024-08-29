@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional, TypedDict, Union
+from typing import List, Literal, Optional, TypedDict, Union, Dict
 from typing_extensions import NotRequired, Required
 
 from .snowflake import Snowflake, SnowflakeList
@@ -208,6 +208,7 @@ class Message(PartialMessage):
     position: NotRequired[int]
     role_subscription_data: NotRequired[RoleSubscriptionData]
     thread: NotRequired[Thread]
+    message_snapshots: NotRequired[List[Dict[Literal['message'], MessageSnapshot]]]
     call: NotRequired[MessageCall]
 
 

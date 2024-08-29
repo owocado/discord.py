@@ -3524,7 +3524,9 @@ class PartialMessageable(discord.abc.Messageable, Hashable):
     @property
     def jump_url(self) -> str:
         """:class:`str`: Returns a URL that allows the client to jump to the channel."""
-        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.id}'
+        if self.guild_id is None:
+            return f'https://discord.com/channels/@me/{self.id}'
+        return f'https://discord.com/channels/{self.guild_id}/{self.id}'
 
     @property
     def mention(self) -> str:
