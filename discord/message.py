@@ -2031,13 +2031,11 @@ class Message(PartialMessage, Hashable):
             state, data.get('message_snapshots') or []
         )
 
-        # This updates the poll so it has the counts, if the message
-        # was previously cached.
         self.poll: Optional[Poll] = None
         try:
             self.poll = Poll._from_data(data=data['poll'], message=self, state=state)
         except KeyError:
-            self.poll = state._get_poll(self.id)
+            pass
 
         try:
             # if the channel doesn't have a guild attribute, we handle that
