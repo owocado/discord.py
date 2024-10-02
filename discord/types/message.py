@@ -120,7 +120,7 @@ class RoleSubscriptionData(TypedDict):
     is_renewal: bool
 
 
-class MessageCall(TypedDict):
+class CallMessage(TypedDict):
     participants: SnowflakeList
     ended_timestamp: NotRequired[Optional[str]]
 
@@ -173,6 +173,8 @@ class MessageSnapshot(TypedDict):
     flags: NotRequired[int]
     mentions: List[UserWithMember]
     mention_roles: SnowflakeList
+    sticker_items: NotRequired[List[StickerItem]]
+    components: NotRequired[List[Component]]
 
 
 class Message(PartialMessage):
@@ -209,7 +211,7 @@ class Message(PartialMessage):
     role_subscription_data: NotRequired[RoleSubscriptionData]
     thread: NotRequired[Thread]
     message_snapshots: NotRequired[List[Dict[Literal['message'], MessageSnapshot]]]
-    call: NotRequired[MessageCall]
+    call: NotRequired[CallMessage]
 
 
 AllowedMentionType = Literal['roles', 'users', 'everyone']

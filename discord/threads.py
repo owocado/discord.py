@@ -396,7 +396,7 @@ class Thread(Messageable, Hashable):
         parent = self.parent
         return parent is not None and parent.is_nsfw()
 
-    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
         """Handles permission resolution for the :class:`~discord.Member`
         or :class:`~discord.Role`.
 

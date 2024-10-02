@@ -74,7 +74,7 @@ __all__ = (
     'EntitlementType',
     'EntitlementOwnerType',
     'PollLayoutType',
-    'HangStatusType',
+    'MessageReferenceType',
     'VoiceChannelEffectAnimationType',
     'OnboardingPromptType',
     'OnboardingMode',
@@ -89,13 +89,13 @@ def _create_value_cls(name: str, comparable: bool):
     # All the type ignores here are due to the type checker being unable to recognise
     # Runtime type creation without exploding.
     cls = namedtuple('_EnumValue_' + name, 'name value')
-    cls.__repr__ = lambda self: f'<{name}.{self.name}: {self.value!r}>'  # type: ignore
-    cls.__str__ = lambda self: f'{name}.{self.name}'  # type: ignore
+    cls.__repr__ = lambda self: f'<{name}.{self.name}: {self.value!r}>'
+    cls.__str__ = lambda self: f'{name}.{self.name}'
     if comparable:
-        cls.__le__ = lambda self, other: isinstance(other, self.__class__) and self.value <= other.value  # type: ignore
-        cls.__ge__ = lambda self, other: isinstance(other, self.__class__) and self.value >= other.value  # type: ignore
-        cls.__lt__ = lambda self, other: isinstance(other, self.__class__) and self.value < other.value  # type: ignore
-        cls.__gt__ = lambda self, other: isinstance(other, self.__class__) and self.value > other.value  # type: ignore
+        cls.__le__ = lambda self, other: isinstance(other, self.__class__) and self.value <= other.value
+        cls.__ge__ = lambda self, other: isinstance(other, self.__class__) and self.value >= other.value
+        cls.__lt__ = lambda self, other: isinstance(other, self.__class__) and self.value < other.value
+        cls.__gt__ = lambda self, other: isinstance(other, self.__class__) and self.value > other.value
     return cls
 
 
@@ -224,14 +224,17 @@ class ChannelType(Enum):
     directory = 14
     forum = 15
     media = 16
+    lobby = 17
 
     def __str__(self) -> str:
         return self.name
 
 
 class MessageReferenceType(Enum):
-    default = 0
+    reply = 0
     forward = 1
+
+    default = 0
 
 
 class MessageType(Enum):
@@ -284,6 +287,9 @@ class MessageType(Enum):
     poll_result = 46
     changelog = 47
     nitro_notification = 48
+    channel_linked_to_lobby = 49
+    gifting_prompt = 50
+    in_game_message_nux = 51
 
 
 class SpeakingState(Enum):
@@ -611,17 +617,6 @@ class ActivityType(Enum):
 
     def __int__(self) -> int:
         return self.value
-
-
-class HangStatusType(Enum):
-    chilling = 'chilling'
-    gaming = 'gaming'
-    focusing = 'focusing'
-    brb = 'brb'
-    eating = 'eating'
-    in_transit = 'in-transit'
-    watching = 'watching'
-    custom = 'custom'
 
 
 class TeamMembershipState(Enum):

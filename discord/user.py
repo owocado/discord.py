@@ -105,6 +105,9 @@ class BaseUser(_UserTag):
             return self.name
         return f'{self.name}#{self.discriminator}'
 
+    def __int__(self) -> int:
+        return self.id
+
     def __eq__(self, other: object) -> bool:
         return isinstance(other, _UserTag) and other.id == self.id
 
@@ -330,6 +333,20 @@ class BaseUser(_UserTag):
             return True
 
         return any(user.id == self.id for user in message.mentions)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "username": self.name,
+            "avatar": self._avatar,
+            "discriminator": self.discriminator,
+            "public_flags": self._public_flags,
+            "banner": self._banner,
+            "accent_color": self._accent_colour,
+            "global_name": self.global_name,
+            "avatar_decoration_data": self._avatar_decoration_data,
+            "clan": self._clan,
+        }
 
 
 class ClientUser(BaseUser):

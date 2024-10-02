@@ -77,7 +77,7 @@ class File:
         .. versionadded:: 2.0
     """
 
-    __slots__ = ('fp', '_filename', 'spoiler', 'description', '_original_pos', '_owner', '_closer')
+    __slots__ = ('fp', '_filename', 'spoiler', 'description', '_original_pos', '_owner', '_closer', 'duration_secs', 'waveform')
 
     def __init__(
         self,
@@ -86,6 +86,8 @@ class File:
         *,
         spoiler: bool = MISSING,
         description: Optional[str] = None,
+        duration_secs: Optional[float] = None,
+        waveform: Optional[str] = None,
     ):
         if isinstance(fp, io.IOBase):
             if not (fp.seekable() and fp.readable()):
@@ -117,6 +119,9 @@ class File:
 
         self.spoiler: bool = spoiler
         self.description: Optional[str] = description
+
+        self.duration_secs = duration_secs
+        self.waveform = waveform
 
     @property
     def filename(self) -> str:
@@ -155,5 +160,13 @@ class File:
 
         if self.description is not None:
             payload['description'] = self.description
+
+        if self.duration_secs is not None:
+            payload['duration_secs'] = self.duration_secs
+            payload['content_type'] = 'audio/ogg'
+            # waveform is also required
+
+        if self.waveform is not None:
+            payload['waveform'] = self.waveform
 
         return payload

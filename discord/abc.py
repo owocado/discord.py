@@ -1005,11 +1005,15 @@ class GuildChannel:
         base_attrs: Dict[str, Any],
         *,
         name: Optional[str] = None,
+        category: Optional[CategoryChannel] = None,
         reason: Optional[str] = None,
     ) -> Self:
         base_attrs['permission_overwrites'] = [x._asdict() for x in self._overwrites]
         base_attrs['parent_id'] = self.category_id
         base_attrs['name'] = name or self.name
+        if category is not None:
+            base_attrs['parent_id'] = category.id
+
         guild_id = self.guild.id
         cls = self.__class__
         data = await self._state.http.create_channel(guild_id, self.type.value, reason=reason, **base_attrs)
@@ -1019,7 +1023,13 @@ class GuildChannel:
         self.guild._channels[obj.id] = obj  # type: ignore # obj is a GuildChannel
         return obj
 
-    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> Self:
+    async def clone(
+        self,
+        *,
+        name: Optional[str] = None,
+        category: Optional[CategoryChannel] = None,
+        reason: Optional[str] = None,
+    ) -> Self:
         """|coro|
 
         Clones this channel. This creates a channel with the same properties
@@ -1029,11 +1039,18 @@ class GuildChannel:
 
         .. versionadded:: 1.1
 
+        .. versionchanged:: 2.5
+
+            The ``category`` keyword-only parameter was added.
+
         Parameters
         ------------
         name: Optional[:class:`str`]
             The name of the new channel. If not provided, defaults to this
             channel name.
+        category: Optional[:class:`~discord.CategoryChannel`]
+            The category the new channel belongs to.
+            This parameter is ignored if cloning a category channel.
         reason: Optional[:class:`str`]
             The reason for cloning this channel. Shows up on the audit log.
 
@@ -1458,6 +1475,7 @@ class Messageable:
         suppress_embeds: bool = False,
         silent: bool = False,
         poll: Optional[Poll] = None,
+        voice: bool = False,
     ) -> Message:
         """|coro|
 
@@ -1589,12 +1607,13 @@ class Messageable:
         if view and not hasattr(view, '__discord_ui_view__'):
             raise TypeError(f'view parameter must be View not {view.__class__.__name__}')
 
-        if suppress_embeds or silent:
+        if suppress_embeds or silent or voice:
             from .message import MessageFlags  # circular import
 
             flags = MessageFlags._from_value(0)
             flags.suppress_embeds = suppress_embeds
             flags.suppress_notifications = silent
+            flags.voice = voice
         else:
             flags = MISSING
 

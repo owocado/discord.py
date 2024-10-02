@@ -184,7 +184,7 @@ class SoundboardSound(BaseSoundboardSound):
         Whether this sound is available for use.
     """
 
-    __slots__ = ('_state', 'name', 'emoji', '_user', 'available', '_user_id', 'guild')
+    __slots__ = ('name', 'emoji', '_user', 'available', '_user_id', 'guild')
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: SoundboardSoundPayload):
         super().__init__(state=state, data=data)

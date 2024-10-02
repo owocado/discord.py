@@ -4201,27 +4201,19 @@ class Guild(Hashable):
 
         return Widget(state=self._state, data=data)
 
-    def widget_image_url(self, style: WidgetStyle = 'shield') -> Optional[str]:
-        """Returns the widget image url of the guild.
-
-        .. note::
-
-            The guild must have the widget enabled to get this information.
+    def widget_image_url(self, style: WidgetStyle = 'banner2') -> Optional[str]:
+        """Returns the widget image URL of the guild.
 
         Parameters
         -----------
         style: :class:`str`
             The style which should be applied for the widget.
-            Default to ``shield``. Returns ``None`` if widget is not enabled.
 
         Returns
         --------
-        Optional[:class:`str`]
-            The widget image url in the given style.
+        :class:`str`
+            The widget image URL in the given style.
         """
-        if not self.widget_enabled:
-            return None
-
         return f"{Route.BASE}/guilds/{self.id}/widget.png?style={style}"
 
     async def edit_widget(
@@ -4599,3 +4591,130 @@ class Guild(Hashable):
             return False
 
         return self.raid_detected_at > utils.utcnow()
+
+    async def fetch_soundboard_sound(self, sound_id: int, /) -> SoundboardSound:
+        """|coro|
+
+        Retrieves a :class:`SoundboardSound` with the specified ID.
+
+        .. versionadded:: 2.5
+
+        .. note::
+
+            Using this, in order to receive :attr:`SoundboardSound.user`, you must have :attr:`~Permissions.create_expressions`
+            or :attr:`~Permissions.manage_expressions`.
+
+        .. note::
+
+            This method is an API call. For general usage, consider :attr:`get_soundboard_sound` instead.
+
+        Raises
+        -------
+        NotFound
+            The sound requested could not be found.
+        HTTPException
+            Retrieving the sound failed.
+
+        Returns
+        --------
+        :class:`SoundboardSound`
+            The retrieved sound.
+        """
+        data = await self._state.http.get_soundboard_sound(self.id, sound_id)
+        return SoundboardSound(guild=self, state=self._state, data=data)
+
+    async def fetch_soundboard_sounds(self) -> List[SoundboardSound]:
+        """|coro|
+
+        Retrieves a list of all soundboard sounds for the guild.
+
+        .. versionadded:: 2.5
+
+        .. note::
+
+            Using this, in order to receive :attr:`SoundboardSound.user`, you must have :attr:`~Permissions.create_expressions`
+            or :attr:`~Permissions.manage_expressions`.
+
+        .. note::
+
+            This method is an API call. For general usage, consider :attr:`soundboard_sounds` instead.
+
+        Raises
+        -------
+        HTTPException
+            Retrieving the sounds failed.
+
+        Returns
+        --------
+        List[:class:`SoundboardSound`]
+            The retrieved soundboard sounds.
+        """
+        data = await self._state.http.get_soundboard_sounds(self.id)
+        return [SoundboardSound(guild=self, state=self._state, data=sound) for sound in data['items']]
+
+    async def create_soundboard_sound(
+        self,
+        *,
+        name: str,
+        sound: bytes,
+        volume: float = 1,
+        emoji: Optional[EmojiInputType] = None,
+        reason: Optional[str] = None,
+    ) -> SoundboardSound:
+        """|coro|
+
+        Creates a :class:`SoundboardSound` for the guild.
+        You must have :attr:`Permissions.create_expressions` to do this.
+
+        .. versionadded:: 2.5
+
+        Parameters
+        ----------
+        name: :class:`str`
+            The name of the sound. Must be between 2 and 32 characters.
+        sound: :class:`bytes`
+            The :term:`py:bytes-like object` representing the sound data.
+            Only MP3 and OGG sound files that don't exceed the duration of 5.2s are supported.
+        volume: :class:`float`
+            The volume of the sound. Must be between 0 and 1. Defaults to ``1``.
+        emoji: Optional[Union[:class:`Emoji`, :class:`PartialEmoji`, :class:`str`]]
+            The emoji of the sound.
+        reason: Optional[:class:`str`]
+            The reason for creating the sound. Shows up on the audit log.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to create a soundboard sound.
+        HTTPException
+            Creating the soundboard sound failed.
+
+        Returns
+        -------
+        :class:`SoundboardSound`
+            The newly created soundboard sound.
+        """
+        payload: Dict[str, Any] = {
+            'name': name,
+            'sound': utils._bytes_to_base64_data(sound, audio=True),
+            'volume': volume,
+            'emoji_id': None,
+            'emoji_name': None,
+        }
+
+        if emoji is not None:
+            if isinstance(emoji, _EmojiTag):
+                partial_emoji = emoji._to_partial()
+            elif isinstance(emoji, str):
+                partial_emoji = PartialEmoji.from_str(emoji)
+            else:
+                partial_emoji = None
+
+            if partial_emoji is not None:
+                if partial_emoji.id is None:
+                    payload['emoji_name'] = partial_emoji.name
+                else:
+                    payload['emoji_id'] = partial_emoji.id
+
+        data = await self._state.http.create_soundboard_sound(self.id, reason=reason, **payload)
+        return SoundboardSound(guild=self, state=self._state, data=data)

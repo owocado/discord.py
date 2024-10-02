@@ -270,12 +270,7 @@ class MemberSearch:
         not present.
     """
 
-    __slots__ = (
-        'member',
-        'invite_code',
-        'join_type',
-        'inviter',
-    )
+    __slots__ = ('member', 'invite_code', 'join_type', 'inviter')
 
     def __init__(self, *, data: MemberSearchPayload, guild: Guild, state: ConnectionState) -> None:
         self.member: Member = Member(data=data.get('member'), guild=guild, state=state)
@@ -284,6 +279,9 @@ class MemberSearch:
         self.inviter: Optional[Union[Object, User]] = None
         if data.get('inviter_id') is not None:
             self.inviter = state.get_user(int(data['inviter_id'])) or Object(int(data['inviter_id']))  # type: ignore
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} invite_code={self.invite_code!r} join_type={self.join_type!r} member={self.member!r}>'
 
 
 @flatten_user
@@ -416,6 +414,9 @@ class Member(discord.abc.Messageable, _UserTag):
 
     def __str__(self) -> str:
         return str(self._user)
+
+    def __int__(self) -> int:
+        return self.id
 
     def __repr__(self) -> str:
         return (
@@ -1000,7 +1001,7 @@ class Member(discord.abc.Messageable, _UserTag):
                 await http.edit_my_voice_state(guild_id, voice_state_payload)
             else:
                 if not suppress:
-                    voice_state_payload['request_to_speak_timestamp'] = datetime.datetime.utcnow().isoformat()
+                    voice_state_payload['request_to_speak_timestamp'] = utils.utcnow().isoformat()
                 await http.edit_voice_state(guild_id, self.id, voice_state_payload)
 
         if voice_channel is not MISSING:
@@ -1056,7 +1057,7 @@ class Member(discord.abc.Messageable, _UserTag):
 
         payload = {
             'channel_id': self.voice.channel.id,
-            'request_to_speak_timestamp': datetime.datetime.utcnow().isoformat(),
+            'request_to_speak_timestamp': utils.utcnow().isoformat(),
         }
 
         if self._state.self_id != self.id:
@@ -1292,6 +1293,26 @@ class Member(discord.abc.Messageable, _UserTag):
     def is_guest(self) -> bool:
         """Returns whether this member is a guest who joined via guest invites."""
         return self.flags.guest
+
+    def to_dict(self):
+        return {
+            'user': self._user.to_dict(),
+            'activities': [act.to_dict() for act in self.activities],
+            'roles': list(map(str, self._roles)),
+            'nick': self.nick,
+            'joined_at': self.joined_at.isoformat() if self.joined_at else None,
+            'premium_since': self.premium_since.isoformat() if self.premium_since else None,
+            'pending': self.pending,
+            'timed_out_until': self.timed_out_until.isoformat() if self.timed_out_until else None,
+            'avatar': self._avatar,
+            'banner': self._banner,
+            'flags': self._flags,
+            'permissions': self._permissions,
+            'unusual_dm_activity_until': self.unusual_dm_activity_until.isoformat() if self.unusual_dm_activity_until else None,
+            'avatar_decoration_data': self._avatar_decoration_data,
+            'clan': self._clan,
+            'bio': self.bio,
+        }
 
     async def safety_metadata(self) -> Optional[MemberSearch]:
         r"""|coro|

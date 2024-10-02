@@ -159,7 +159,7 @@ class VoiceChannelSoundEffect(BaseSoundboardSound):
         The volume of the sound as floating point percentage (e.g. ``1.0`` for 100%).
     """
 
-    __slots__ = ('_state',)
+    __slots__ = ()
 
     def __init__(self, *, state: ConnectionState, id: int, volume: float):
         data: BaseSoundboardSoundPayload = {
@@ -380,7 +380,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         return None
 
     @utils.copy_doc(discord.abc.GuildChannel.permissions_for)
-    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
         base = super().permissions_for(obj)
         self._apply_implicit_permissions(base)
 
@@ -547,9 +547,24 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
             return self.__class__(state=self._state, guild=self.guild, data=payload)  # type: ignore
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
-    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> TextChannel:
+    async def clone(
+        self,
+        *,
+        name: Optional[str] = None,
+        category: Optional[CategoryChannel] = None,
+        reason: Optional[str] = None,
+    ) -> TextChannel:
         return await self._clone_impl(
-            {'topic': self.topic, 'nsfw': self.nsfw, 'rate_limit_per_user': self.slowmode_delay}, name=name, reason=reason
+            {
+                'topic': self.topic,
+                'rate_limit_per_user': self.slowmode_delay,
+                'nsfw': self.nsfw,
+                'default_auto_archive_duration': self.default_auto_archive_duration,
+                'default_thread_rate_limit_per_user': self.default_thread_slowmode_delay,
+            },
+            name=name,
+            category=category,
+            reason=reason,
         )
 
     async def delete_messages(self, messages: Iterable[Snowflake], *, reason: Optional[str] = None) -> None:
@@ -1153,7 +1168,7 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         return [event for event in self.guild.scheduled_events if event.channel_id == self.id]
 
     @utils.copy_doc(discord.abc.GuildChannel.permissions_for)
-    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
         base = super().permissions_for(obj)
         self._apply_implicit_permissions(base)
 
@@ -1420,6 +1435,31 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         data = await self._state.http.create_webhook(self.id, name=str(name), avatar=avatar, reason=reason)
         return Webhook.from_state(data, state=self._state)
 
+    @utils.copy_doc(discord.abc.GuildChannel.clone)
+    async def clone(
+        self,
+        *,
+        name: Optional[str] = None,
+        category: Optional[CategoryChannel] = None,
+        reason: Optional[str] = None,
+    ) -> Self:
+        base = {
+            'bitrate': self.bitrate,
+            'user_limit': self.user_limit,
+            'rate_limit_per_user': self.slowmode_delay,
+            'nsfw': self.nsfw,
+            'video_quality_mode': self.video_quality_mode.value,
+        }
+        if self.rtc_region:
+            base['rtc_region'] = self.rtc_region
+
+        return await self._clone_impl(
+            base,
+            name=name,
+            category=category,
+            reason=reason,
+        )
+
 
 class VoiceChannel(VocalGuildChannel):
     """Represents a Discord guild voice channel.
@@ -1523,10 +1563,6 @@ class VoiceChannel(VocalGuildChannel):
     def type(self) -> Literal[ChannelType.voice]:
         """:class:`ChannelType`: The channel's Discord type."""
         return ChannelType.voice
-
-    @utils.copy_doc(discord.abc.GuildChannel.clone)
-    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> VoiceChannel:
-        return await self._clone_impl({'bitrate': self.bitrate, 'user_limit': self.user_limit}, name=name, reason=reason)
 
     @overload
     async def edit(self) -> None:
@@ -1797,10 +1833,6 @@ class StageChannel(VocalGuildChannel):
     def type(self) -> Literal[ChannelType.stage_voice]:
         """:class:`ChannelType`: The channel's Discord type."""
         return ChannelType.stage_voice
-
-    @utils.copy_doc(discord.abc.GuildChannel.clone)
-    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> StageChannel:
-        return await self._clone_impl({}, name=name, reason=reason)
 
     @property
     def instance(self) -> Optional[StageInstance]:
@@ -2079,7 +2111,13 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         return self.nsfw
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
-    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> CategoryChannel:
+    async def clone(
+        self,
+        *,
+        name: Optional[str] = None,
+        category: Optional[CategoryChannel] = None,
+        reason: Optional[str] = None,
+    ) -> CategoryChannel:
         return await self._clone_impl({'nsfw': self.nsfw}, name=name, reason=reason)
 
     @overload
@@ -2522,7 +2560,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         return None
 
     @utils.copy_doc(discord.abc.GuildChannel.permissions_for)
-    def permissions_for(self, obj: Union[ClientUser, Member, Role], /) -> Permissions:
+    def permissions_for(self, obj: Union[Member, Role], /) -> Permissions:
         base = super().permissions_for(obj)
         self._apply_implicit_permissions(base)
 
@@ -2606,9 +2644,33 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         return self._type == ChannelType.media.value
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
-    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> ForumChannel:
+    async def clone(
+        self,
+        *,
+        name: Optional[str] = None,
+        category: Optional[CategoryChannel],
+        reason: Optional[str] = None,
+    ) -> ForumChannel:
+        base = {
+            'topic': self.topic,
+            'rate_limit_per_user': self.slowmode_delay,
+            'nsfw': self.nsfw,
+            'default_auto_archive_duration': self.default_auto_archive_duration,
+            'available_tags': [tag.to_dict() for tag in self.available_tags],
+            'default_thread_rate_limit_per_user': self.default_thread_slowmode_delay,
+        }
+        if self.default_sort_order:
+            base['default_sort_order'] = self.default_sort_order.value
+        if self.default_reaction_emoji:
+            base['default_reaction_emoji'] = self.default_reaction_emoji._to_forum_tag_payload()
+        if not self.is_media() and self.default_layout:
+            base['default_forum_layout'] = self.default_layout.value
+
         return await self._clone_impl(
-            {'topic': self.topic, 'nsfw': self.nsfw, 'rate_limit_per_user': self.slowmode_delay}, name=name, reason=reason
+            base,
+            name=name,
+            category=category,
+            reason=reason,
         )
 
     @overload

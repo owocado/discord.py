@@ -352,6 +352,18 @@ class SystemChannelFlags(BaseFlags):
     def channel_prompt_deadchat(self):
         return 128
 
+    @flag_value
+    def unknown_flag_8(self):
+        return 256
+
+    @flag_value
+    def unknown_flag_9(self):
+        return 512
+
+    @flag_value
+    def unknown_flag_10(self):
+        return 1024
+
 
 @fill_with_flags()
 class MessageFlags(BaseFlags):
@@ -527,11 +539,16 @@ class MessageFlags(BaseFlags):
 
     @flag_value
     def has_snapshot(self):
+        """:class:`bool`: Returns ``True`` if the message contains a forwarded message i.e. message snapshot."""
         return 16384
 
     @flag_value
     def ui_kit_component(self):
         return 32768
+
+    @flag_value
+    def sent_by_social_layer_integration(self):
+        return 65536
 
 
 @fill_with_flags()
@@ -2259,45 +2276,83 @@ class MemberFlags(BaseFlags):
 
     @flag_value
     def guest(self):
-        """:class:`bool`: Returns ``True`` if the member is a guest and can only access
-        the voice channel they were invited to.
+        """:class:`bool`: Returns ``True`` if the member is a guest and can only access the voice channel they were invited to.
 
-        .. versionadded:: 2.5
+        .. versionadded:: 2.4
         """
         return 1 << 4
 
     @flag_value
     def started_home_actions(self):
-        """:class:`bool`: Returns ``True`` if the member has started Server Guide new member actions.
-
-        .. versionadded:: 2.5
-        """
+        """:class:`bool`: Returns ``True`` if the member has started Server Guide new member actions."""
         return 1 << 5
 
     @flag_value
     def completed_home_actions(self):
-        """:class:`bool`: Returns ``True`` if the member has completed Server Guide new member actions.
-
-        .. versionadded:: 2.5
-        """
+        """:class:`bool`: Returns ``True`` if the member has completed Server Guide new member actions."""
         return 1 << 6
 
     @flag_value
-    def automod_quarantined_username(self):
-        """:class:`bool`: Returns ``True`` if the member's username, nickname, or global name has been
-        blocked by AutoMod.
-
-        .. versionadded:: 2.5
-        """
+    def automod_quarantined_name(self):
+        """:class:`bool`: Returns ``True`` if the member's username, display name, or nickname is blocked by AutoMod"""
         return 1 << 7
 
     @flag_value
-    def dm_settings_upsell_acknowledged(self):
-        """:class:`bool`: Returns ``True`` if the member has dismissed the DM settings upsell.
+    def automod_quarantined_bio(self):
+        return 1 << 8
 
-        .. versionadded:: 2.5
-        """
+    @flag_value
+    def dm_settings_upsell_acknowledged(self):
+        """:class:`bool`: Returns ``True`` if the member has dismissed the DM settings upsell."""
         return 1 << 9
+
+    @flag_value
+    def automod_quarantined_clan_tag(self):
+        return 1 << 10
+
+    @flag_value
+    def unknown_flag_11(self):
+        return 1 << 11
+
+    @flag_value
+    def unknown_flag_12(self):
+        return 1 << 12
+
+    @flag_value
+    def unknown_flag_13(self):
+        return 1 << 13
+
+    @flag_value
+    def unknown_flag_14(self):
+        return 1 << 14
+
+    @flag_value
+    def unknown_flag_15(self):
+        return 1 << 15
+
+    @flag_value
+    def unknown_flag_16(self):
+        return 1 << 16
+
+    @flag_value
+    def unknown_flag_17(self):
+        return 1 << 17
+
+    @flag_value
+    def unknown_flag_18(self):
+        return 1 << 18
+
+    @flag_value
+    def unknown_flag_19(self):
+        return 1 << 19
+
+    @flag_value
+    def unknown_flag_20(self):
+        return 1 << 20
+
+    @flag_value
+    def unknown_flag_21(self):
+        return 1 << 21
 
 
 @fill_with_flags()

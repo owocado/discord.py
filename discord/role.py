@@ -234,6 +234,9 @@ class Role(Hashable):
     def __str__(self) -> str:
         return self.name
 
+    def __int__(self) -> int:
+        return self.id
+
     def __repr__(self) -> str:
         return f'<Role id={self.id} name={self.name!r}>'
 
@@ -551,3 +554,29 @@ class Role(Hashable):
         """
 
         await self._state.http.delete_role(self.guild.id, self.id, reason=reason)
+
+    def to_dict(self):
+        obj = {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'permissions': self._permissions,
+            'position': self.position,
+            'color': self._colour,
+            'hoist': self.hoist,
+            'managed': self.managed,
+            'mentionable': self.mentionable,
+            'icon': self._icon,
+            'unicode_emoji': self.unicode_emoji,
+            'flags': self._flags,
+        }
+        if self.tags:
+            obj['tags'] = {
+                'bot_id': self.tags.bot_id,
+                'integration_id': self.tags.integration_id,
+                'subscription_listing_id': self.tags.subscription_listing_id,
+                'premium_subscriber': self.tags._premium_subscriber,
+                'guild_connections': self.tags._guild_connections,
+                'available_for_purchase': self.tags._available_for_purchase,
+            }
+        return obj

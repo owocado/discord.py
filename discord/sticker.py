@@ -212,6 +212,9 @@ class StickerItem(_StickerTag):
     def __str__(self) -> str:
         return self.name
 
+    def to_dict(self):
+        return {'id': self.id, 'name': self.name, 'format': repr(self.format)}
+
     async def fetch(self) -> Union[Sticker, StandardSticker, GuildSticker]:
         """|coro|
 
@@ -291,6 +294,9 @@ class Sticker(_StickerTag):
     def created_at(self) -> datetime.datetime:
         """:class:`datetime.datetime`: Returns the sticker's creation time in UTC."""
         return snowflake_time(self.id)
+
+    def to_dict(self):
+        return {'id': self.id, 'name': self.name, 'format': repr(self.format), 'description': self.description}
 
 
 class StandardSticker(Sticker):
@@ -432,6 +438,15 @@ class GuildSticker(Sticker):
         .. versionadded:: 2.0
         """
         return self._state._get_guild(self.guild_id)
+
+    def to_dict(self):
+        return {
+            **super().to_dict(),
+            'available': self.available,
+            'guild_id': self.guild_id,
+            'emoji': self.emoji,
+            'user': self.user.to_dict() if self.user else None,
+        }
 
     async def edit(
         self,

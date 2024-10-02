@@ -251,7 +251,7 @@ class Client:
 
         .. versionadded:: 2.0
     connector: Optional[:class:`aiohttp.BaseConnector`]
-        The aiohhtp connector to use for this client. This can be used to control underlying aiohttp
+        The aiohttp connector to use for this client. This can be used to control underlying aiohttp
         behavior, such as setting a dns resolver or sslcontext.
 
         .. versionadded:: 2.5
@@ -486,7 +486,7 @@ class Client:
     ) -> asyncio.Task:
         wrapped = self._run_event(coro, event_name, *args, **kwargs)
         # Schedules the task
-        return self.loop.create_task(wrapped, name=f'discord.py: {event_name}')
+        return utils.create_task(wrapped, name=f'discord.py: {event_name}')
 
     def dispatch(self, event: str, /, *args: Any, **kwargs: Any) -> None:
         _log.debug('Dispatching event %s', event)

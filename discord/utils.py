@@ -21,6 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
+
 from __future__ import annotations
 
 import array
@@ -41,7 +42,6 @@ from typing import (
     Iterator,
     List,
     Literal,
-    Mapping,
     NamedTuple,
     Optional,
     Protocol,
@@ -71,6 +71,7 @@ import types
 import typing
 import warnings
 import logging
+import zlib
 
 import yarl
 
@@ -80,6 +81,20 @@ except ModuleNotFoundError:
     HAS_ORJSON = False
 else:
     HAS_ORJSON = True
+
+try:
+    import zstandard  # type: ignore
+except ImportError:
+    _HAS_ZSTD = False
+else:
+    _HAS_ZSTD = True
+
+try:
+    import msgspec  # type: ignore
+except ModuleNotFoundError:
+    HAS_MSGSPEC = False
+else:
+    HAS_MSGSPEC = True
 
 
 __all__ = (
@@ -148,8 +163,11 @@ if TYPE_CHECKING:
     from .invite import Invite
     from .template import Template
 
-    class _RequestLike(Protocol):
-        headers: Mapping[str, Any]
+    class _DecompressionContext(Protocol):
+        COMPRESSION_TYPE: str
+
+        def decompress(self, data: bytes, /) -> str | None:
+            ...
 
     P = ParamSpec('P')
 
@@ -648,12 +666,20 @@ def _is_submodule(parent: str, child: str) -> bool:
     return parent == child or child.startswith(parent + '.')
 
 
-if HAS_ORJSON:
+#  if HAS_ORJSON:
+if HAS_MSGSPEC:
+    assert msgspec  # type: ignore
+    encoder = msgspec.json.Encoder()
+    encode = encoder.encode
+    decoder = msgspec.json.Decoder()
 
     def _to_json(obj: Any) -> str:
-        return orjson.dumps(obj).decode('utf-8')  # type: ignore
+        try:
+            return encode(obj).decode('utf-8')
+        except Exception:
+            return orjson.dumps(obj).decode('utf-8')
 
-    _from_json = orjson.loads  # type: ignore
+    _from_json = decoder.decode
 
 else:
 
@@ -1418,6 +1444,62 @@ def _human_join(seq: Sequence[str], /, *, delimiter: str = ', ', final: str = 'o
     return delimiter.join(seq[:-1]) + f' {final} {seq[-1]}'
 
 
+if _HAS_ZSTD:
+
+    class _ZstdDecompressionContext:
+        __slots__ = ('context',)
+
+        COMPRESSION_TYPE: str = 'zstd-stream'
+
+        def __init__(self) -> None:
+            decompressor = zstandard.ZstdDecompressor()  # type: ignore
+            self.context = decompressor.decompressobj()
+
+        def decompress(self, data: bytes, /) -> str | None:
+            # Each WS message is a complete gateway message
+            return self.context.decompress(data).decode('utf-8')
+
+    _ActiveDecompressionContext: Type[_DecompressionContext] = _ZstdDecompressionContext
+else:
+
+    class _ZlibDecompressionContext:
+        __slots__ = ('context', 'buffer')
+
+        COMPRESSION_TYPE: str = 'zlib-stream'
+
+        def __init__(self) -> None:
+            self.buffer: bytearray = bytearray()
+            self.context = zlib.decompressobj()
+
+        def decompress(self, data: bytes, /) -> str | None:
+            self.buffer.extend(data)
+
+            # Check whether ending is Z_SYNC_FLUSH
+            if len(data) < 4 or data[-4:] != b'\x00\x00\xff\xff':
+                return
+
+            msg = self.context.decompress(self.buffer)
+            self.buffer = bytearray()
+
+            return msg.decode('utf-8')
+
+    _ActiveDecompressionContext: Type[_DecompressionContext] = _ZlibDecompressionContext
+
+
+def copy_sig(f: T) -> Callable[..., T]:
+    return lambda x: x
+
+_task_cache: set[asyncio.Task[Any]] = set()
+
+
+@copy_sig(asyncio.create_task)
+def create_task(*args: Any, **kwargs: Any):
+    t = asyncio.create_task(*args, **kwargs)
+    _task_cache.add(t)
+    t.add_done_callback(_task_cache.discard)
+    return t
+
+
 def _find_y(x: int, z: int) -> Optional[int]:
     """
     Finds the integer value of y that satisfies the equation x^y = z.
@@ -1453,4 +1535,8 @@ def _fuzzy_find(query: str, choices: Any, *, score: int = 80):
     from rapidfuzz import process
 
     return process.extract(query, choices, limit=None, score_cutoff=score)
+
+
+def _undiscord_username(username: str, repl: str = "[blocked]"):
+    return re.sub(r"(Discord|Clyde)", repl, username, flags=re.I)
 

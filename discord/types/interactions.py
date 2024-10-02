@@ -263,4 +263,6 @@ class MessageInteractionMetadata(TypedDict):
     original_response_message_id: NotRequired[Snowflake]
     interacted_message_id: NotRequired[Snowflake]
     triggering_interaction_metadata: NotRequired[MessageInteractionMetadata]
+    target_user: NotRequired[User]
+    target_message_id: NotRequired[Snowflake]
     ephemerality_reason: NotRequired[int]

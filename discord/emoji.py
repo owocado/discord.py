@@ -145,6 +145,9 @@ class Emoji(_EmojiTag, AssetMixin):
             return f'<a:{self.name}:{self.id}>'
         return f'<:{self.name}:{self.id}>'
 
+    def __int__(self) -> int:
+        return self.id
+
     def __repr__(self) -> str:
         return f'<Emoji id={self.id} name={self.name!r} animated={self.animated} managed={self.managed}>'
 
@@ -302,7 +305,22 @@ class Emoji(_EmojiTag, AssetMixin):
         return self.guild_id == 0
 
     def is_premium(self) -> bool:
-        """:class:`bool`: Whether the emoji is premium emoji added via Server Subscriptions."""
+        """:class:`bool`: Whether the emoji is premium emoji added via Server Subscriptions.
+
+        .. versionadded:: 2.4
+        """
         if not self.roles:
             return False
         return any((r for r in self.roles if r.tags and r.tags.subscription_listing_id))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'user': self.user._to_minimal_user_json() if self.user else None,
+            'roles': list(map(str, self._roles)),
+            'require_colons': self.require_colons,
+            'managed': self.managed,
+            'animated': self.animated,
+            'available': self.available,
+        }

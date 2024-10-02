@@ -472,6 +472,7 @@ def _get_command_error(
 
             messages.extend(f'{indentation}  {message}' for message in errors)
         else:
+            errors = {}
             if isinstance(remaining, dict):
                 try:
                     inner_errors = remaining['_errors']
