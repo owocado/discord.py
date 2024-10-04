@@ -438,8 +438,8 @@ class AsyncWebhookAdapter:
         proxy: Optional[str] = MISSING,
         proxy_auth: Optional[aiohttp.BasicAuth] = MISSING,
         params: MultipartParameters,
-        with_response: Literal[True],
-    ) -> Response[InteractionCallbackResponsePayload]:
+        with_response: Literal[False] = ...,
+    ) -> Response[None]:
         ...
 
     @overload
@@ -452,8 +452,8 @@ class AsyncWebhookAdapter:
         proxy: Optional[str] = MISSING,
         proxy_auth: Optional[aiohttp.BasicAuth] = MISSING,
         params: MultipartParameters,
-        with_response: Literal[False] = ...,
-    ) -> Response[None]:
+        with_response: Literal[True],
+    ) -> Response[InteractionCallbackResponsePayload]:
         ...
 
     def create_interaction_response(
