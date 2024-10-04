@@ -767,6 +767,8 @@ class InteractionResponse(Generic[ClientT]):
         silent: bool = False,
         delete_after: Optional[float] = None,
         poll: Poll = MISSING,
+        voice: bool = False,
+        with_response: bool = False,
     ) -> None:
         """|coro|
 
@@ -829,11 +831,12 @@ class InteractionResponse(Generic[ClientT]):
         if self._response_type:
             raise InteractionResponded(self._parent)
 
-        if ephemeral or suppress_embeds or silent:
+        if ephemeral or suppress_embeds or silent or voice:
             flags = MessageFlags._from_value(0)
             flags.ephemeral = ephemeral
             flags.suppress_embeds = suppress_embeds
             flags.suppress_notifications = silent
+            flags.voice = voice
         else:
             flags = MISSING
 
@@ -855,13 +858,14 @@ class InteractionResponse(Generic[ClientT]):
         )
 
         http = parent._state.http
-        await adapter.create_interaction_response(
+        ret = await adapter.create_interaction_response(
             parent.id,
             parent.token,
             session=parent._session,
             proxy=http.proxy,
             proxy_auth=http.proxy_auth,
             params=params,
+            with_response=True,
         )
 
         if view is not MISSING and not view.is_finished():
@@ -885,6 +889,9 @@ class InteractionResponse(Generic[ClientT]):
                     pass
 
             utils.create_task(inner_call())
+
+        if with_response:
+            return ret
 
     async def edit_message(
         self,

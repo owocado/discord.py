@@ -425,6 +425,20 @@ class AsyncWebhookAdapter:
         route = Route('GET', '/webhooks/{webhook_id}/{webhook_token}', webhook_id=webhook_id, webhook_token=token)
         return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth)
 
+    @overload
+    def create_interaction_response(
+        self,
+        interaction_id: int,
+        token: str,
+        *,
+        session: aiohttp.ClientSession,
+        proxy: Optional[str] = ...,
+        proxy_auth: Optional[aiohttp.BasicAuth] = ...,
+        params: MultipartParameters,
+        with_response: Literal[True] = ...,
+    ) -> Response[MessagePayload]:
+        ...
+
     def create_interaction_response(
         self,
         interaction_id: int,
@@ -434,6 +448,7 @@ class AsyncWebhookAdapter:
         proxy: Optional[str] = None,
         proxy_auth: Optional[aiohttp.BasicAuth] = None,
         params: MultipartParameters,
+        with_response: bool = False,
     ) -> Response[None]:
         route = Route(
             'POST',
@@ -441,6 +456,7 @@ class AsyncWebhookAdapter:
             webhook_id=interaction_id,
             webhook_token=token,
         )
+        _params = {'with_response': int(with_response)}
 
         if params.files:
             return self.request(
@@ -450,9 +466,10 @@ class AsyncWebhookAdapter:
                 proxy_auth=proxy_auth,
                 files=params.files,
                 multipart=params.multipart,
+                params=_params,
             )
         else:
-            return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, payload=params.payload)
+            return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, payload=params.payload, params=_params)
 
     def get_original_interaction_response(
         self,
@@ -1612,6 +1629,7 @@ class Webhook(BaseWebhook):
         silent: bool = MISSING,
         applied_tags: List[ForumTag] = MISSING,
         poll: Poll = MISSING,
+        voice: bool = ...,
     ) -> WebhookMessage:
         ...
 
@@ -1637,6 +1655,7 @@ class Webhook(BaseWebhook):
         silent: bool = MISSING,
         applied_tags: List[ForumTag] = MISSING,
         poll: Poll = MISSING,
+        voice: bool = ...,
     ) -> None:
         ...
 
@@ -1661,6 +1680,7 @@ class Webhook(BaseWebhook):
         silent: bool = False,
         applied_tags: List[ForumTag] = MISSING,
         poll: Poll = MISSING,
+        voice: bool = False,
     ) -> Optional[WebhookMessage]:
         """|coro|
 
@@ -1789,11 +1809,12 @@ class Webhook(BaseWebhook):
         previous_mentions: Optional[AllowedMentions] = getattr(self._state, 'allowed_mentions', None)
         if content is None:
             content = MISSING
-        if ephemeral or suppress_embeds or silent:
+        if ephemeral or suppress_embeds or silent or voice:
             flags = MessageFlags._from_value(0)
             flags.ephemeral = ephemeral
             flags.suppress_embeds = suppress_embeds
             flags.suppress_notifications = silent
+            flags.voice = voice
         else:
             flags = MISSING
 

@@ -696,6 +696,7 @@ class InteractionResponseType(Enum):
     modal = 9  # for modals
     # premium_required = 10 (deprecated)
     iframe = 11 # for iframe modals
+    launch_activity = 12
 
 
 class VideoQualityMode(Enum):
@@ -963,7 +964,6 @@ class MemberJoinType(Enum):
     manual_member_verification = 7
 
 
-# TODO: `guild` vs `guild_install`
 class ApplicationIntegrationType(Enum):
     guild = 0
     user = 1

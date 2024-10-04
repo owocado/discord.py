@@ -1390,6 +1390,7 @@ class Messageable:
         suppress_embeds: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -1411,6 +1412,7 @@ class Messageable:
         suppress_embeds: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -1432,6 +1434,7 @@ class Messageable:
         suppress_embeds: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -1453,6 +1456,7 @@ class Messageable:
         suppress_embeds: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 

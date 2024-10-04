@@ -643,6 +643,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -665,6 +666,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -687,6 +689,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -709,6 +712,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -832,6 +836,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -854,6 +859,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -876,6 +882,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -898,6 +905,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = ...,
         silent: bool = ...,
         poll: Poll = ...,
+        voice: bool = ...,
     ) -> Message:
         ...
 
@@ -921,6 +929,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
         ephemeral: bool = False,
         silent: bool = False,
         poll: Poll = MISSING,
+        voice: bool = False,
     ) -> Message:
         """|coro|
 
@@ -1053,6 +1062,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
                 suppress_embeds=suppress_embeds,
                 silent=silent,
                 poll=poll,
+                voice=voice,
             )  # type: ignore # The overloads don't support Optional but the implementation does
 
         # Convert the kwargs from None to MISSING to appease the remaining implementations
@@ -1069,6 +1079,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
             'ephemeral': ephemeral,
             'silent': silent,
             'poll': poll,
+            'voice': voice,
         }
 
         if self.interaction.response.is_done():

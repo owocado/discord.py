@@ -2213,6 +2213,9 @@ class Message(PartialMessage, Hashable):
                     # the channel will be the correct type here
                     ref.resolved = self.__class__(channel=chan, data=resolved, state=state)  # type: ignore
 
+                    if self.type is MessageType.poll_result and ref.resolved.poll:
+                        ref.resolved.poll._update_results_from_message(self)
+
         self.application: Optional[MessageApplication] = None
         try:
             application = data['application']
@@ -2711,7 +2714,8 @@ class Message(PartialMessage, Hashable):
             total_months = self.role_subscription.total_months_subscribed
             months = '1 month' if total_months == 1 else f'{total_months} months'
             action = 'renewed' if self.role_subscription.is_renewal else 'joined'
-            return f'{self.author.name} {action} {self.role_subscription.tier_name} and has been a subscriber of {self.guild} for {months}!'
+            shop_page = f'[{self.guild}](https://discord.com/channels/{self.guild.id}/role-subscriptions)'
+            return f'{self.author.name} {action} **{self.role_subscription.tier_name}** and has been a subscriber of {shop_page} for {months}!'
 
         if self.type is MessageType.stage_start:
             return f'{self.author.name} started **{self.content}**.'
@@ -2748,6 +2752,17 @@ class Message(PartialMessage, Hashable):
 
         if self.type is MessageType.purchase_notification:
             return f'{self.author.name} has purchased a server product.'
+
+        if self.type is MessageType.poll_result:
+            embed = self.embeds[0]  # Will always have 1 embed
+            poll_title = utils.get(embed.fields, name='poll_question_text')
+            if self.reference:
+                if not self.reference.guild_id and self.guild: # Discord WTF
+                    self.reference.guild_id = self.guild.id
+                jump_url = f'[{poll_title.value if poll_title else '???'}]({self.reference.jump_url})'
+            else:
+                jump_url = poll_title.value if poll_title else '???'
+            return f'{self.author.display_name}’s poll **{jump_url}** has closed.'
 
         if self.type is MessageType.channel_linked_to_lobby:
             return f'{self.author.name} has connected this channel to **{self.application}**. Messages are now syncing.'
