@@ -90,6 +90,9 @@ if TYPE_CHECKING:
     )
     from ..types.emoji import PartialEmoji as PartialEmojiPayload
     from ..types.snowflake import SnowflakeList
+    from ..types.interactions import (
+        InteractionCallbackResponse as InteractionCallbackResponsePayload,
+    )
 
     BE = TypeVar('BE', bound=BaseException)
     _State = Union[ConnectionState, '_WebhookState']
@@ -432,11 +435,25 @@ class AsyncWebhookAdapter:
         token: str,
         *,
         session: aiohttp.ClientSession,
-        proxy: Optional[str] = ...,
-        proxy_auth: Optional[aiohttp.BasicAuth] = ...,
+        proxy: Optional[str] = MISSING,
+        proxy_auth: Optional[aiohttp.BasicAuth] = MISSING,
         params: MultipartParameters,
-        with_response: Literal[True] = ...,
-    ) -> Response[MessagePayload]:
+        with_response: Literal[True],
+    ) -> Response[InteractionCallbackResponsePayload]:
+        ...
+
+    @overload
+    def create_interaction_response(
+        self,
+        interaction_id: int,
+        token: str,
+        *,
+        session: aiohttp.ClientSession,
+        proxy: Optional[str] = MISSING,
+        proxy_auth: Optional[aiohttp.BasicAuth] = MISSING,
+        params: MultipartParameters,
+        with_response: Literal[False] = ...,
+    ) -> Response[None]:
         ...
 
     def create_interaction_response(
@@ -448,15 +465,18 @@ class AsyncWebhookAdapter:
         proxy: Optional[str] = None,
         proxy_auth: Optional[aiohttp.BasicAuth] = None,
         params: MultipartParameters,
-        with_response: bool = False,
-    ) -> Response[None]:
+        with_response: bool = MISSING,
+    ) -> Response[Optional[InteractionCallbackResponsePayload]]:
         route = Route(
             'POST',
             '/interactions/{webhook_id}/{webhook_token}/callback',
             webhook_id=interaction_id,
             webhook_token=token,
         )
-        _params = {'with_response': int(with_response)}
+
+        request_params = {}
+        if with_response is not MISSING:
+            request_params['with_response'] = int(with_response)
 
         if params.files:
             return self.request(
@@ -466,10 +486,17 @@ class AsyncWebhookAdapter:
                 proxy_auth=proxy_auth,
                 files=params.files,
                 multipart=params.multipart,
-                params=_params,
+                params=request_params,
             )
         else:
-            return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth, payload=params.payload, params=_params)
+            return self.request(
+                route,
+                session=session,
+                proxy=proxy,
+                proxy_auth=proxy_auth,
+                payload=params.payload,
+                params=request_params,
+            )
 
     def get_original_interaction_response(
         self,
@@ -1629,7 +1656,7 @@ class Webhook(BaseWebhook):
         silent: bool = MISSING,
         applied_tags: List[ForumTag] = MISSING,
         poll: Poll = MISSING,
-        voice: bool = ...,
+        voice: bool = MISSING,
     ) -> WebhookMessage:
         ...
 
@@ -1655,7 +1682,7 @@ class Webhook(BaseWebhook):
         silent: bool = MISSING,
         applied_tags: List[ForumTag] = MISSING,
         poll: Poll = MISSING,
-        voice: bool = ...,
+        voice: bool = MISSING,
     ) -> None:
         ...
 
