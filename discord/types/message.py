@@ -125,6 +125,11 @@ class CallMessage(TypedDict):
     ended_timestamp: NotRequired[Optional[str]]
 
 
+class CallMessage(TypedDict):
+    participants: SnowflakeList
+    ended_timestamp: NotRequired[Optional[str]]
+
+
 MessageType = Literal[
     0,
     1,
@@ -210,8 +215,8 @@ class Message(PartialMessage):
     position: NotRequired[int]
     role_subscription_data: NotRequired[RoleSubscriptionData]
     thread: NotRequired[Thread]
-    message_snapshots: NotRequired[List[Dict[Literal['message'], MessageSnapshot]]]
     call: NotRequired[CallMessage]
+    message_snapshots: NotRequired[List[Dict[Literal['message'], MessageSnapshot]]]
 
 
 AllowedMentionType = Literal['roles', 'users', 'everyone']

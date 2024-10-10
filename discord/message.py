@@ -79,6 +79,7 @@ if TYPE_CHECKING:
         RoleSubscriptionData as RoleSubscriptionDataPayload,
         MessageInteractionMetadata as MessageInteractionMetadataPayload,
         CallMessage as CallMessagePayload,
+        CallMessage as CallMessagePayload,
     )
 
     from .types.interactions import MessageInteraction as MessageInteractionPayload
