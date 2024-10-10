@@ -22,28 +22,21 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from typing import TypedDict, Optional, Union
-from typing_extensions import NotRequired
+from __future__ import annotations
+
+from typing import List, Literal, Optional, TypedDict
 
 from .snowflake import Snowflake
-from .user import User
+
+SubscriptionStatus = Literal[0, 1, 2]
 
 
-class BaseSoundboardSound(TypedDict):
-    sound_id: Union[Snowflake, str]  # basic string number when it's a default sound
-    volume: float
-
-
-class SoundboardSound(BaseSoundboardSound):
-    name: str
-    emoji_name: Optional[str]
-    emoji_id: Optional[Snowflake]
-    user_id: NotRequired[Snowflake]
-    available: bool
-    guild_id: NotRequired[Snowflake]
-    user: NotRequired[User]
-
-
-class SoundboardDefaultSound(BaseSoundboardSound):
-    name: str
-    emoji_name: str
+class Subscription(TypedDict):
+    id: Snowflake
+    user_id: Snowflake
+    sku_ids: List[Snowflake]
+    entitlement_ids: List[Snowflake]
+    current_period_start: str
+    current_period_end: str
+    status: SubscriptionStatus
+    canceled_at: Optional[str]

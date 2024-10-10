@@ -46,6 +46,7 @@ from .threads import Thread, ThreadMember
 from .scheduled_event import GuildScheduledEvent
 from .audit_log import AuditLogEntry
 from .soundboard import SoundboardSound
+from .subscription import Subscription
 
 
 class SessionStartLimit(TypedDict):
@@ -375,7 +376,4 @@ class PollVoteActionEvent(TypedDict):
     answer_id: int
 
 
-class VoiceChannelStatusUpdate(TypedDict):
-    id: Snowflake
-    guild_id: Snowflake
-    status: Optional[str]
+SubscriptionCreateEvent = SubscriptionUpdateEvent = SubscriptionDeleteEvent = Subscription

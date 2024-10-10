@@ -1332,6 +1332,8 @@ class PartialMessage(Hashable):
         Forbidden
             Tried to suppress a message without permissions or
             edited a message's content or embed that isn't yours.
+        NotFound
+            This message does not exist.
         TypeError
             You specified both ``embed`` and ``embeds``
 
@@ -2883,6 +2885,8 @@ class Message(PartialMessage, Hashable):
         Forbidden
             Tried to suppress a message without permissions or
             edited a message's content or embed that isn't yours.
+        NotFound
+            This message does not exist.
         TypeError
             You specified both ``embed`` and ``embeds``
 

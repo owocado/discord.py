@@ -89,14 +89,6 @@ except ImportError:
 else:
     _HAS_ZSTD = True
 
-try:
-    import msgspec  # type: ignore
-except ModuleNotFoundError:
-    HAS_MSGSPEC = False
-else:
-    HAS_MSGSPEC = True
-
-
 __all__ = (
     'oauth_url',
     'snowflake_time',
@@ -1452,7 +1444,7 @@ if _HAS_ZSTD:
         COMPRESSION_TYPE: str = 'zstd-stream'
 
         def __init__(self) -> None:
-            decompressor = zstandard.ZstdDecompressor()  # type: ignore
+            decompressor = zstandard.ZstdDecompressor()
             self.context = decompressor.decompressobj()
 
         def decompress(self, data: bytes, /) -> str | None:
@@ -1484,59 +1476,3 @@ else:
             return msg.decode('utf-8')
 
     _ActiveDecompressionContext: Type[_DecompressionContext] = _ZlibDecompressionContext
-
-
-def copy_sig(f: T) -> Callable[..., T]:
-    return lambda x: x
-
-_task_cache: set[asyncio.Task[Any]] = set()
-
-
-@copy_sig(asyncio.create_task)
-def create_task(*args: Any, **kwargs: Any):
-    t = asyncio.create_task(*args, **kwargs)
-    _task_cache.add(t)
-    t.add_done_callback(_task_cache.discard)
-    return t
-
-
-def _find_y(x: int, z: int) -> Optional[int]:
-    """
-    Finds the integer value of y that satisfies the equation x^y = z.
-
-    Args
-    ----
-    x: The base of the exponentiation.
-    z: The result of the exponentiation.
-
-    Returns
-    -------
-    The integer value of y that satisfies the equation, or None if no such value exists.
-    """
-    # Check if z is 1
-    if z == 1:
-        return 0
-
-    # Initialize y and power
-    y, power = 1, x
-
-    # Loop until power exceeds z or y becomes too large
-    while power <= z and y <= z:
-        if power == z:
-            return y
-        power *= x
-        y += 1
-
-    # No integer solution found
-    return None
-
-
-def _fuzzy_find(query: str, choices: Any, *, score: int = 80):
-    from rapidfuzz import process
-
-    return process.extract(query, choices, limit=None, score_cutoff=score)
-
-
-def _undiscord_username(username: str, repl: str = "[blocked]"):
-    return re.sub(r"(Discord|Clyde)", repl, username, flags=re.I)
-

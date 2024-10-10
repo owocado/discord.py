@@ -117,6 +117,20 @@ class VoiceChannelEffect(TypedDict):
     sound_volume: NotRequired[float]
 
 
+VoiceChannelEffectAnimationType = Literal[0, 1]
+
+
+class VoiceChannelEffect(TypedDict):
+    guild_id: Snowflake
+    channel_id: Snowflake
+    user_id: Snowflake
+    emoji: NotRequired[Optional[PartialEmoji]]
+    animation_type: NotRequired[VoiceChannelEffectAnimationType]
+    animation_id: NotRequired[int]
+    sound_id: NotRequired[Union[int, str]]
+    sound_volume: NotRequired[float]
+
+
 class CategoryChannel(_BaseGuildChannel):
     type: Literal[4]
 

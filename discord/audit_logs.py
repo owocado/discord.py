@@ -245,29 +245,8 @@ def _transform_automod_actions(entry: AuditLogEntry, data: List[AutoModerationAc
     return [AutoModRuleAction.from_data(action) for action in data]
 
 
-def _transform_onboarding_prompts(entry: AuditLogEntry, data: List[PromptPayload]) -> List[OnboardingPrompt]:
-    return [OnboardingPrompt(data=prompt, state=entry._state, guild=entry.guild) for prompt in data]
-
-
-def _transform_onboarding_prompt_options(
-    entry: AuditLogEntry, data: List[PromptOptionPayload]
-) -> List[OnboardingPromptOption]:
-    return [OnboardingPromptOption(data=option, state=entry._state, guild=entry.guild) for option in data]
-
-
 def _transform_default_emoji(entry: AuditLogEntry, data: str) -> PartialEmoji:
     return PartialEmoji(name=data)
-
-
-def _transform_partial_emoji(entry: AuditLogEntry, data: PartialEmojiPayload) -> PartialEmoji:
-    return PartialEmoji(**data)
-
-
-def _transform_status(entry: AuditLogEntry, data: Union[int, str]) -> Union[enums.EventStatus, str]:
-    if entry.action.name.startswith('scheduled_event_'):
-        return enums.try_enum(enums.EventStatus, data)
-    else:
-        return data  # type: ignore  # voice channel status is str
 
 
 E = TypeVar('E', bound=enums.Enum)
@@ -378,14 +357,8 @@ class AuditLogChanges:
         'available_tags':                        (None, _transform_forum_tags),
         'flags':                                 (None, _transform_overloaded_flags),
         'default_reaction_emoji':                (None, _transform_default_reaction),
-        'options':                               (None, _transform_onboarding_prompt_options),
-        'prompts':                               (None, _transform_onboarding_prompts),
-        'mode':                                  (None, _enum_transformer(enums.OnboardingMode)),
-        'default_channel_ids':                   ('default_channels', _transform_channels_or_threads),
         'emoji_name':                            ('emoji', _transform_default_emoji),
-        'user_id':                               ('user', _transform_member_id),
-        'theme_color':                           (None, _transform_color),
-        'icon_emoji':                            (None, _transform_partial_emoji)
+        'user_id':                               ('user', _transform_member_id)
     }
     # fmt: on
 

@@ -74,14 +74,8 @@ __all__ = (
     'EntitlementType',
     'EntitlementOwnerType',
     'PollLayoutType',
-    'MessageReferenceType',
     'VoiceChannelEffectAnimationType',
-    'OnboardingPromptType',
-    'OnboardingMode',
-    'PremiumType',
-    'InviteType',
-    'MemberJoinType',
-    'InteractionEphemeralityReason',
+    'SubscriptionStatus',
 )
 
 
@@ -508,24 +502,9 @@ class AuditLogAction(Enum):
             AuditLogAction.automod_quarantine_user:                  None,
             AuditLogAction.creator_monetization_request_created:     None,
             AuditLogAction.creator_monetization_terms_accepted:      None,
-            AuditLogAction.role_prompt_create:                       AuditLogActionCategory.create,
-            AuditLogAction.role_prompt_update:                       AuditLogActionCategory.update,
-            AuditLogAction.role_prompt_delete:                       AuditLogActionCategory.delete,
-            AuditLogAction.onboarding_question_create:               AuditLogActionCategory.create,
-            AuditLogAction.onboarding_question_delete:               AuditLogActionCategory.delete,
-            AuditLogAction.onboarding_question_update:               AuditLogActionCategory.update,
-            AuditLogAction.onboarding_create:                        AuditLogActionCategory.create,
-            AuditLogAction.onboarding_update:                        AuditLogActionCategory.update,
-            AuditLogAction.guild_home_feature_item:                  None,
-            AuditLogAction.guild_home_remove_item:                   None,
-            AuditLogAction.harmful_links_blocked_message:            None,
-            AuditLogAction.server_guide_create:                      AuditLogActionCategory.create,
-            AuditLogAction.server_guide_update:                      AuditLogActionCategory.update,
-            AuditLogAction.voice_channel_status_update:              AuditLogActionCategory.create,
-            AuditLogAction.voice_channel_status_delete:              AuditLogActionCategory.delete,
-            AuditLogAction.scheduled_event_exception_create:         AuditLogActionCategory.create,
-            AuditLogAction.scheduled_event_exception_delete:         AuditLogActionCategory.delete,
-            AuditLogAction.scheduled_event_exception_update:         AuditLogActionCategory.update,
+            AuditLogAction.soundboard_sound_create:                  AuditLogActionCategory.create,
+            AuditLogAction.soundboard_sound_update:                  AuditLogActionCategory.update,
+            AuditLogAction.soundboard_sound_delete:                  AuditLogActionCategory.delete,
         }
         # fmt: on
         return lookup[self]
@@ -953,42 +932,15 @@ class ReactionType(Enum):
     burst = 1
 
 
-class MemberJoinType(Enum):
-    unknown = 0
-    bot = 1
-    integration = 2
-    discovery = 3
-    hub = 4
-    invite = 5
-    vanity_url = 6
-    manual_member_verification = 7
+class VoiceChannelEffectAnimationType(Enum):
+    premium = 0
+    basic = 1
 
 
-class ApplicationIntegrationType(Enum):
-    guild = 0
-    user = 1
-
-
-class InteractionEphemeralityReason(Enum):
-    none = 0
-    feature_limited = 1
-    guild_feature_limited = 2
-    user_feature_limited = 3
-    slowmode = 4
-    rate_limit = 5
-    cannot_message_user = 6
-    user_verification_level = 7
-    cannot_unarchive_thread = 8
-    cannot_join_thread = 9
-    missing_permissions = 10
-    cannot_send_attachments = 11
-    cannot_send_embeds = 12
-    cannot_send_stickers = 13
-    automod_blocked = 14
-    harmful_link = 15
-    cannot_use_command = 16
-    beta_guild_size = 17
-    cannot_use_external_apps = 18
+class SubscriptionStatus(Enum):
+    active = 0
+    ending = 1
+    inactive = 2
 
 
 def create_unknown_value(cls: Type[E], val: Any) -> E:

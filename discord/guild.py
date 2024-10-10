@@ -96,7 +96,6 @@ from .welcome_screen import WelcomeScreen, WelcomeChannel
 from .automod import AutoModRule, AutoModTrigger, AutoModRuleAction
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .soundboard import SoundboardSound
-from .http import Route
 
 
 __all__ = (
@@ -335,8 +334,6 @@ class Guild(Hashable):
         'max_stage_video_users',
         '_incidents_data',
         '_soundboard_sounds',
-        '_home_header',
-        '_sticker_count',
     )
 
     _PREMIUM_GUILD_LIMITS: ClassVar[Dict[Optional[int], _GuildLimit]] = {
@@ -1033,14 +1030,14 @@ class Guild(Hashable):
     def soundboard_sounds(self) -> Sequence[SoundboardSound]:
         """Sequence[:class:`SoundboardSound`]: Returns a sequence of the guild's soundboard sounds.
 
-        .. versionadded:: 2.4
+        .. versionadded:: 2.5
         """
         return utils.SequenceProxy(self._soundboard_sounds.values())
 
     def get_soundboard_sound(self, sound_id: int, /) -> Optional[SoundboardSound]:
         """Returns a soundboard sound with the given ID.
 
-        .. versionadded:: 2.4
+        .. versionadded:: 2.5
 
         Parameters
         -----------
@@ -4403,6 +4400,8 @@ class Guild(Hashable):
         -------
         Forbidden
             You do not have permission to view the automod rule.
+        NotFound
+            The automod rule does not exist within this guild.
 
         Returns
         --------

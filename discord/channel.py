@@ -159,7 +159,7 @@ class VoiceChannelSoundEffect(BaseSoundboardSound):
         The volume of the sound as floating point percentage (e.g. ``1.0`` for 100%).
     """
 
-    __slots__ = ()
+    __slots__ = ('_state',)
 
     def __init__(self, *, state: ConnectionState, id: int, volume: float):
         data: BaseSoundboardSoundPayload = {
@@ -563,7 +563,6 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
                 'default_thread_rate_limit_per_user': self.default_thread_slowmode_delay,
             },
             name=name,
-            category=category,
             reason=reason,
         )
 
@@ -1436,13 +1435,7 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         return Webhook.from_state(data, state=self._state)
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
-    async def clone(
-        self,
-        *,
-        name: Optional[str] = None,
-        category: Optional[CategoryChannel] = None,
-        reason: Optional[str] = None,
-    ) -> Self:
+    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> Self:
         base = {
             'bitrate': self.bitrate,
             'user_limit': self.user_limit,
@@ -1456,7 +1449,6 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         return await self._clone_impl(
             base,
             name=name,
-            category=category,
             reason=reason,
         )
 
@@ -2644,13 +2636,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         return self._type == ChannelType.media.value
 
     @utils.copy_doc(discord.abc.GuildChannel.clone)
-    async def clone(
-        self,
-        *,
-        name: Optional[str] = None,
-        category: Optional[CategoryChannel],
-        reason: Optional[str] = None,
-    ) -> ForumChannel:
+    async def clone(self, *, name: Optional[str] = None, reason: Optional[str] = None) -> ForumChannel:
         base = {
             'topic': self.topic,
             'rate_limit_per_user': self.slowmode_delay,
@@ -2669,7 +2655,6 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         return await self._clone_impl(
             base,
             name=name,
-            category=category,
             reason=reason,
         )
 

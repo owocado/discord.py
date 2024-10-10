@@ -101,7 +101,7 @@ class BaseSoundboardSound(Hashable, AssetMixin):
 
 
 class SoundboardDefaultSound(BaseSoundboardSound):
-    """Represents a Discord default soundboard sound.
+    """Represents a Discord soundboard default sound.
 
     .. versionadded:: 2.5
 
@@ -176,15 +176,15 @@ class SoundboardSound(BaseSoundboardSound):
         The volume of the sound as floating point percentage (e.g. ``1.0`` for 100%).
     name: :class:`str`
         The name of the sound.
-    emoji: :class:`PartialEmoji`
-        The emoji of the sound.
+    emoji: Optional[:class:`PartialEmoji`]
+        The emoji of the sound. ``None`` if no emoji is set.
     guild: :class:`Guild`
         The guild in which the sound is uploaded.
     available: :class:`bool`
         Whether this sound is available for use.
     """
 
-    __slots__ = ('name', 'emoji', '_user', 'available', '_user_id', 'guild')
+    __slots__ = ('_state', 'name', 'emoji', '_user', 'available', '_user_id', 'guild')
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: SoundboardSoundPayload):
         super().__init__(state=state, data=data)
@@ -200,7 +200,7 @@ class SoundboardSound(BaseSoundboardSound):
             ('name', self.name),
             ('volume', self.volume),
             ('emoji', self.emoji),
-            ('user', self._user),
+            ('user', self.user),
         ]
         inner = ' '.join('%s=%r' % t for t in attrs)
         return f"<{self.__class__.__name__} {inner}>"
@@ -275,7 +275,7 @@ class SoundboardSound(BaseSoundboardSound):
         payload: Dict[str, Any] = {}
 
         if name is not MISSING:
-                payload['name'] = name
+            payload['name'] = name
 
         if volume is not MISSING:
             payload['volume'] = volume

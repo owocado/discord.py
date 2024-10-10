@@ -89,6 +89,9 @@ AuditLogEvent = Literal[
     111,
     112,
     121,
+    130,
+    131,
+    132,
     140,
     141,
     142,
@@ -114,7 +117,6 @@ class _AuditLogChange_Str(TypedDict):
         'tags',
         'unicode_emoji',
         'emoji_name',
-        'title',
     ]
     new_value: str
     old_value: str

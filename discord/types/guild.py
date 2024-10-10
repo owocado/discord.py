@@ -91,8 +91,8 @@ GuildFeature = Literal[
     'VIP_REGIONS',
     'WELCOME_SCREEN_ENABLED',
     'RAID_ALERTS_DISABLED',
-    'GUESTS_ENABLED',
     'SOUNDBOARD',
+    'MORE_SOUNDBOARD',
 ]
 
 
@@ -162,7 +162,6 @@ class Guild(_BaseGuildPreview):
     premium_subscription_count: NotRequired[int]
     max_video_channel_users: NotRequired[int]
     soundboard_sounds: NotRequired[List[SoundboardSound]]
-    home_header: Optional[str]
 
 
 class InviteGuild(_GuildPreviewUnique, Guild, total=False):
