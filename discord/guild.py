@@ -96,6 +96,7 @@ from .welcome_screen import WelcomeScreen, WelcomeChannel
 from .automod import AutoModRule, AutoModTrigger, AutoModRuleAction
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .soundboard import SoundboardSound
+from .http import Route
 
 
 __all__ = (
@@ -137,7 +138,6 @@ if TYPE_CHECKING:
     from .types.snowflake import SnowflakeList
     from .types.widget import EditWidgetSettings
     from .types.audit_log import AuditLogEvent
-    from .types.user import PartialUser as PartialUserPayload
     from .message import EmojiInputType
 
     VocalGuildChannel = Union[VoiceChannel, StageChannel]
@@ -149,7 +149,6 @@ if TYPE_CHECKING:
 class BanEntry(NamedTuple):
     reason: Optional[str]
     user: User
-    data: PartialUserPayload
 
 
 class BulkBanResult(NamedTuple):
@@ -334,6 +333,8 @@ class Guild(Hashable):
         'max_stage_video_users',
         '_incidents_data',
         '_soundboard_sounds',
+        '_home_header',
+        '_sticker_count',
     )
 
     _PREMIUM_GUILD_LIMITS: ClassVar[Dict[Optional[int], _GuildLimit]] = {
@@ -2467,7 +2468,7 @@ class Guild(Hashable):
         """
         data: BanPayload = await self._state.http.get_ban(user.id, self.id)
         user_ = User(state=self._state, data=data['user'])
-        return BanEntry(user=user_, reason=data['reason'], data=data['user'])
+        return BanEntry(user=user_, reason=data['reason'])
 
     async def fetch_channel(self, channel_id: int, /) -> Union[GuildChannel, Thread]:
         """|coro|
@@ -2617,7 +2618,7 @@ class Guild(Hashable):
                 limit = 0
 
             for e in data:
-                yield BanEntry(user=User(state=self._state, data=e['user']), reason=e['reason'], data=e['user'])
+                yield BanEntry(user=User(state=self._state, data=e['user']), reason=e['reason'])
 
     async def prune_members(
         self,

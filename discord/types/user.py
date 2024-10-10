@@ -49,7 +49,7 @@ class PartialUser(TypedDict):
     bot: NotRequired[bool]
     system: NotRequired[bool]
     global_name: Optional[str]
-    avatar_decoration_data: NotRequired[AvatarDecorationData]
+    avatar_decoration_data: NotRequired[Optional[AvatarDecorationData]]
     clan: Optional[Clan]
 
 
@@ -95,6 +95,7 @@ class Connection(PartialConnection):
 
 
 class APIUser(PartialUser):
+    flags: int
     banner: Optional[str]
     banner_color: Optional[str]
     accent_color: Optional[int]

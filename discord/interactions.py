@@ -662,6 +662,29 @@ class InteractionCallback(Generic[ClientT]):
     """Represents a Discord response to an interaction.
 
     .. versionadded:: 2.5
+
+    Attributes
+    ----------
+    id: :class:`int`
+        The interaction ID this callback responds to.
+    interaction_type: :class:`InteractionType`
+        The interaction type.
+    callback_type: Optional[:class:`InteractionResponseType`]
+        The interaction response type.
+    activity_instance_id: Optional[:class:`str`]
+        The activity instance ID this interaction was invoked from.
+    activity_instance: Optional[:class:`InteractionCallbackActivity`]
+        The resolved activity instance this interaction was invoked from.
+    response_message_id: Optional[:class:`int`]
+        The message ID of the interaction response.
+    response_message_loading: :class:`bool`
+        Whether the response message showed the application was thinking.
+    response_message_ephemeral: :class:`bool`
+        Whether the response message was ephemeral.
+    response_message: :class:`InteractionMessage`
+        The resolved response message.
+    response_channel: Union[:class:`abc.GuildChannel`, :class:`abc.PrivateChannel`, :class:`Thread`]
+        The channel this interaction was invoked from.
     """
 
     __slots__ = (
@@ -699,14 +722,7 @@ class InteractionCallback(Generic[ClientT]):
         self.id: int = int(interaction['id'])
         self.interaction_type: InteractionType = try_enum(InteractionType, interaction['type'])
         self.activity_instance_id: Optional[str] = interaction.get('activity_instance_id')
-        response_id = interaction.get('response_message_id')
-        self.response_message_id: Optional[int] = (
-            int(
-                response_id,
-            )
-            if response_id is not None
-            else None
-        )
+        self.response_message_id: Optional[int] = utils._get_as_snowflake(interaction, 'response_message_id')
         self.response_message_loading: Optional[bool] = interaction.get('response_message_loading')
         self.response_message_ephemeral: Optional[bool] = interaction.get('response_message_ephemeral')
 
@@ -725,7 +741,7 @@ class InteractionCallback(Generic[ClientT]):
                 data=resource['activity_instance'],
             )
         except KeyError:
-            pass
+            self.activity_instance = None
 
         try:
             self.response_message = InteractionMessage(
@@ -734,7 +750,7 @@ class InteractionCallback(Generic[ClientT]):
                 data=resource['message'],
             )
         except KeyError:
-            pass
+            self.response_message = None
 
 
 class InteractionResponse(Generic[ClientT]):

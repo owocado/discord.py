@@ -800,12 +800,16 @@ class Member(discord.abc.Messageable, _UserTag):
         .. versionchanged:: 2.0
             Member timeouts are taken into consideration.
         """
+        if not self.guild.get_member(self.id):
+            return self.resolved_permissions or discord.Permissions._dm_permissions()
 
         if self.guild.owner_id == self.id:
             return Permissions.all()
 
         base = Permissions.none()
         for r in self.roles:
+            if not r:
+                continue
             base.value |= r.permissions.value
 
         if base.administrator:

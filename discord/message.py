@@ -2060,7 +2060,7 @@ class Message(PartialMessage, Hashable):
         The call associated with this message.
 
         .. versionadded:: 2.5
-    message_snapshots: Optional[List[:class:`MessageSnapshot`]]
+    message_snapshots: List[:class:`MessageSnapshot`]
         The message snapshots attached to this message.
 
         .. versionadded:: 2.5
@@ -2240,8 +2240,7 @@ class Message(PartialMessage, Hashable):
             except KeyError:
                 continue
 
-        import cachebox
-        self._data = cachebox.Cache(0, data)
+        self._data = utils._to_json(data).encode(errors='ignore')
 
     def __repr__(self) -> str:
         name = self.__class__.__name__
@@ -2579,6 +2578,7 @@ class Message(PartialMessage, Hashable):
             MessageType.chat_input_command,
             MessageType.context_menu_command,
             MessageType.thread_starter_message,
+            MessageType.poll_result,
         )
 
     @utils.cached_slot_property('_cs_system_content')
@@ -2985,3 +2985,6 @@ class Message(PartialMessage, Hashable):
             The newly edited message.
         """
         return await self.edit(attachments=[a for a in self.attachments if a not in attachments])
+
+    def to_dict(self) -> MessagePayload:
+        return utils._from_json(self._data.decode(errors='ignore'))

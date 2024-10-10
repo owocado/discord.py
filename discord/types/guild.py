@@ -93,6 +93,7 @@ GuildFeature = Literal[
     'RAID_ALERTS_DISABLED',
     'SOUNDBOARD',
     'MORE_SOUNDBOARD',
+    'GUESTS_ENABLED',
 ]
 
 
@@ -162,6 +163,7 @@ class Guild(_BaseGuildPreview):
     premium_subscription_count: NotRequired[int]
     max_video_channel_users: NotRequired[int]
     soundboard_sounds: NotRequired[List[SoundboardSound]]
+    home_header: Optional[str]
 
 
 class InviteGuild(_GuildPreviewUnique, Guild, total=False):

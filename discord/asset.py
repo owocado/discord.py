@@ -460,14 +460,11 @@ class Asset(AssetMixin):
             url = url.with_path(f'{path}.{static_format}')
 
         if size is not MISSING:
-            if not utils.valid_icon_size(size):
-                raise ValueError('size must be a power of 2 between 16 and 4096')
             url = url.with_query(size=size)
         else:
             url = url.with_query(url.raw_query_string)
 
-        url = str(url)
-        return self.__class__(state=self._state, url=url, key=self._key, animated=self._animated)
+        return self.__class__(state=self._state, url=str(url), key=self._key, animated=self._animated)
 
     def with_size(self, size: int, /) -> Self:
         """Returns a new asset with the specified size.
@@ -491,9 +488,6 @@ class Asset(AssetMixin):
         :class:`Asset`
             The new updated asset.
         """
-        if not utils.valid_icon_size(size):
-            raise ValueError('size must be a power of 2 between 16 and 4096')
-
         url = str(yarl.URL(self._url).with_query(size=size))
         return self.__class__(state=self._state, url=url, key=self._key, animated=self._animated)
 

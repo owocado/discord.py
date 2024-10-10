@@ -428,34 +428,6 @@ class AsyncWebhookAdapter:
         route = Route('GET', '/webhooks/{webhook_id}/{webhook_token}', webhook_id=webhook_id, webhook_token=token)
         return self.request(route, session=session, proxy=proxy, proxy_auth=proxy_auth)
 
-    @overload
-    def create_interaction_response(
-        self,
-        interaction_id: int,
-        token: str,
-        *,
-        session: aiohttp.ClientSession,
-        proxy: Optional[str] = MISSING,
-        proxy_auth: Optional[aiohttp.BasicAuth] = MISSING,
-        params: MultipartParameters,
-        with_response: Literal[False] = ...,
-    ) -> Response[None]:
-        ...
-
-    @overload
-    def create_interaction_response(
-        self,
-        interaction_id: int,
-        token: str,
-        *,
-        session: aiohttp.ClientSession,
-        proxy: Optional[str] = MISSING,
-        proxy_auth: Optional[aiohttp.BasicAuth] = MISSING,
-        params: MultipartParameters,
-        with_response: Literal[True],
-    ) -> Response[InteractionCallbackResponsePayload]:
-        ...
-
     def create_interaction_response(
         self,
         interaction_id: int,

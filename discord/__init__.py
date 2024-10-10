@@ -72,6 +72,9 @@ from .automod import *
 from .poll import *
 from .soundboard import *
 from .subscription import *
+from .onboarding import *
+from .connections import *
+from .profile import *
 
 
 class VersionInfo(NamedTuple):

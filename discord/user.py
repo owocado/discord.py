@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from .state import ConnectionState
     from .types.channel import DMChannel as DMChannelPayload
     from .types.user import PartialUser as PartialUserPayload, User as UserPayload, AvatarDecorationData, Clan as ClanPayload
+    from .types.user import APIUser as APIUserPayload
 
 
 __all__ = (
@@ -334,18 +335,20 @@ class BaseUser(_UserTag):
 
         return any(user.id == self.id for user in message.mentions)
 
-    def to_dict(self):
+    def to_dict(self) -> APIUserPayload:
         return {
-            "id": self.id,
-            "username": self.name,
-            "avatar": self._avatar,
-            "discriminator": self.discriminator,
-            "public_flags": self._public_flags,
-            "banner": self._banner,
-            "accent_color": self._accent_colour,
-            "global_name": self.global_name,
-            "avatar_decoration_data": self._avatar_decoration_data,
-            "clan": self._clan,
+            'id': str(self.id),
+            'username': self.name,
+            'avatar': self._avatar,
+            'discriminator': self.discriminator,
+            'public_flags': self._public_flags,
+            'flags': self._public_flags,
+            'banner': self._banner,
+            'accent_color': self._accent_colour,
+            'global_name': self.global_name,
+            'avatar_decoration_data': self._avatar_decoration_data,
+            'banner_color': None,
+            'clan': self._clan,
         }
 
 
