@@ -1564,6 +1564,18 @@ class VoiceChannel(VocalGuildChannel):
         """:class:`ChannelType`: The channel's Discord type."""
         return ChannelType.voice
 
+    @utils.copy_doc(discord.abc.GuildChannel.clone)
+    async def clone(
+        self,
+        *,
+        name: Optional[str] = None,
+        category: Optional[CategoryChannel] = None,
+        reason: Optional[str] = None,
+    ) -> VoiceChannel:
+        return await self._clone_impl(
+            {'bitrate': self.bitrate, 'user_limit': self.user_limit}, name=name, category=category, reason=reason
+        )
+
     @overload
     async def edit(self) -> None:
         ...
@@ -1833,6 +1845,16 @@ class StageChannel(VocalGuildChannel):
     def type(self) -> Literal[ChannelType.stage_voice]:
         """:class:`ChannelType`: The channel's Discord type."""
         return ChannelType.stage_voice
+
+    @utils.copy_doc(discord.abc.GuildChannel.clone)
+    async def clone(
+        self,
+        *,
+        name: Optional[str] = None,
+        category: Optional[CategoryChannel] = None,
+        reason: Optional[str] = None,
+    ) -> StageChannel:
+        return await self._clone_impl({}, name=name, category=category, reason=reason)
 
     @property
     def instance(self) -> Optional[StageInstance]:

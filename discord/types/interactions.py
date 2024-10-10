@@ -265,7 +265,7 @@ class MessageInteraction(TypedDict):
     member: NotRequired[Member]
 
 
-class MessageInteractionMetadata(TypedDict):
+class MessageInteractionMetadata(TypedDict, total=False):
     id: Snowflake
     type: InteractionType
     user: User

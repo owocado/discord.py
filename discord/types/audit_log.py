@@ -117,6 +117,7 @@ class _AuditLogChange_Str(TypedDict):
         'tags',
         'unicode_emoji',
         'emoji_name',
+        'title',
     ]
     new_value: str
     old_value: str

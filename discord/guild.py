@@ -96,7 +96,6 @@ from .welcome_screen import WelcomeScreen, WelcomeChannel
 from .automod import AutoModRule, AutoModTrigger, AutoModRuleAction
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .soundboard import SoundboardSound
-from .http import Route
 
 
 __all__ = (
@@ -4212,6 +4211,7 @@ class Guild(Hashable):
         :class:`str`
             The widget image URL in the given style.
         """
+        from .http import Route
         return f"{Route.BASE}/guilds/{self.id}/widget.png?style={style}"
 
     async def edit_widget(

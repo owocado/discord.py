@@ -163,7 +163,7 @@ MessageType = Literal[
 ]
 
 
-class MessageSnapshot(TypedDict):
+class MessageSnapshot(TypedDict, total=False):
     type: MessageType
     content: str
     embeds: List[Embed]

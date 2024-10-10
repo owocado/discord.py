@@ -1002,7 +1002,7 @@ class CallMessage:
     __slots__ = ('_message', 'ended_timestamp', 'participants')
 
     def __repr__(self) -> str:
-        return f'<MessageCall participants={self.participants!r}>'
+        return f'<CallMessage participants={self.participants!r}>'
 
     def __init__(self, *, state: ConnectionState, message: Message, data: CallMessagePayload):
         self._message: Message = message
@@ -2100,8 +2100,8 @@ class Message(PartialMessage, Hashable):
         'position',
         'interaction_metadata',
         'poll',
-        'message_snapshots',
         'call',
+        'message_snapshots',
         '_data',
     )
 
@@ -2751,6 +2751,22 @@ class Message(PartialMessage, Hashable):
 
         if self.type is MessageType.guild_incident_report_false_alarm:
             return f'{self.author.name} reported a false alarm in {self.guild}.'
+
+        if self.type is MessageType.call:
+            call_ended = self.call.ended_timestamp is not None  # type: ignore # call can't be None here
+            missed = self._state.user not in self.call.participants  # type: ignore # call can't be None here
+
+            if call_ended:
+                duration = utils._format_call_duration(self.call.duration)  # type: ignore # call can't be None here
+                if missed:
+                    return 'You missed a call from {0.author.name} that lasted {1}.'.format(self, duration)
+                else:
+                    return '{0.author.name} started a call that lasted {1}.'.format(self, duration)
+            else:
+                if missed:
+                    return '{0.author.name} started a call. \N{EM DASH} Join the call'.format(self)
+                else:
+                    return '{0.author.name} started a call.'.format(self)
 
         if self.type is MessageType.purchase_notification:
             return f'{self.author.name} has purchased a server product.'
