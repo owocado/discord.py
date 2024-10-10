@@ -125,11 +125,6 @@ class CallMessage(TypedDict):
     ended_timestamp: NotRequired[Optional[str]]
 
 
-class CallMessage(TypedDict):
-    participants: SnowflakeList
-    ended_timestamp: NotRequired[Optional[str]]
-
-
 MessageType = Literal[
     0,
     1,
