@@ -362,6 +362,13 @@ class HybridAppCommand(discord.app_commands.Command[CogT, P, T]):
                 else:
                     raise app_commands.CommandSignatureMismatch(self) from None
             else:
+                if isinstance(value, app_commands.AppCommandChannel):
+                    from discord.channel import _guild_channel_factory
+
+                    factory, ch_type = _guild_channel_factory(value.type.value)
+                    if factory:
+                        guild = interaction._state._get_or_create_unavailable_guild(value.guild_id)
+                        value = factory(state=interaction._state, guild=guild, data=value.to_dict())  # type: ignore
                 transformed_values[param.name] = await param.transform(interaction, value)
 
         if self.flag_converter is not None:

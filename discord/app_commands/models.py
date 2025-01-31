@@ -38,7 +38,7 @@ from ..enums import (
     try_enum,
 )
 from ..mixins import Hashable
-from ..utils import _get_as_snowflake, parse_time, snowflake_time, MISSING
+from ..utils import _get_as_snowflake, parse_time, snowflake_time, MISSING, _from_json, _to_json
 from ..object import Object
 from ..role import Role
 from ..member import Member
@@ -584,6 +584,7 @@ class AppCommandChannel(Hashable):
         'permissions',
         'guild_id',
         '_state',
+        '_raw',
     )
 
     def __init__(
@@ -599,6 +600,7 @@ class AppCommandChannel(Hashable):
         self.type: ChannelType = try_enum(ChannelType, data['type'])
         self.name: str = data['name']
         self.permissions: Permissions = Permissions(int(data['permissions']))
+        self._raw: bytes = _to_json(data).encode(errors='ignore')
 
     def __str__(self) -> str:
         return self.name
@@ -624,6 +626,9 @@ class AppCommandChannel(Hashable):
         if guild is not None:
             return guild.get_channel(self.id)
         return None
+
+    def to_dict(self) -> PartialChannel:
+        return _from_json(self._raw.decode(errors='ignore'))
 
     async def fetch(self) -> GuildChannel:
         """|coro|
