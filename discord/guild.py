@@ -216,8 +216,8 @@ class GuildPreview(Hashable):
         'stickers',
         'features',
         'description',
-        "approximate_member_count",
-        "approximate_presence_count",
+        'approximate_member_count',
+        'approximate_presence_count',
     )
 
     def __init__(self, *, data: GuildPreviewPayload, state: ConnectionState) -> None:
@@ -238,8 +238,8 @@ class GuildPreview(Hashable):
         )
         self.features: List[GuildFeature] = data.get('features', [])
         self.description: Optional[str] = data.get('description')
-        self.approximate_member_count: int = data.get('approximate_member_count')
-        self.approximate_presence_count: int = data.get('approximate_presence_count')
+        self.approximate_member_count: int = data.get('approximate_member_count') or 0
+        self.approximate_presence_count: int = data.get('approximate_presence_count') or 0
 
     def __str__(self) -> str:
         return self.name
