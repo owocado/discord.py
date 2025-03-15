@@ -75,7 +75,11 @@ class Typing:
 
         while True:
             await asyncio.sleep(5)
-            await typing(channel.id)
+            # sometimes during Discord API outages, calling http.send_typing can error
+            try:
+                await typing(channel.id)
+            except Exception:
+                pass
 
     async def __aenter__(self) -> None:
         channel = await self._get_channel()
