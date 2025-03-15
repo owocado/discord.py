@@ -2428,7 +2428,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         'default_layout',
         'default_sort_order',
         '_available_tags',
-        '_flags',
+        '_last_pin',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[ForumChannelPayload, MediaChannelPayload]):
@@ -2479,6 +2479,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
             self.default_sort_order = try_enum(ForumOrderType, default_sort_order)
 
         self._flags: int = data.get('flags', 0)
+        self._last_pin = utils.parse_time(data.get('last_pin_timestamp'))
         self._fill_overwrites(data)
 
     @property
