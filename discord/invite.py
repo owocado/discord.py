@@ -184,6 +184,7 @@ class PartialInviteGuild:
         'vanity_url_code',
         'nsfw_level',
         'premium_subscription_count',
+        '_discovery_splash',
     )
 
     def __init__(self, state: ConnectionState, data: InviteGuildPayload, id: int):
@@ -199,6 +200,7 @@ class PartialInviteGuild:
         self.vanity_url_code: Optional[str] = data.get('vanity_url_code')
         self.nsfw_level: NSFWLevel = try_enum(NSFWLevel, data.get('nsfw_level', 0))
         self.premium_subscription_count: int = data.get('premium_subscription_count') or 0
+        self._discovery_splash: Optional[str] = data.get('discovery_splash')
 
     def __str__(self) -> str:
         return self.name
@@ -244,6 +246,13 @@ class PartialInviteGuild:
         if self._splash is None:
             return None
         return Asset._from_guild_image(self._state, self.id, self._splash, path='splashes')
+
+    @property
+    def discovery_splash(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's discovery splash asset, if available."""
+        if self._discovery_splash is None:
+            return None
+        return Asset._from_guild_image(self._state, self.id, self._discovery_splash, path='discovery-splashes')
 
 
 class Invite(Hashable):
