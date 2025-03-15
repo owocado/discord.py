@@ -772,6 +772,18 @@ class Guild(Hashable):
         r.sort(key=lambda c: (c.position, c.id))
         return r
 
+    @property
+    def media_channels(self) -> List[ForumChannel]:
+        """List[:class:`ForumChannel`]: A list of media channels that belongs to this guild.
+
+        This is sorted by the position and are in UI order from top to bottom.
+
+        .. versionadded:: 2.6
+        """
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.media]
+        r.sort(key=lambda c: (c.position, c.id))
+        return r
+
     def by_category(self) -> List[ByCategoryItem]:
         """Returns every :class:`CategoryChannel` and their associated channels.
 
