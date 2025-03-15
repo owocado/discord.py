@@ -3152,15 +3152,21 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
         The user presenting yourself.
     id: :class:`int`
         The direct message channel ID.
+    last_message_id: Optional[:class:`int`]
+        The last message ID of the message sent to this channel. It may
+        *not* point to an existing or valid message.
+
+        .. versionadded:: 2.6
     """
 
-    __slots__ = ('id', 'recipients', 'me', '_state')
+    __slots__ = ('id', 'recipients', 'me', 'last_message_id', '_state')
 
     def __init__(self, *, me: ClientUser, state: ConnectionState, data: DMChannelPayload):
         self._state: ConnectionState = state
         self.recipients: List[User] = [state.store_user(u) for u in data.get('recipients', [])]
         self.me: ClientUser = me
         self.id: int = int(data['id'])
+        self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
 
     async def _get_channel(self) -> Self:
         return self
@@ -3319,9 +3325,14 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         .. versionadded:: 2.0
     name: Optional[:class:`str`]
         The group channel's name if provided.
+    last_message_id: Optional[:class:`int`]
+        The last message ID of the message sent to this channel. It may
+        *not* point to an existing or valid message.
+
+        .. versionadded:: 2.6
     """
 
-    __slots__ = ('id', 'recipients', 'owner_id', 'owner', '_icon', 'name', 'me', '_state')
+    __slots__ = ('id', 'recipients', 'owner_id', 'owner', '_icon', 'name', 'me', 'last_message_id', '_state')
 
     def __init__(self, *, me: ClientUser, state: ConnectionState, data: GroupChannelPayload):
         self._state: ConnectionState = state
@@ -3334,6 +3345,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         self._icon: Optional[str] = data.get('icon')
         self.name: Optional[str] = data.get('name')
         self.recipients: List[User] = [self._state.store_user(u) for u in data.get('recipients', [])]
+        self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
 
         self.owner: Optional[BaseUser]
         if self.owner_id == self.me.id:
