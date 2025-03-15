@@ -328,6 +328,11 @@ class PrivateChannel:
     id: int
     me: ClientUser
 
+    @property
+    def mention(self) -> str:
+        """:class:`str`: Returns a string that allows you to mention this channel."""
+        raise NotImplementedError
+
 
 class _Overwrites:
     __slots__ = ('id', 'allow', 'deny', 'type')
