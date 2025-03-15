@@ -467,6 +467,11 @@ class DeletedReferencedMessage:
         """Optional[:class:`int`]: The guild ID of the deleted referenced message."""
         return self._parent.guild_id
 
+    @property
+    def jump_url(self) -> str:
+        """:class:`str`: Returns a URL that allows the client to jump to this message."""
+        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.id}'
+
 
 class MessageSnapshot:
     """Represents a message snapshot attached to a forwarded message.
