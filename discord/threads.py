@@ -155,6 +155,7 @@ class Thread(Messageable, Hashable):
         '_created_at',
         '_flags',
         '_applied_tags',
+        '_last_pin',
     )
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: ThreadPayload) -> None:
@@ -188,6 +189,7 @@ class Thread(Messageable, Hashable):
         self._flags: int = data.get('flags', 0)
         # SnowflakeList is sorted, but this would not be proper for applied tags, where order actually matters.
         self._applied_tags: array.array[int] = array.array('Q', map(int, data.get('applied_tags', [])))
+        self._last_pin: datetime = parse_time(data.get('last_pin_timestamp'))
         self._unroll_metadata(data['thread_metadata'])
 
         self.me: Optional[ThreadMember]
@@ -216,6 +218,7 @@ class Thread(Messageable, Hashable):
         self.slowmode_delay = data.get('rate_limit_per_user', 0)
         self._flags: int = data.get('flags', 0)
         self._applied_tags: array.array[int] = array.array('Q', map(int, data.get('applied_tags', [])))
+        self._last_pin: datetime = parse_time(data.get('last_pin_timestamp'))
 
         try:
             self._unroll_metadata(data['thread_metadata'])
