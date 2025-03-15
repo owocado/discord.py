@@ -105,6 +105,8 @@ if TYPE_CHECKING:
     BE = TypeVar('BE', bound=BaseException)
     Response = Coroutine[Any, Any, T]
 
+    HTTP_METHOD = Literal['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'CONNECT', 'OPTIONS', 'TRACE', 'PATCH']
+
 
 async def json_or_text(response: aiohttp.ClientResponse) -> Union[Dict[str, Any], str]:
     text = await response.text(encoding='utf-8')
@@ -302,9 +304,9 @@ def _set_api_version(value: int):
 class Route:
     BASE: ClassVar[str] = 'https://discord.com/api/v10'
 
-    def __init__(self, method: str, path: str, *, metadata: Optional[str] = None, **parameters: Any) -> None:
+    def __init__(self, method: HTTP_METHOD, path: str, *, metadata: Optional[str] = None, **parameters: Any) -> None:
         self.path: str = path
-        self.method: str = method
+        self.method: HTTP_METHOD = method
         # Metadata is a special string used to differentiate between known sub rate limits
         # Since these can't be handled generically, this is the next best way to do so.
         self.metadata: Optional[str] = metadata
