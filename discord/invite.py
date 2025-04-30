@@ -169,6 +169,11 @@ class PartialInviteGuild:
         The number of "boosts" the partial guild currently has.
 
         .. versionadded:: 2.0
+    premium_tier: :class:`int`
+        The premium tier for this guild. Corresponds to "Nitro Server" in the official UI.
+        The number goes from 0 to 3 inclusive.
+
+        .. versionadded:: 2.6
     """
 
     __slots__ = (
@@ -184,6 +189,7 @@ class PartialInviteGuild:
         'vanity_url_code',
         'nsfw_level',
         'premium_subscription_count',
+        'premium_tier',
         '_discovery_splash',
     )
 
@@ -200,6 +206,7 @@ class PartialInviteGuild:
         self.vanity_url_code: Optional[str] = data.get('vanity_url_code')
         self.nsfw_level: NSFWLevel = try_enum(NSFWLevel, data.get('nsfw_level', 0))
         self.premium_subscription_count: int = data.get('premium_subscription_count') or 0
+        self.premium_tier: int = data.get('premium_tier', 0)
         self._discovery_splash: Optional[str] = data.get('discovery_splash')
 
     def __str__(self) -> str:
