@@ -25,7 +25,7 @@ DEALINGS IN THE SOFTWARE.
 from typing import Optional, TypedDict
 from typing_extensions import NotRequired
 from .snowflake import Snowflake, SnowflakeList
-from .user import User
+from .user import User, APIUser
 
 
 class PartialEmoji(TypedDict):
@@ -36,7 +36,7 @@ class PartialEmoji(TypedDict):
 
 class Emoji(PartialEmoji, total=False):
     roles: SnowflakeList
-    user: User
+    user: APIUser
     require_colons: bool
     managed: bool
     animated: bool

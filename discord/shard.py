@@ -107,8 +107,8 @@ class Shard:
         self._queue_put: Callable[[EventItem], None] = queue_put
         self._disconnect: bool = False
         self._reconnect = client._reconnect
-        self._backoff: ExponentialBackoff = ExponentialBackoff()
-        self._task: Optional[asyncio.Task] = None
+        self._backoff: ExponentialBackoff[bool] = ExponentialBackoff()
+        self._task: Optional[asyncio.Task[None]] = None
         self._handled_exceptions: Tuple[Type[Exception], ...] = (
             OSError,
             HTTPException,
@@ -396,7 +396,7 @@ class AutoShardedClient(Client):
             shard_id = (guild_id >> 22) % self.shard_count  # type: ignore
         return self.__shards[shard_id].ws
 
-    def _get_state(self, **options: Any) -> AutoShardedConnectionState:
+    def _get_state(self, **options: Unpack[_AutoShardedClientOptions]) -> AutoShardedConnectionState:
         return AutoShardedConnectionState(
             dispatch=self.dispatch,
             handlers=self._handlers,

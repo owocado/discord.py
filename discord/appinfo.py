@@ -31,6 +31,7 @@ from .asset import Asset
 from .flags import ApplicationFlags
 from .permissions import Permissions
 from .utils import MISSING
+from .enums import ApplicationIntegrationType, ApplicationType, try_enum
 
 if TYPE_CHECKING:
     from typing import Dict, Any
@@ -39,10 +40,11 @@ if TYPE_CHECKING:
     from .types.appinfo import (
         AppInfo as AppInfoPayload,
         PartialAppInfo as PartialAppInfoPayload,
-        Team as TeamPayload,
         InstallParams as InstallParamsPayload,
         AppIntegrationTypeConfig as AppIntegrationTypeConfigPayload,
     )
+    from .types.team import Team as TeamPayload
+    from .types.user import User as UserPayload
     from .user import User
     from .state import ConnectionState
 
@@ -163,6 +165,7 @@ class AppInfo:
         'rpc_origins',
         'bot_public',
         'bot_require_code_grant',
+        'bot',
         'owner',
         '_icon',
         'verify_key',
@@ -183,6 +186,7 @@ class AppInfo:
         'approximate_guild_count',
         'approximate_user_install_count',
         '_integration_types_config',
+        '_data',
     )
 
     def __init__(self, state: ConnectionState, data: AppInfoPayload):
@@ -193,13 +197,16 @@ class AppInfo:
         self.name: str = data['name']
         self.description: str = data['description']
         self._icon: Optional[str] = data['icon']
-        self.rpc_origins: Optional[List[str]] = data.get('rpc_origins')
+        self.rpc_origins: List[str] = data.get('rpc_origins') or []
         self.bot_public: bool = data['bot_public']
         self.bot_require_code_grant: bool = data['bot_require_code_grant']
         self.owner: User = state.create_user(data['owner'])
 
         team: Optional[TeamPayload] = data.get('team')
         self.team: Optional[Team] = Team(state, team) if team else None
+
+        bot: Optional[UserPayload] = data.get('bot')
+        self.bot: Optional[User] = state.create_user(bot) if bot else None
 
         self.verify_key: str = data['verify_key']
 
@@ -211,19 +218,20 @@ class AppInfo:
         self._cover_image: Optional[str] = data.get('cover_image')
         self.terms_of_service_url: Optional[str] = data.get('terms_of_service_url')
         self.privacy_policy_url: Optional[str] = data.get('privacy_policy_url')
-        self.tags: List[str] = data.get('tags', [])
+        self.tags: List[str] = data.get('tags', []) or []
         self.custom_install_url: Optional[str] = data.get('custom_install_url')
         self.role_connections_verification_url: Optional[str] = data.get('role_connections_verification_url')
 
         params = data.get('install_params')
-        self.install_params: Optional[AppInstallParams] = AppInstallParams(params) if params else None
+        self.install_params: Optional[AppInstallParams] = AppInstallParams(params, self.id) if params else None
         self.interactions_endpoint_url: Optional[str] = data.get('interactions_endpoint_url')
-        self.redirect_uris: List[str] = data.get('redirect_uris', [])
+        self.redirect_uris: List[str] = data.get('redirect_uris', []) or []
         self.approximate_guild_count: int = data.get('approximate_guild_count', 0)
         self.approximate_user_install_count: Optional[int] = data.get('approximate_user_install_count')
         self._integration_types_config: Dict[Literal['0', '1'], AppIntegrationTypeConfigPayload] = data.get(
             'integration_types_config', {}
         )
+        self._data: bytes = utils._to_json(data)
 
     def __repr__(self) -> str:
         return (
@@ -231,6 +239,9 @@ class AppInfo:
             f'description={self.description!r} public={self.bot_public} '
             f'owner={self.owner!r}>'
         )
+
+    def to_dict(self) -> AppInfoPayload:
+        return utils._from_json(self._data)
 
     @property
     def icon(self) -> Optional[Asset]:
@@ -277,7 +288,7 @@ class AppInfo:
             return None
 
         try:
-            return IntegrationTypeConfig(self._integration_types_config['0'])
+            return IntegrationTypeConfig(self._integration_types_config['0'], self.id)
         except KeyError:
             return None
 
@@ -292,7 +303,7 @@ class AppInfo:
             return None
 
         try:
-            return IntegrationTypeConfig(self._integration_types_config['1'])
+            return IntegrationTypeConfig(self._integration_types_config['1'], self.id)
         except KeyError:
             return None
 
@@ -555,6 +566,12 @@ class PartialAppInfo:
         'redirect_uris',
         'interactions_endpoint_url',
         'role_connections_verification_url',
+        'install_params',
+        'integration_type',
+        'integration_types_config',
+        'type',
+        '_splash',
+        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, data: PartialAppInfoPayload):
@@ -565,17 +582,37 @@ class PartialAppInfo:
         self._flags: int = data.get('flags', 0)
         self._cover_image: Optional[str] = data.get('cover_image')
         self.description: str = data['description']
-        self.rpc_origins: Optional[List[str]] = data.get('rpc_origins')
+        self.rpc_origins: List[str] = data.get('rpc_origins', []) or []
         self.verify_key: str = data['verify_key']
         self.terms_of_service_url: Optional[str] = data.get('terms_of_service_url')
         self.privacy_policy_url: Optional[str] = data.get('privacy_policy_url')
         self.approximate_guild_count: int = data.get('approximate_guild_count', 0)
-        self.redirect_uris: List[str] = data.get('redirect_uris', [])
+        self.redirect_uris: List[str] = data.get('redirect_uris', []) or []
         self.interactions_endpoint_url: Optional[str] = data.get('interactions_endpoint_url')
         self.role_connections_verification_url: Optional[str] = data.get('role_connections_verification_url')
 
+        params = data.get('install_params')
+        self.install_params: Optional[AppInstallParams] = AppInstallParams(params, self.id) if params else None
+        self.integration_type: Optional[int] = data.get('integration_type')
+        self.integration_types_config: Dict[ApplicationIntegrationType, AppInstallParams] = {}
+        for _type, config in (data.get('integration_types_config') or {}).items():
+            if not config:
+                continue
+            integration_type = try_enum(ApplicationIntegrationType, int(_type))
+            self.integration_types_config[integration_type] = AppInstallParams(
+                config.get('oauth2_install_params'),
+                self.id,
+                integration_type=integration_type,
+            )
+        self.type: ApplicationType = try_enum(ApplicationType, data.get('type') or 0)
+        self._splash: Optional[str] = data.get('splash')
+        self._data: bytes = utils._to_json(data)
+
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} id={self.id} name={self.name!r} description={self.description!r}>'
+
+    def to_dict(self) -> PartialAppInfoPayload:
+        return utils._from_json(self._data)
 
     @property
     def icon(self) -> Optional[Asset]:
@@ -595,6 +632,18 @@ class PartialAppInfo:
         if self._cover_image is None:
             return None
         return Asset._from_cover_image(self._state, self.id, self._cover_image)
+
+    @property
+    def splash(self) -> Optional[Asset]:
+        """Optional[:class:`.Asset`]: Retrieves the application's splash asset, if any.
+
+        This is only available if the application is a game sold on Discord.
+
+        .. versionadded:: 2.6
+        """
+        if self._splash is None:
+            return None
+        return Asset._from_app_splash(self._state, self.id, self._splash)
 
     @property
     def flags(self) -> ApplicationFlags:
@@ -619,11 +668,37 @@ class AppInstallParams:
         The permissions to give to application in the guild.
     """
 
-    __slots__ = ('scopes', 'permissions')
+    __slots__ = ('scopes', 'permissions', '_app_id', '_integration_type')
 
-    def __init__(self, data: InstallParamsPayload) -> None:
-        self.scopes: List[str] = data.get('scopes', [])
-        self.permissions: Permissions = Permissions(int(data['permissions']))
+    def __init__(
+        self,
+        data: Optional[InstallParamsPayload],
+        app_id: int,
+        *,
+        integration_type: Optional[ApplicationIntegrationType] = None,
+    ) -> None:
+        self.scopes: List[str] = (data.get('scopes') or []) if data else []
+        self.permissions: Permissions = Permissions(int(data['permissions']) if data else 0)
+        self._app_id: int = app_id
+        self._integration_type = integration_type
+
+    def __repr__(self) -> str:
+        return f'<InstallParams scopes={self.scopes!r} permissions={self.permissions!r}>'
+
+    def to_url(self) -> str:
+        """Return the oauth2 invite URL that can be used to add this application to a server or user.
+
+        Returns
+        -------
+        :class:`str`
+            The invite url.
+        """
+        return utils.oauth_url(
+            self._app_id,
+            scopes=self.scopes,
+            permissions=self.permissions,
+            integration_type=self._integration_type.value if self._integration_type is not None else 0,
+        )
 
 
 class IntegrationTypeConfig:
@@ -637,9 +712,9 @@ class IntegrationTypeConfig:
         The install params for this installation context's default in-app authorization link.
     """
 
-    def __init__(self, data: AppIntegrationTypeConfigPayload) -> None:
+    def __init__(self, data: AppIntegrationTypeConfigPayload, app_id: int) -> None:
         self.oauth2_install_params: Optional[AppInstallParams] = None
         try:
-            self.oauth2_install_params = AppInstallParams(data['oauth2_install_params'])  # type: ignore # EAFP
+            self.oauth2_install_params = AppInstallParams(data['oauth2_install_params'], app_id)  # type: ignore # EAFP
         except KeyError:
             pass

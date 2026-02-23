@@ -77,6 +77,7 @@ class SKU:
         'name',
         'slug',
         '_flags',
+        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, data: SKUPayload):
@@ -87,9 +88,13 @@ class SKU:
         self.name: str = data['name']
         self.slug: str = data['slug']
         self._flags: int = data['flags']
+        self._data: bytes = utils._to_json(data)
 
     def __repr__(self) -> str:
-        return f'<SKU id={self.id} name={self.name!r} slug={self.slug!r}>'
+        return f'<SKU id={self.id} name={self.name!r} slug={self.slug!r} type={self.type!r}>'
+
+    def to_dict(self) -> SKUPayload:
+        return utils._from_json(self._data)
 
     @property
     def flags(self) -> SKUFlags:

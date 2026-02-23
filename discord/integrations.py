@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Type, Tuple
-from .utils import _get_as_snowflake, parse_time, MISSING
+from .utils import _get_as_snowflake, parse_time, MISSING, _to_json
 from .user import User
 from .enums import try_enum, ExpireBehaviour
 
@@ -114,6 +114,7 @@ class Integration:
         'user',
         'enabled',
         'scopes',
+        '_data'
     )
 
     def __init__(self, *, data: IntegrationPayload, guild: Guild) -> None:
@@ -134,6 +135,7 @@ class Integration:
         self.user: Optional[User] = User(state=self._state, data=user) if user else None
         self.enabled: bool = data['enabled']
         self.scopes: List[str] = data.get('scopes', [])
+        self._data = _to_json(data)
 
     async def delete(self, *, reason: Optional[str] = None) -> None:
         """|coro|

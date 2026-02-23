@@ -24,7 +24,7 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import Literal, Optional, TypedDict, Union
+from typing import Literal, List, Optional, TypedDict, Union
 from typing_extensions import NotRequired
 
 from .scheduled_event import GuildScheduledEvent
@@ -33,6 +33,7 @@ from .guild import InviteGuild, _GuildPreviewUnique
 from .channel import PartialChannel
 from .user import PartialUser
 from .appinfo import PartialAppInfo
+from .role import Role
 
 InviteTargetType = Literal[1, 2]
 InviteType = Literal[0, 1, 2]
@@ -66,6 +67,10 @@ class Invite(IncompleteInvite, total=False):
     type: InviteType
     flags: NotRequired[int]
     expires_at: Optional[str]
+    is_nickname_changeable: NotRequired[bool]
+    roles: List[Role]
+    approximate_member_count: int
+    approximate_presence_count: int
 
 
 class InviteWithCounts(Invite, _GuildPreviewUnique): ...
@@ -95,3 +100,12 @@ class GatewayInviteDelete(TypedDict):
 
 
 GatewayInvite = Union[GatewayInviteCreate, GatewayInviteDelete]
+
+
+class InviteTargetUsersJobStatus(TypedDict):
+    status: int
+    total_users: int
+    processed_users: int
+    created_at: str
+    error_message: str
+    completed_at: Optional[str]

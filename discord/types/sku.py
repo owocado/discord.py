@@ -27,6 +27,10 @@ from __future__ import annotations
 from typing import TypedDict, Optional, Literal
 from typing_extensions import NotRequired
 
+from .user import PremiumType
+from .appinfo import PartialAppInfo
+from .snowflake import Snowflake
+
 
 class SKU(TypedDict):
     id: str
@@ -50,4 +54,68 @@ class Entitlement(TypedDict):
     consumed: NotRequired[bool]
 
 
+class PremiumPrice(TypedDict):
+    amount: int
+    percentage: int
+
+
+class Price(TypedDict):
+    amount: int
+    currency: str
+    currency_exponent: int
+    premium: dict[str, PremiumPrice]
+
+
+class PublicSKU(SKU):
+    product_line: int
+    dependent_sku_id: Optional[int]
+    manifest_labels: Optional[str]
+    access_type: int
+    features: list[str]
+    release_date: Optional[str]
+    premium: bool
+    application: PartialAppInfo
+    show_age_gate: bool
+    price: Price
+    created_at: str | None
+    updated_at: str | None
+
+
+class PublishedSKU(TypedDict):
+    id: str
+    summary: Optional[str]
+    sku: PublicSKU
+    description: Optional[str]
+    benefits: list[str]
+
+
 EntitlementOwnerType = Literal[1, 2]
+
+
+class ProductStyles(TypedDict, total=False):
+    background_colors: list[int]
+    button_colors: list[int]
+    confetti_colors: list[int]
+
+
+class ProductItem(TypedDict):
+    type: int
+    id: Snowflake
+    sku_id: Snowflake
+    asset: str
+    palette: str
+
+
+class CollectibleProduct(TypedDict, total=False):
+    sku_id: str
+    name: str
+    summary: str
+    store_listing_id: Snowflake
+    banner: Optional[Snowflake]
+    unpublished_at: Optional[str]
+    styles: ProductStyles
+    items: list[ProductItem]
+    type: int
+    premium_type: PremiumType
+    category_sku_id: Optional[Snowflake]
+    google_sku_ids: dict[str, str]

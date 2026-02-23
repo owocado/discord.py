@@ -42,7 +42,8 @@ import weakref
 
 from .. import utils
 from ..errors import HTTPException, Forbidden, NotFound, DiscordServerError
-from ..message import Message, MessageFlags
+from ..message import Message
+from ..flags import MessageFlags
 from ..http import Route, handle_message_parameters
 from ..channel import PartialMessageable, ForumTag
 
@@ -78,7 +79,8 @@ if TYPE_CHECKING:
     BE = TypeVar('BE', bound=BaseException)
 
     try:
-        from requests import Session, Response
+        from requests.models import Response
+        from requests.sessions import Session
     except ModuleNotFoundError:
         pass
 
@@ -99,8 +101,8 @@ class DeferredLock:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BE]],
-        exc: Optional[BE],
+        exc_type: Optional[Type[BaseException]],
+        exc: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> None:
         if self.delta:
@@ -136,7 +138,7 @@ class WebhookAdapter:
 
         if payload is not None:
             headers['Content-Type'] = 'application/json; charset=utf-8'
-            to_send = utils._to_json(payload).encode('utf-8')
+            to_send = utils._to_json(payload)
 
         if auth_token is not None:
             headers['Authorization'] = f'Bot {auth_token}'
@@ -144,7 +146,7 @@ class WebhookAdapter:
         if reason is not None:
             headers['X-Audit-Log-Reason'] = urlquote(reason, safe='/ ')
 
-        response: Optional[Response] = None
+        response: Response = MISSING
         data: Optional[Union[Dict[str, Any], str]] = None
         file_data: Optional[Dict[str, Any]] = None
         method = route.method
@@ -180,7 +182,7 @@ class WebhookAdapter:
                         # Compatibility with aiohttp
                         response.status = response.status_code  # type: ignore
 
-                        data = response.text or None
+                        data: Any = response.text or None
                         try:
                             if data and response.headers['Content-Type'] == 'application/json':
                                 data = json.loads(data)
@@ -840,7 +842,7 @@ class SyncWebhook(BaseWebhook):
         if self.token is None and self.auth_token is None:
             raise ValueError('This webhook does not have a token associated with it')
 
-        payload = {}
+        payload: dict[str, Any] = {}
         if name is not MISSING:
             payload['name'] = str(name) if name is not None else None
 
@@ -1146,7 +1148,7 @@ class SyncWebhook(BaseWebhook):
         if wait:
             msg = self._create_message(data, thread=thread)
 
-        if poll is not MISSING and msg:
+        if poll and msg:
             poll._update(msg)
 
         return msg

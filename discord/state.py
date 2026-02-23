@@ -84,8 +84,7 @@ from .subscription import Subscription
 
 
 if TYPE_CHECKING:
-    from .abc import PrivateChannel
-    from .message import MessageableChannel
+    from .abc import PrivateChannel, MessageableChannel
     from .guild import GuildChannel
     from .http import HTTPClient
     from .voice_client import VoiceProtocol
@@ -197,7 +196,7 @@ class ConnectionState(Generic[ClientT]):
         self.handlers: Dict[str, Callable[..., Any]] = handlers
         self.hooks: Dict[str, Callable[..., Coroutine[Any, Any, Any]]] = hooks
         self.shard_count: Optional[int] = None
-        self._ready_task: Optional[asyncio.Task] = None
+        self._ready_task: Optional[asyncio.Task[None]] = None
         self.application_id: Optional[int] = utils._get_as_snowflake(options, 'application_id')
         self.application_flags: ApplicationFlags = utils.MISSING
         self.heartbeat_timeout: float = options.get('heartbeat_timeout', 60.0)
@@ -213,21 +212,21 @@ class ConnectionState(Generic[ClientT]):
         self.allowed_mentions: Optional[AllowedMentions] = allowed_mentions
         self._chunk_requests: Dict[Union[int, str], ChunkRequest] = {}
 
-        activity = options.get('activity', None)
+        activity = options.get('activity')
         if activity:
             if not isinstance(activity, BaseActivity):
                 raise TypeError('activity parameter must derive from BaseActivity.')
 
             activity = activity.to_dict()
 
-        status = options.get('status', None)
+        status = options.get('status')
         if status:
             if status is Status.offline:
                 status = 'invisible'
             else:
                 status = str(status)
 
-        intents = options.get('intents', None)
+        intents = options.get('intents')
         if intents is not None:
             if not isinstance(intents, Intents):
                 raise TypeError(f'intents parameter must be Intent not {type(intents)!r}')
@@ -243,7 +242,7 @@ class ConnectionState(Generic[ClientT]):
         if not intents.members and self._chunk_guilds:
             raise ValueError('Intents.members must be enabled to chunk guilds at startup.')
 
-        cache_flags = options.get('member_cache_flags', None)
+        cache_flags = options.get('member_cache_flags')
         if cache_flags is None:
             cache_flags = MemberCacheFlags.from_intents(intents)
         else:
@@ -295,7 +294,7 @@ class ConnectionState(Generic[ClientT]):
         # Purposefully don't call `clear` because users rely on cache being available post-close
 
     def clear(self, *, views: bool = True) -> None:
-        self.user: Optional[ClientUser] = None
+        self.user: ClientUser = None
         self._users: weakref.WeakValueDictionary[int, User] = weakref.WeakValueDictionary()
         self._emojis: Dict[int, Emoji] = {}
         self._stickers: Dict[int, GuildSticker] = {}
@@ -553,7 +552,7 @@ class ConnectionState(Generic[ClientT]):
     def _update_poll_counts(self, message: Message, answer_id: int, added: bool, self_voted: bool = False) -> Optional[Poll]:
         poll = message.poll
         if not poll:
-            return
+            return None
         poll._handle_vote(answer_id, added, self_voted)
         return poll
 
@@ -607,7 +606,7 @@ class ConnectionState(Generic[ClientT]):
 
     async def _delay_ready(self) -> None:
         try:
-            states = []
+            states: List[Tuple[Guild, asyncio.Future[List[Member]]]] = []
             while True:
                 # this snippet of code is basically waiting N seconds
                 # until the last GUILD_CREATE was sent
@@ -682,6 +681,7 @@ class ConnectionState(Generic[ClientT]):
         self.dispatch('resumed')
 
     def parse_message_create(self, data: gw.MessageCreateEvent) -> None:
+        self.dispatch('raw_message', data)
         channel, _ = self._get_guild_channel(data)
         # channel would be the correct type here
         message = Message(channel=channel, data=data, state=self)  # type: ignore
@@ -716,6 +716,7 @@ class ConnectionState(Generic[ClientT]):
                 self._messages.remove(msg)  # type: ignore
 
     def parse_message_update(self, data: gw.MessageUpdateEvent) -> None:
+        self.dispatch('raw_message_update', data)
         channel, _ = self._get_guild_channel(data)
         # channel would be the correct type here
         updated_message = Message(channel=channel, data=data, state=self)  # type: ignore
@@ -836,7 +837,7 @@ class ConnectionState(Generic[ClientT]):
         raw = RawPresenceUpdateEvent(data=data, state=self)
 
         if self.raw_presence_flag:
-            self.dispatch('raw_presence_update', raw)
+            self.dispatch('raw_presence_update', data)
 
         if raw.guild is None:
             _log.debug('PRESENCE_UPDATE referencing an unknown guild ID: %s. Discarding.', raw.guild_id)
@@ -1027,9 +1028,9 @@ class ConnectionState(Generic[ClientT]):
         else:
             previous_threads = guild._filter_threads(channel_ids)
 
-        threads = {d['id']: guild._store_thread(d) for d in data.get('threads', [])}
+        threads = {d['id']: guild._store_thread(d) for d in data.get('threads', []) or []}
 
-        for member in data.get('members', []):
+        for member in data.get('members', []) or []:
             try:
                 # note: member['id'] is the thread_id
                 thread = threads[member['id']]
@@ -1076,8 +1077,8 @@ class ConnectionState(Generic[ClientT]):
             _log.debug('THREAD_MEMBERS_UPDATE referencing an unknown thread ID: %s. Discarding', thread_id)
             return
 
-        added_members = [ThreadMember(thread, d) for d in data.get('added_members', [])]
-        removed_member_ids = [int(x) for x in data.get('removed_member_ids', [])]
+        added_members = [ThreadMember(thread, d) for d in data.get('added_members', []) or []]
+        removed_member_ids = [int(x) for x in data.get('removed_member_ids', []) or []]
         self_id = self.self_id
         for member in added_members:
             if member.id != self_id:
@@ -1192,6 +1193,7 @@ class ConnectionState(Generic[ClientT]):
         self.dispatch('guild_stickers_update', guild, before_stickers, guild.stickers)
 
     def parse_guild_audit_log_entry_create(self, data: gw.GuildAuditLogEntryCreate) -> None:
+        self.dispatch('raw_audit_log_entry_create', data)
         guild = self._get_guild(int(data['guild_id']))
         if guild is None:
             _log.debug('GUILD_AUDIT_LOG_ENTRY_CREATE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
@@ -1291,7 +1293,7 @@ class ConnectionState(Generic[ClientT]):
     def _chunk_timeout(self, guild: Guild) -> float:
         return max(5.0, (guild.member_count or 0) / 10000)
 
-    async def _chunk_and_dispatch(self, guild, unavailable):
+    async def _chunk_and_dispatch(self, guild: Guild, unavailable):
         timeout = self._chunk_timeout(guild)
 
         try:
@@ -1326,7 +1328,7 @@ class ConnectionState(Generic[ClientT]):
 
         # check if it requires chunking
         if self._guild_needs_chunking(guild):
-            asyncio.create_task(self._chunk_and_dispatch(guild, unavailable))
+            utils.create_task(self._chunk_and_dispatch(guild, unavailable))
             return
 
         # Dispatch available if newly available
@@ -1345,6 +1347,7 @@ class ConnectionState(Generic[ClientT]):
             _log.debug('GUILD_UPDATE referencing an unknown guild ID: %s. Discarding.', data['id'])
 
     def parse_guild_delete(self, data: gw.GuildDeleteEvent) -> None:
+        self.dispatch('raw_guild_delete', data)
         guild = self._get_guild(int(data['id']))
         if guild is None:
             _log.debug('GUILD_DELETE referencing an unknown guild ID: %s. Discarding.', data['id'])
@@ -1428,12 +1431,12 @@ class ConnectionState(Generic[ClientT]):
     def parse_guild_members_chunk(self, data: gw.GuildMembersChunkEvent) -> None:
         guild_id = int(data['guild_id'])
         guild = self._get_guild(guild_id)
-        presences = data.get('presences', [])
+        presences = data.get('presences', []) or []
 
         if guild is None:
             return
 
-        members = [Member(guild=guild, data=member, state=self) for member in data.get('members', [])]
+        members = [Member(guild=guild, data=member, state=self) for member in data.get('members', []) or []]
         _log.debug('Processed a chunk for %s members in guild ID %s.', len(members), guild_id)
 
         if presences:
@@ -1482,6 +1485,7 @@ class ConnectionState(Generic[ClientT]):
         guild = self._get_guild(guild_id)
         if guild is not None:
             raw = RawIntegrationDeleteEvent(data)
+            self.dispatch('rawest_integration_delete', data)
             self.dispatch('raw_integration_delete', raw)
         else:
             _log.debug('INTEGRATION_DELETE referencing an unknown guild ID: %s. Discarding.', guild_id)
@@ -1673,7 +1677,7 @@ class ConnectionState(Generic[ClientT]):
                 voice = self._get_voice_client(guild.id)
                 if voice is not None:
                     coro = voice.on_voice_state_update(data)
-                    asyncio.create_task(logging_coroutine(coro, info='Voice Protocol voice state update handler'))
+                    utils.create_task(logging_coroutine(coro, info='Voice Protocol voice state update handler'))
 
             member, before, after = guild._update_voice_state(data, channel_id)  # type: ignore
             if member is not None:
@@ -1702,7 +1706,7 @@ class ConnectionState(Generic[ClientT]):
         vc = self._get_voice_client(key_id)
         if vc is not None:
             coro = vc.on_voice_server_update(data)
-            asyncio.create_task(logging_coroutine(coro, info='Voice Protocol voice server update handler'))
+            utils.create_task(logging_coroutine(coro, info='Voice Protocol voice server update handler'))
 
     def parse_typing_start(self, data: gw.TypingStartEvent) -> None:
         raw = RawTypingEvent(data)
@@ -1726,15 +1730,29 @@ class ConnectionState(Generic[ClientT]):
 
         self.dispatch('raw_typing', raw)
 
+    def parse_voice_channel_status_update(self, data: gw.VoiceChannelStatusUpdate) -> None:
+        raw = RawVoiceChannelStatusUpdateEvent(data)
+        guild = self._get_guild(raw.guild_id)
+        if guild is not None:
+            channel = guild.get_channel(raw.channel_id)
+            if channel is not None:
+                raw.cached_status = channel.status  # pyright: ignore[reportAttributeAccessIssue] # must be a voice channel
+                channel.status = raw.status  # pyright: ignore[reportAttributeAccessIssue] # must be a voice channel
+
+        self.dispatch('raw_voice_channel_status_update', raw)
+
     def parse_entitlement_create(self, data: gw.EntitlementCreateEvent) -> None:
+        self.dispatch('raw_entitlement_create', data)
         entitlement = Entitlement(data=data, state=self)
         self.dispatch('entitlement_create', entitlement)
 
     def parse_entitlement_update(self, data: gw.EntitlementUpdateEvent) -> None:
+        self.dispatch('raw_entitlement_update', data)
         entitlement = Entitlement(data=data, state=self)
         self.dispatch('entitlement_update', entitlement)
 
     def parse_entitlement_delete(self, data: gw.EntitlementDeleteEvent) -> None:
+        self.dispatch('raw_entitlement_delete', data)
         entitlement = Entitlement(data=data, state=self)
         self.dispatch('entitlement_delete', entitlement)
 
@@ -1786,6 +1804,18 @@ class ConnectionState(Generic[ClientT]):
         subscription = Subscription(data=data, state=self)
         self.dispatch('subscription_delete', subscription)
 
+    def parse_guild_join_request_create(self, data: gw.GuildJoinRequestCreate):
+        self.dispatch('guild_join_request_create', data)
+
+    def parse_guild_join_request_delete(self, data: gw.GuildJoinRequestDelete):
+        self.dispatch('guild_join_request_delete', data)
+
+    def parse_guild_join_request_update(self, data: gw.GuildJoinRequestUpdate):
+        self.dispatch('guild_join_request_update', data)
+
+    def parse_guild_applied_boosts_update(self, data: gw.GuildBoostUpdateEvent):
+        self.dispatch('guild_boost_update', data)
+
     def _get_reaction_user(self, channel: MessageableChannel, user_id: int) -> Optional[Union[User, Member]]:
         if isinstance(channel, (TextChannel, Thread, VoiceChannel)):
             return channel.guild.get_member(user_id)
@@ -1807,6 +1837,14 @@ class ConnectionState(Generic[ClientT]):
                 id=emoji_id,
                 name=data['name'],  # type: ignore
             )
+
+    @staticmethod
+    def emoji_to_partial_payload(emoji: Union[Emoji, PartialEmoji, str]) -> PartialEmojiPayload:
+        if isinstance(emoji, str):
+            return {'name': emoji}  # type: ignore
+        elif isinstance(emoji, Emoji):
+            emoji = emoji._to_partial()
+        return emoji.to_dict()
 
     def _upgrade_partial_emoji(self, emoji: PartialEmoji) -> Union[Emoji, PartialEmoji, str]:
         emoji_id = emoji.id
@@ -1835,7 +1873,7 @@ class ConnectionState(Generic[ClientT]):
 
     def get_soundboard_sound(self, id: Optional[int]) -> Optional[SoundboardSound]:
         if id is None:
-            return
+            return None
 
         for guild in self.guilds:
             sound = guild._resolve_soundboard_sound(id)
@@ -1854,7 +1892,7 @@ class AutoShardedConnectionState(ConnectionState[ClientT]):
 
     def _update_message_references(self) -> None:
         # self._messages won't be None when this is called
-        for msg in self._messages:  # type: ignore
+        for msg in self._messages or []:  # type: ignore
             if not msg.guild:
                 continue
 
@@ -1901,7 +1939,7 @@ class AutoShardedConnectionState(ConnectionState[ClientT]):
 
     async def _delay_shard_ready(self, shard_id: int) -> None:
         try:
-            states = []
+            states: List[Tuple[Guild, asyncio.Future[List[Member]]]] = []
             while True:
                 # this snippet of code is basically waiting N seconds
                 # until the last GUILD_CREATE was sent
@@ -1957,7 +1995,7 @@ class AutoShardedConnectionState(ConnectionState[ClientT]):
         if shard_id not in self._ready_states:
             self._ready_states[shard_id] = asyncio.Queue()
 
-        self.user: Optional[ClientUser]
+        self.user: ClientUser
         self.user = user = ClientUser(state=self, data=data['user'])
         # self._users is a list of Users, we're setting a ClientUser
         self._users[user.id] = user  # type: ignore
@@ -1988,4 +2026,4 @@ class AutoShardedConnectionState(ConnectionState[ClientT]):
 
     def parse_resumed(self, data: gw.ResumedEvent) -> None:
         self.dispatch('resumed')
-        self.dispatch('shard_resumed', data['__shard_id__'])  # type: ignore # This is an internal discord.py key
+        self.dispatch('shard_resumed', data['__shard_id__'])  # pyright: ignore # This is an internal discord.py key

@@ -77,7 +77,7 @@ if TYPE_CHECKING:
     from .commands import Parameter
 
 
-@dataclass
+@dataclass(slots=True)
 class CommandParameter:
     # The name of the parameter is *always* the parameter name in the code
     # Therefore, it can't be Union[str, locale_str]
@@ -171,7 +171,7 @@ class CommandParameter:
     def is_choice_annotation(self) -> bool:
         return getattr(self._annotation, '__discord_app_commands_is_choice__', False)
 
-    async def transform(self, interaction: Interaction, value: Any, /) -> Any:
+    async def transform(self, interaction: Interaction[ClientT], value: Any, /) -> Any:
         if hasattr(self._annotation, '__discord_app_commands_transformer__'):
             # This one needs special handling for type safety reasons
             if self._annotation.__discord_app_commands_is_choice__:
@@ -383,6 +383,9 @@ class RangeTransformer(IdentityTransformer):
         self._max: Optional[Union[int, float]] = max
         super().__init__(opt_type)
 
+    def __repr__(self) -> str:
+        return f'<RangeTransformer min={self.min_value} max={self.max_value}>'
+
     @property
     def min_value(self) -> Optional[Union[int, float]]:
         return self._min
@@ -450,6 +453,9 @@ class EnumValueTransformer(Transformer):
         self._enum: Any = enum
         self._choices = [Choice(name=v.name, value=v.value) for v in values]
 
+    def __repr__(self):
+        return f'<EnumValueTransformer type={self._type!r} enum={self._enum!r} choices={self.choices!r}>'
+
     @property
     def _error_display_name(self) -> str:
         return self._enum.__name__
@@ -462,7 +468,7 @@ class EnumValueTransformer(Transformer):
     def choices(self):
         return self._choices
 
-    async def transform(self, interaction: Interaction, value: Any, /) -> Any:
+    async def transform(self, interaction: Interaction[ClientT], value: Any, /) -> Any:
         return self._enum(value)
 
 
@@ -489,7 +495,7 @@ class EnumNameTransformer(Transformer):
     def choices(self):
         return self._choices
 
-    async def transform(self, interaction: Interaction, value: Any, /) -> Any:
+    async def transform(self, interaction: Interaction[ClientT], value: Any, /) -> Any:
         return self._enum[value]
 
 
@@ -607,12 +613,11 @@ else:
             else:
                 cast = float
 
-            transformer = RangeTransformer(
+            return RangeTransformer(
                 opt_type,
                 min=cast(min) if min is not None else None,
                 max=cast(max) if max is not None else None,
             )
-            return transformer
 
 
 class MemberTransformer(Transformer[ClientT]):
@@ -681,6 +686,7 @@ class UnionChannelTransformer(BaseChannelTransformer[ClientT]):
         if resolved is None or not isinstance(resolved, self._types):
             raise TransformerError(value, AppCommandOptionType.channel, self)
         return resolved
+
 
 
 if TYPE_CHECKING:

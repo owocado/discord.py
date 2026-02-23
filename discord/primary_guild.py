@@ -25,24 +25,36 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING
-from datetime import datetime
+
+import msgspec
+from msgspec.structs import asdict
 
 from .asset import Asset
 from .utils import snowflake_time, _get_as_snowflake
+from .enums import DisplayNameEffect, DisplayNameFont, try_enum
 
 if TYPE_CHECKING:
-    from .state import ConnectionState
-    from .types.user import PrimaryGuild as PrimaryGuildPayload
+    from datetime import datetime
     from typing_extensions import Self
+
+    from .state import ConnectionState
+    from .types.user import (
+        AvatarDecorationData,
+        PrimaryGuild as PrimaryGuildPayload,
+        DisplayNameStyle as DisplayNameStylePayload,
+        UserCollectibles as CollectiblePayload,
+    )
 
 # fmt: off
 __all__ = (
     'PrimaryGuild',
+    'AvatarDecoration',
+    'NamePlate',
 )
 # fmt: on
 
 
-class PrimaryGuild:
+class _PrimaryGuild:
     """Represents the primary guild identity of a :class:`User`
 
     .. versionadded:: 2.6
@@ -54,11 +66,13 @@ class PrimaryGuild:
     tag: Optional[:class:`str`]
         The primary guild's tag.
     identity_enabled: Optional[:class:`bool`]
-        Whether the user has their primary guild publicly displayed. If ``None``, the user has a public guild but has not reaffirmed the guild identity after a change
+        Whether the user has their primary guild publicly displayed.
+        If ``None``, the user has a public guild but has not reaffirmed the guild identity after a change.
 
         .. warning::
 
-            Users can have their primary guild publicly displayed while still having an :attr:`id` of ``None``. Be careful when checking this attribute!
+            Users can have their primary guild publicly displayed while still having an :attr:`id` of ``None``.
+            Be careful when checking this attribute!
     """
 
     __slots__ = ('id', 'identity_enabled', 'tag', '_badge', '_state')
@@ -94,3 +108,124 @@ class PrimaryGuild:
 
     def __repr__(self) -> str:
         return f'<PrimaryGuild id={self.id} identity_enabled={self.identity_enabled} tag={self.tag!r}>'
+
+
+class PrimaryGuild(msgspec.Struct, kw_only=True):
+    identity_guild_id: str | None = None
+    identity_enabled: bool | None = None
+    tag: str | None = None
+    badge: str | None = None
+
+    @classmethod
+    def _default(cls, **kwargs):
+        return cls(**kwargs)
+
+    @property
+    def guild_id(self) -> int | None:
+        return int(self.identity_guild_id) if self.identity_guild_id else None
+
+    @property
+    def enabled(self) -> bool | None:
+        return self.identity_enabled
+
+    def get_badge(self, state: ConnectionState) -> Asset | None:
+        if self.guild_id is not None and self.badge is not None:
+            return Asset._from_primary_guild(state, self.guild_id, self.badge)
+        return None
+
+    def is_null(self):
+        return self.identity_guild_id is None and self.identity_enabled is None and self.tag is None and self.badge is None
+
+    def to_dict(self) -> PrimaryGuildPayload:
+        return asdict(self)  # pyright: ignore
+
+    def _update(self, obj: PrimaryGuild | None) -> Self:
+        self.identity_guild_id = obj.identity_guild_id if obj is not None else None
+        self.identity_enabled = obj.identity_enabled if obj is not None else None
+        self.tag = obj.tag if obj is not None else None
+        self.badge = obj.badge if obj is not None else None
+        return self
+
+
+class AvatarDecoration(msgspec.Struct, kw_only=True):
+    asset: str
+    sku_id: str | None = None
+    expires_at: int | None = None
+
+    @classmethod
+    def from_data(cls, data: AvatarDecorationData | None):
+        return cls(**data) if data else None
+
+    @property
+    def shop_url(self) -> str:
+        """The URL of the avatar decoration asset."""
+        return f'https://discord.com/shop#itemSkuId={self.sku_id}'
+
+    @property
+    def _sku_id(self):
+        return int(self.sku_id) if self.sku_id else None
+
+    def to_dict(self) -> AvatarDecorationData:
+        return asdict(self)  # pyright: ignore
+
+    def _update(self, obj: AvatarDecoration | None):
+        self.asset = obj.asset if obj is not None else ''
+        self.sku_id = obj.sku_id if obj is not None else None
+        self.expires_at = obj.expires_at if obj is not None else None
+        return self
+
+
+class NamePlate(msgspec.Struct, kw_only=True):
+    asset: str
+    label: str
+    palette: str
+    sku_id: str | None = None
+    expires_at: int | None = None
+
+    @property
+    def shop_url(self) -> str:
+        """The URL of the avatar decoration asset."""
+        return f'https://discord.com/shop#itemSkuId={self.sku_id}'
+
+    def _update(self, obj: NamePlate | None):
+        self.asset = obj.asset if obj is not None else ''
+        self.label = obj.label if obj is not None else ''
+        self.palette = obj.palette if obj is not None else ''
+        self.sku_id = obj.sku_id if obj is not None else None
+        self.expires_at = obj.expires_at if obj is not None else None
+        return self
+
+    def to_dict(self) -> CollectiblePayload:
+        return {'nameplate': asdict(self)}  # pyright: ignore
+
+
+class UserCollectible(msgspec.Struct, kw_only=True):
+    nameplate: NamePlate
+
+    def to_dict(self) -> CollectiblePayload:
+        return asdict(self)  # pyright: ignore
+
+    def _update(self, obj: UserCollectible | None):
+        if obj is None:
+            self.nameplate = None
+            return self
+        if self.nameplate:
+            self.nameplate._update(obj.nameplate)
+        return self
+
+
+class DisplayNameStyle(msgspec.Struct, kw_only=True):
+    font_id: int
+    effect_id: int
+    colors: list[int] = msgspec.field(default_factory=list)
+
+    @property
+    def effect(self):
+        return try_enum(DisplayNameEffect, self.effect_id)
+
+    @property
+    def font(self):
+        return try_enum(DisplayNameFont, self.font_id)
+
+    def to_dict(self) -> DisplayNameStylePayload:
+        return asdict(self)  # pyright: ignore

@@ -35,14 +35,14 @@ from .activity import PartialPresenceUpdate
 from .role import Role
 from .member import Member
 from .emoji import Emoji
-from .user import User
+from .user import APIUser
 from .threads import Thread
 from .soundboard import SoundboardSound
 
 
 class Ban(TypedDict):
     reason: Optional[str]
-    user: User
+    user: APIUser
 
 
 class UnavailableGuild(TypedDict):
@@ -53,6 +53,11 @@ class UnavailableGuild(TypedDict):
 class IncidentData(TypedDict):
     invites_disabled_until: NotRequired[Optional[str]]
     dms_disabled_until: NotRequired[Optional[str]]
+
+
+class ModeratorReporting(TypedDict):
+    moderator_reporting_enabled: bool
+    moderator_report_channel_id: str
 
 
 DefaultMessageNotificationLevel = Literal[0, 1]
@@ -96,6 +101,9 @@ GuildFeature = Literal[
     'MORE_SOUNDBOARD',
     'GUESTS_ENABLED',
     'GUILD_TAGS',
+    'PREMIUM_TIER_3_OVERRIDE',
+    'CLAN_DISCOVERY_DISABLED',
+    'CLAN',
 ]
 
 
@@ -109,11 +117,22 @@ class _BaseGuildPreview(UnavailableGuild):
     features: List[GuildFeature]
     description: Optional[str]
     incidents_data: Optional[IncidentData]
+    sticker_count: Optional[int]
+    approximate_member_count: int
+    approximate_presence_count: int
 
 
 class _GuildPreviewUnique(TypedDict):
-    approximate_member_count: int
-    approximate_presence_count: int
+    emoji_count: Optional[int]
+    sticker_count: Optional[int]
+    primary_category_id: Optional[int]
+    discovery_profile_features: NotRequired[List[GuildFeature]]
+    badge_hash: NotRequired[Optional[str]]
+    banner_hash: NotRequired[Optional[str]]
+    play_style: NotRequired[int]
+    game_application_ids: NotRequired[List[Snowflake]]
+    search_terms: NotRequired[List[str]]
+    member_count: NotRequired[int]
 
 
 class GuildPreview(_BaseGuildPreview, _GuildPreviewUnique): ...
@@ -160,9 +179,24 @@ class Guild(_BaseGuildPreview):
     premium_subscription_count: NotRequired[int]
     max_video_channel_users: NotRequired[int]
     soundboard_sounds: NotRequired[List[SoundboardSound]]
+    home_header: Optional[str]
+    moderator_reporting: NotRequired[Optional[ModeratorReporting]]
 
 
-class InviteGuild(Guild, total=False):
+class InviteGuild(TypedDict, total=False):
+    id: Snowflake
+    name: str
+    splash: Optional[str]
+    banner: Optional[str]
+    description: Optional[str]
+    icon: Optional[str]
+    features: List[GuildFeature]
+    verification_level: int
+    vanity_url_code: Optional[str]
+    nsfw_level: int
+    nsfw: bool
+    premium_subscription_count: int
+    premium_tier: int
     welcome_screen: WelcomeScreen
 
 
@@ -192,6 +226,32 @@ class RolePositionUpdate(_RolePositionRequired, total=False):
     position: Optional[Snowflake]
 
 
+class DiscoveryCategory(TypedDict):
+    id: int
+    is_primary: bool
+    name: str
+
+
 class BulkBanUserResponse(TypedDict):
     banned_users: Optional[List[Snowflake]]
     failed_users: Optional[List[Snowflake]]
+
+
+class GuildProfile(TypedDict):
+    id: Snowflake
+    name: str
+    tag: str
+    icon_hash: str | None
+    member_count: int
+    online_count: int
+    description: str | None
+    banner_hash: str | None
+    game_application_ids: list[Snowflake]
+    game_activity: dict[str, str]
+    badge: int
+    badge_color_primary: str
+    badge_color_secondary: str
+    badge_hash: str | None
+    traits: list[str]
+    features: list[str]
+    visibility: int

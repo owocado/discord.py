@@ -67,7 +67,7 @@ from ..components import (
     Container as ContainerComponent,
     LabelComponent,
 )
-from ..utils import get as _utils_get, find as _utils_find
+from ..utils import get as _utils_get, find as _utils_find, create_task
 
 # fmt: off
 __all__ = (
@@ -84,7 +84,7 @@ if TYPE_CHECKING:
     from ..interactions import Interaction
     from .._types import ClientT
     from ..message import Message
-    from ..types.components import ComponentBase as ComponentBasePayload
+    from ..types.components import ComponentBase as ComponentBasePayload, Component as ComponentPayload
     from ..types.interactions import (
         ModalSubmitComponentInteractionData as ModalSubmitComponentInteractionDataPayload,
         ResolvedData as ResolvedDataPayload,
@@ -111,7 +111,7 @@ def _walk_all_components(components: List[Component]) -> Iterator[Component]:
             yield item
 
 
-def _component_to_item(component: Component, parent: Optional[Item] = None) -> Item:
+def _component_to_item(component: Component, parent: Optional[Item[Any]] = None) -> Item[Any]:
     if isinstance(component, ActionRowComponent):
         from .action_row import ActionRow
 
@@ -170,23 +170,23 @@ class _ViewWeights:
     )
     # fmt: on
 
-    def __init__(self, children: List[Item]):
+    def __init__(self, children: List[Item[Any]]):
         self.weights: List[int] = [0, 0, 0, 0, 0]
 
-        key = lambda i: sys.maxsize if i.row is None else i.row
+        key: Callable[[Item[Any]], int] = lambda i: sys.maxsize if i.row is None else i.row
         children = sorted(children, key=key)
         for row, group in groupby(children, key=key):
             for item in group:
                 self.add_item(item)
 
-    def find_open_space(self, item: Item) -> int:
+    def find_open_space(self, item: Item[Any]) -> int:
         for index, weight in enumerate(self.weights):
             if weight + item.width <= 5:
                 return index
 
         raise ValueError('could not find open space for item')
 
-    def add_item(self, item: Item) -> None:
+    def add_item(self, item: Item[Any]) -> None:
         if item.row is not None:
             total = self.weights[item.row] + item.width
             if total > 5:
@@ -198,7 +198,7 @@ class _ViewWeights:
             self.weights[index] += item.width
             item._rendered_row = index
 
-    def remove_item(self, item: Item) -> None:
+    def remove_item(self, item: Item[Any]) -> None:
         if item._rendered_row is not None:
             self.weights[item._rendered_row] -= item.width
             item._rendered_row = None
@@ -251,7 +251,7 @@ class BaseView:
                 children.append(item)
                 parents[raw] = item
             else:
-                item: Item = raw.__discord_ui_model_type__(**raw.__discord_ui_model_kwargs__)
+                item: Item[Any] = raw.__discord_ui_model_type__(**raw.__discord_ui_model_kwargs__)
                 item.callback = _ItemCallback(raw, self, item)  # type: ignore
                 item._update_view(self)
                 if isinstance(item, Select):
@@ -269,7 +269,7 @@ class BaseView:
         while True:
             # Guard just in case someone changes the value of the timeout at runtime
             if self.timeout is None:
-                return
+                return None
 
             if self.__timeout_expiry is None:
                 return self._dispatch_timeout()
@@ -291,14 +291,14 @@ class BaseView:
     def has_components_v2(self) -> bool:
         return any(c._is_v2() for c in self.children)
 
-    def to_components(self) -> List[Dict[str, Any]]:
+    def to_components(self) -> List[ComponentPayload]:
         return NotImplemented
 
     def _refresh_timeout(self) -> None:
         if self.__timeout:
             self.__timeout_expiry = time.monotonic() + self.__timeout
 
-    def _swap_item(self, base: Item, new: DynamicItem, custom_id: str) -> None:
+    def _swap_item(self, base: Item[Any], new: DynamicItem[Any], custom_id: str) -> None:
         # if an error is raised it is catched by the try/except block that calls
         # this function
         child_index = self._children.index(base)
@@ -399,6 +399,37 @@ class BaseView:
             row += 1
 
         return view
+
+    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
+        """Insert an item to the view.
+
+        This function returns the class instance to allow for fluent-style
+        chaining.
+
+        Parameters
+        -----------
+        position: int
+            The position at which to add the item. `0` to insert at the beginning.
+        item: :class:`Item`
+            The item to add to the view.
+
+        Raises
+        --------
+        TypeError
+            An :class:`Item` was not passed.
+        ValueError
+            Maximum number of children has been exceeded, the
+            row the item is trying to be added to is full or the item
+            you tried to add is not allowed in this View.
+        """
+
+        if not isinstance(item, Item):
+            raise TypeError(f'expected Item not {item.__class__.__name__}')
+
+        item._update_view(self)
+        self._add_count(item._total_count)
+        self._children.insert(position, item)
+        return self
 
     def add_item(self, item: Item[Any]) -> Self:
         """Adds an item to the view.
@@ -546,7 +577,7 @@ class BaseView:
 
             allow = await item._run_checks(interaction) and await self.interaction_check(interaction)
             if not allow:
-                return
+                return None
 
             if self.timeout:
                 self.__timeout_expiry = time.monotonic() + self.timeout
@@ -573,7 +604,7 @@ class BaseView:
             self.__cancel_callback = None
 
         self.__stopped.set_result(True)
-        asyncio.create_task(self.on_timeout(), name=f'discord-ui-view-timeout-{self.id}')
+        create_task(self.on_timeout(), name=f'discord-ui-view-timeout-{self.id}')
 
     def _dispatch_item(self, item: Item[Any], interaction: Interaction[ClientT]) -> Optional[asyncio.Task[None]]:
         if self.__stopped is None or self.__stopped.done():
@@ -718,29 +749,41 @@ class View(BaseView):
         super().__init__(timeout=timeout)
         self.__weights = _ViewWeights(self._children)
 
-    def to_components(self) -> List[Dict[str, Any]]:
-        def key(item: Item) -> int:
+    def to_components(self) -> List[ComponentPayload]:
+        def key(item: Item[Any]) -> int:
             return item._rendered_row or 0
 
         children = sorted(self._children, key=key)
-        components: List[Dict[str, Any]] = []
+        components: List[ComponentPayload] = []
         for _, group in groupby(children, key=key):
             children = [item.to_component_dict() for item in group]
             if not children:
                 continue
 
-            components.append(
-                {
-                    'type': 1,
-                    'components': children,
-                }
-            )
+            components.append({'type': 1, 'components': children})
 
         return components
 
+    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
+        if len(self._children) >= 25:
+            raise ValueError(f'maximum number of children exceeded (must be =< 25; not {len(self._children)})')
+
+        if item._is_v2():
+            raise ValueError('v2 items cannot be added to this view')
+
+        super().insert_item_at(position, item)
+        try:
+            self.__weights.add_item(item)
+        except ValueError as e:
+            # if the item has no space left then remove it from _children
+            self._children.remove(item)
+            raise e
+
+        return self
+
     def add_item(self, item: Item[Any]) -> Self:
         if len(self._children) >= 25:
-            raise ValueError('maximum number of children exceeded')
+            raise ValueError(f'maximum number of children exceeded (must be =< 25; not {len(self._children)})')
 
         if item._is_v2():
             raise ValueError('v2 items cannot be added to this view')
@@ -800,7 +843,7 @@ class LayoutView(BaseView):
         super().__init__(timeout=timeout)
 
         if self._total_children > 40:
-            raise ValueError('maximum number of children exceeded (40)')
+            raise ValueError(f'maximum number of children exceeded (must be =< 40, not {self._total_children})')
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
@@ -827,7 +870,7 @@ class LayoutView(BaseView):
 
     def _add_count(self, value: int) -> None:
         if self._total_children + value > 40:
-            raise ValueError('maximum number of children exceeded (40)')
+            raise ValueError(f'maximum number of children exceeded (must be =< 40, not {self._total_children + value})')
 
         self._total_children = max(0, self._total_children + value)
 
@@ -840,8 +883,14 @@ class LayoutView(BaseView):
 
     def add_item(self, item: Item[Any]) -> Self:
         if self._total_children >= 40:
-            raise ValueError('maximum number of children exceeded (40)')
+            raise ValueError(f'maximum number of children exceeded (must be =< 40, not {self._total_children})')
         super().add_item(item)
+        return self
+
+    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
+        if self._total_children >= 40:
+            raise ValueError(f'maximum number of children exceeded (must be =< 40, not {self._total_children})')
+        super().insert_item_at(position, item)
         return self
 
     def content_length(self) -> int:

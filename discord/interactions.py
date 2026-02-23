@@ -27,15 +27,14 @@ DEALINGS IN THE SOFTWARE.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Generic, TYPE_CHECKING, Sequence, Tuple, Union, List, overload
+from typing import Any, Dict, Literal, Optional, Generic, TYPE_CHECKING, Sequence, Tuple, Union, List, overload
 import asyncio
 import datetime
 
 from . import utils
-from .enums import try_enum, Locale, InteractionType, InteractionResponseType
+from .enums import try_enum, Locale, InteractionType, InteractionResponseType, ChannelType
 from .errors import InteractionResponded, HTTPException, ClientException, DiscordException
 from .flags import MessageFlags
-from .channel import ChannelType
 from ._types import ClientT
 from .sku import Entitlement
 
@@ -72,6 +71,7 @@ if TYPE_CHECKING:
         Webhook as WebhookPayload,
     )
     from .types.snowflake import Snowflake
+    from .types.user import User as UserPayload, PartialUser as PartialUserPayload
     from .guild import Guild
     from .state import ConnectionState
     from .file import File
@@ -195,6 +195,7 @@ class Interaction(Generic[ClientT]):
         '_cs_command',
         '_cs_command_id',
         '_cs_custom_id',
+        '_data',
     )
 
     def __init__(self, *, data: InteractionPayload, state: ConnectionState[ClientT]):
@@ -210,20 +211,30 @@ class Interaction(Generic[ClientT]):
         self._from_data(data)
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} id={self.id} type={self.type!r} guild_id={self.guild_id!r} user={self.user!r}>'
+        attrs = (
+            ('type', self.type),
+            ('user', self.user),
+            ('locale', self.locale),
+            ('guild_locale', self.guild_locale),
+            ('guild', self.guild),
+            ('channel', self.channel),
+            ('app_permissions', self.app_permissions),
+        )
+        joined = ' '.join('%s=%r' % t for t in attrs)
+        return f'<{self.__class__.__name__} {joined}>'
 
     def _from_data(self, data: InteractionPayload):
         self.id: int = int(data['id'])
         self.type: InteractionType = try_enum(InteractionType, data['type'])
-        self.data: Optional[InteractionData] = data.get('data')
-        self.token: str = data['token']
+        self.data: InteractionData = data.get('data', {})
+        self.token: str = data.pop('token', '')
         self.version: int = data['version']
         self.guild_id: Optional[int] = utils._get_as_snowflake(data, 'guild_id')
         self.channel: Optional[InteractionChannel] = None
         self.application_id: int = int(data['application_id'])
-        self.entitlement_sku_ids: List[int] = [int(x) for x in data.get('entitlement_skus', []) or []]
+        self.entitlement_sku_ids: List[int] = [int(x) for x in data.get('entitlement_sku_ids', [])]
         self.entitlements: List[Entitlement] = [Entitlement(self._state, x) for x in data.get('entitlements', [])]
-        self.filesize_limit: int = data['attachment_size_limit']
+        self.filesize_limit: int = data.get('attachment_size_limit') or 0
         # This is not entirely useful currently, unsure how to expose it in a way that it is.
         self._integration_owners: Dict[int, Snowflake] = {
             int(k): int(v) for k, v in data.get('authorizing_integration_owners', {}).items()
@@ -274,6 +285,7 @@ class Interaction(Generic[ClientT]):
         self.user: Union[User, Member] = MISSING
         self._permissions: int = 0
         self._app_permissions: int = int(data.get('app_permissions', 0))
+        self._data = utils._to_json(data)
 
         if guild is not None:
             # Upgrade Message.guild in case it's missing with partial guild data
@@ -458,6 +470,9 @@ class Interaction(Generic[ClientT]):
         .. versionadded:: 2.4
         """
         return self.user.id == self._integration_owners.get(1)
+
+    def to_dict(self) -> InteractionPayload:
+        return utils._from_json(self._data)
 
     async def original_response(self) -> InteractionMessage:
         """|coro|
@@ -704,6 +719,9 @@ class InteractionCallbackActivityInstance:
 
     def __init__(self, data: InteractionCallbackActivityPayload) -> None:
         self.id: str = data['id']
+
+    def __repr__(self) -> str:
+        return f'<InteractionCallbackActivityInstance id={self.id!r}>'
 
 
 class InteractionCallbackResponse(Generic[ClientT]):
@@ -1111,7 +1129,7 @@ class InteractionResponse(Generic[ClientT]):
                 except HTTPException:
                     pass
 
-            asyncio.create_task(inner_call())
+            utils.create_task(inner_call())
 
         return InteractionCallbackResponse(
             data=response,
@@ -1213,7 +1231,7 @@ class InteractionResponse(Generic[ClientT]):
             original_interaction_id = None
 
         if parent.type not in (InteractionType.component, InteractionType.modal_submit):
-            return
+            return None
 
         if view is not MISSING and message_id is not None:
             state.prevent_view_updates_for(message_id)
@@ -1261,7 +1279,7 @@ class InteractionResponse(Generic[ClientT]):
                 except HTTPException:
                     pass
 
-            asyncio.create_task(inner_call())
+            utils.create_task(inner_call())
 
         return InteractionCallbackResponse(
             data=response,
@@ -1374,6 +1392,52 @@ class InteractionResponse(Generic[ClientT]):
 
         self._response_type = InteractionResponseType.autocomplete_result
 
+    async def launch_iframe(
+        self, *, title: str, custom_id: str, modal_size: Literal[1, 2, 3] = 2, iframe_path: Optional[str] = '/'
+    ) -> None:
+        """|coro|
+
+        Responds to this interaction by sending an iframe modal.
+
+        Parameters
+        -----------
+        custom_id: :class:`str`
+            The custom ID of the iframe.
+        title: :class:`str`
+            The title of the iframe.
+        iframe_path: Optional[:class:`str`]
+            The path to the iframe. If ``None`` is passed then the iframe is removed.
+
+        Raises
+        -------
+        HTTPException
+            Sending the iframe failed.
+        InteractionResponded
+            This interaction has already been responded to before.
+        """
+        if self._response_type:
+            raise InteractionResponded(self._parent)
+
+        parent = self._parent
+
+        adapter = async_context.get()
+        http = parent._state.http
+
+        params = interaction_response_params(
+            InteractionResponseType.iframe.value,
+            {'iframe_path': iframe_path, 'title': title, 'modal_size': modal_size, 'custom_id': custom_id},
+        )
+        await adapter.create_interaction_response(
+            parent.id,
+            parent.token,
+            session=parent._session,
+            proxy=http.proxy,
+            proxy_auth=http.proxy_auth,
+            params=params,
+        )
+
+        self._response_type = InteractionResponseType.iframe
+
     async def launch_activity(self) -> InteractionCallbackResponse[ClientT]:
         """|coro|
 
@@ -1428,13 +1492,13 @@ class _InteractionMessageState:
         self._interaction: Interaction = interaction
         self._parent: ConnectionState = parent
 
-    def _get_guild(self, guild_id):
+    def _get_guild(self, guild_id: int):
         return self._parent._get_guild(guild_id)
 
-    def store_user(self, data, *, cache: bool = True):
+    def store_user(self, data: Union[UserPayload, PartialUserPayload], *, cache: bool = True):
         return self._parent.store_user(data, cache=cache)
 
-    def create_user(self, data):
+    def create_user(self, data: Union[UserPayload, PartialUserPayload]):
         return self._parent.create_user(data)
 
     @property
@@ -1656,6 +1720,6 @@ class InteractionMessage(Message):
                 except HTTPException:
                     pass
 
-            asyncio.create_task(inner_call())
+            utils.create_task(inner_call())
         else:
             await self._state._interaction.delete_original_response()

@@ -28,7 +28,7 @@ from typing import List, Literal, TypedDict, Union, Optional
 from typing_extensions import NotRequired
 
 from .snowflake import Snowflake
-from .user import User
+from .user import User, APIUser
 
 StickerFormatType = Literal[1, 2, 3, 4]
 
@@ -57,7 +57,7 @@ class GuildSticker(BaseSticker):
     type: Literal[2]
     available: NotRequired[bool]
     guild_id: Snowflake
-    user: NotRequired[User]
+    user: NotRequired[APIUser]
 
 
 Sticker = Union[StandardSticker, GuildSticker]

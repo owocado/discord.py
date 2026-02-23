@@ -32,6 +32,9 @@ from .channel import (
     GuildChannel,
     InteractionDMChannel,
     GroupDMChannel,
+    ForumTag,
+    DefaultReaction,
+    ForumLayoutType,
 )
 from .sku import Entitlement
 from .threads import ThreadType, ThreadMetadata
@@ -42,6 +45,7 @@ from .snowflake import Snowflake
 from .user import User
 from .guild import GuildFeature
 from .components import ComponentBase
+from .threads import ThreadArchiveDuration
 
 if TYPE_CHECKING:
     from .message import Message
@@ -78,6 +82,15 @@ class PartialChannel(_BasePartialChannel):
     parent_id: Optional[Snowflake]
     last_message_id: Optional[Snowflake]
     last_pin_timestamp: NotRequired[str]
+    default_thread_rate_limit_per_user: NotRequired[int]
+    default_sort_order: NotRequired[int]
+    default_reaction_emoji: NotRequired[Optional[DefaultReaction]]
+    default_forum_layout: NotRequired[ForumLayoutType]
+    available_tags: NotRequired[List[ForumTag]]
+    default_auto_archive_duration: NotRequired[ThreadArchiveDuration]
+    bitrate: NotRequired[int]
+    user_limit: NotRequired[int]
+    rtc_region: NotRequired[Optional[str]]
 
 
 class PartialThread(_BasePartialChannel):
@@ -92,6 +105,7 @@ class PartialThread(_BasePartialChannel):
     last_message_id: NotRequired[Optional[Snowflake]]
     flags: NotRequired[int]
     total_message_sent: int
+    member_ids_preview: List[Snowflake]
 
 
 class ResolvedData(TypedDict, total=False):
@@ -294,7 +308,7 @@ InteractionData = Union[
 ]
 
 
-class _BaseInteraction(TypedDict):
+class _BaseInteraction(TypedDict, total=False):
     id: Snowflake
     application_id: Snowflake
     token: str
@@ -348,11 +362,14 @@ class MessageInteraction(TypedDict):
     member: NotRequired[Member]
 
 
-class _MessageInteractionMetadata(TypedDict):
+class _MessageInteractionMetadata(TypedDict, total=False):
     id: Snowflake
     user: User
     authorizing_integration_owners: Dict[Literal['0', '1'], Snowflake]
     original_response_message_id: NotRequired[Snowflake]
+    target_user: NotRequired[User]
+    target_message_id: NotRequired[Snowflake]
+    ephemerality_reason: NotRequired[int]
 
 
 class _ApplicationCommandMessageInteractionMetadata(_MessageInteractionMetadata):

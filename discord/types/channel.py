@@ -58,8 +58,18 @@ class _BaseGuildChannel(_BaseChannel):
     parent_id: Optional[Snowflake]
 
 
+class PartialRecipient(TypedDict):
+    username: str
+
+
 class PartialChannel(_BaseChannel):
     type: ChannelType
+    recipients: NotRequired[List[PartialRecipient]]
+
+
+class ChannelIconEmoji(TypedDict):
+    id: Optional[int]
+    name: str
 
 
 class _BaseTextChannel(_BaseGuildChannel, total=False):
@@ -69,6 +79,8 @@ class _BaseTextChannel(_BaseGuildChannel, total=False):
     rate_limit_per_user: int
     default_thread_rate_limit_per_user: int
     default_auto_archive_duration: ThreadArchiveDuration
+    icon_emoji: Optional[ChannelIconEmoji]
+    theme_color: Optional[int]
 
 
 class TextChannel(_BaseTextChannel):
@@ -88,6 +100,9 @@ class VoiceChannel(_BaseTextChannel):
     user_limit: int
     rtc_region: NotRequired[Optional[str]]
     video_quality_mode: NotRequired[VideoQualityMode]
+    status: NotRequired[Optional[str]]
+    hd_streaming_until: NotRequired[Optional[str]]
+    hd_streaming_buyer_id: NotRequired[Optional[Snowflake]]
 
 
 VoiceChannelEffectAnimationType = Literal[0, 1]
@@ -116,7 +131,7 @@ class StageChannel(_BaseGuildChannel):
     topic: NotRequired[str]
 
 
-class ThreadChannel(_BaseChannel):
+class ThreadChannel(_BaseChannel, total=False):
     type: Literal[10, 11, 12]
     guild_id: Snowflake
     parent_id: Snowflake

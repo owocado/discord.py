@@ -447,7 +447,6 @@ class Permissions(BaseFlags):
         """A factory method that creates a :class:`Permissions` with all
         "Apps" permissions from the official Discord UI set to ``True``.
 
-
         .. versionadded:: 2.6
         """
         return cls(0b0000_0000_0000_0100_0000_0000_1000_0000_1000_0000_0000_0000_0000_0000_0000_0000)
@@ -850,6 +849,10 @@ class Permissions(BaseFlags):
         return 1 << 46
 
     @flag_value
+    def use_clyde_ai(self) -> int:  # deprecated
+        return 1 << 47
+
+    @flag_value
     def set_voice_channel_status(self) -> int:
         """:class:`bool`: Returns ``True`` if a user can set voice channel status.
 
@@ -1012,12 +1015,14 @@ class PermissionOverwrite:
         use_external_stickers: Optional[bool]
         use_embedded_activities: Optional[bool]
         moderate_members: Optional[bool]
+        view_creator_monetization_analytics: Optional[bool]
         use_soundboard: Optional[bool]
         use_external_sounds: Optional[bool]
         send_voice_messages: Optional[bool]
         set_voice_channel_status: Optional[bool]
         create_expressions: Optional[bool]
         create_events: Optional[bool]
+        set_voice_channel_status: Optional[bool]
         send_polls: Optional[bool]
         create_polls: Optional[bool]
         use_external_apps: Optional[bool]

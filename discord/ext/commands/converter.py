@@ -47,6 +47,7 @@ from typing import (
 import types
 
 import discord
+from unidecode import unidecode
 
 from .errors import *
 
@@ -150,13 +151,19 @@ class Converter(Protocol[T_co]):
         raise NotImplementedError('Derived classes need to implement this.')
 
 
-_ID_REGEX = re.compile(r'([0-9]{15,20})$')
+_ID_REGEX = re.compile(r'\"?([0-9]{17,19})\"?')
+_DELETED_USER_ID: int = 456226577798135808
 
 
 class IDConverter(Converter[T_co]):
+    if TYPE_CHECKING:
+
+        async def convert(self, ctx: Context[BotT], argument: str) -> T_co:
+            raise NotImplementedError
+
     @staticmethod
-    def _get_id_match(argument):
-        return _ID_REGEX.match(argument)
+    def _get_id_match(argument: str):
+        return _ID_REGEX.search(argument)
 
 
 class ObjectConverter(IDConverter[discord.Object]):
@@ -173,7 +180,7 @@ class ObjectConverter(IDConverter[discord.Object]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.Object:
-        match = self._get_id_match(argument) or re.match(r'<(?:@(?:!|&)?|#)([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<(?:@(?:!|&)?|#)([0-9]{17,19})>$', argument)
 
         if match is None:
             raise ObjectNotFound(argument)
@@ -252,7 +259,7 @@ class MemberConverter(IDConverter[discord.Member]):
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.Member:
         bot = ctx.bot
-        match = self._get_id_match(argument) or re.match(r'<@!?([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<@!?([0-9]{17,19})>', argument)
         guild = ctx.guild
         result = None
         user_id = None
@@ -260,7 +267,15 @@ class MemberConverter(IDConverter[discord.Member]):
         if match is None:
             # not a mention...
             if guild:
-                result = guild.get_member_named(argument)
+                users = []
+                for user_name in discord.utils._fuzzy_find(argument, {user: user.name for user in guild.members}):
+                    users.append(user_name[2])
+                for user_nick in discord.utils._fuzzy_find(
+                    argument,
+                    {obj: unidecode(obj.nick).casefold() for obj in guild.members if obj.nick and obj not in users},
+                ):
+                    users.append(user_nick[2])
+                result = users[0] if users else guild.get_member_named(argument)
             else:
                 result = _get_from_guilds(bot, 'get_member_named', argument)
         else:
@@ -312,7 +327,7 @@ class UserConverter(IDConverter[discord.User]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.User:
-        match = self._get_id_match(argument) or re.match(r'<@!?([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<@!?([0-9]{17,19})>', argument)
         result = None
         state = ctx._state
 
@@ -333,7 +348,7 @@ class UserConverter(IDConverter[discord.User]):
         if not username:
             discriminator, username = username, discriminator
 
-        if discriminator == '0' or (len(discriminator) == 4 and discriminator.isdigit()):
+        if len(discriminator) == 4 and discriminator.isdigit():
             predicate = lambda u: u.name == username and u.discriminator == discriminator
         else:
             predicate = lambda u: u.name == argument or u.global_name == argument
@@ -343,6 +358,13 @@ class UserConverter(IDConverter[discord.User]):
             raise UserNotFound(argument)
 
         return result
+
+
+MESSAGE_ID_REGEX: re.Pattern[str] = re.compile(r'(?:(?P<channel_id>[0-9]{17,19})-)?(?P<message_id>[0-9]{17,19})$')
+MESSAGE_LINK_REGEX: re.Pattern[str] = re.compile(
+    r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
+    r'(?P<guild_id>[0-9]{17,19}|@me)/(?P<channel_id>[0-9]{17,19})/(?P<message_id>[0-9]{17,19})/?$'
+)
 
 
 class PartialMessageConverter(Converter[discord.PartialMessage]):
@@ -359,11 +381,11 @@ class PartialMessageConverter(Converter[discord.PartialMessage]):
 
     @staticmethod
     def _get_id_matches(ctx: Context[BotT], argument: str) -> Tuple[Optional[int], int, int]:
-        id_regex = re.compile(r'(?:(?P<channel_id>[0-9]{15,20})-)?(?P<message_id>[0-9]{15,20})$')
+        id_regex = re.compile(r'(?:(?P<channel_id>[0-9]{17,19})-)?(?P<message_id>[0-9]{17,19})$')
         link_regex = re.compile(
             r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
-            r'(?P<guild_id>[0-9]{15,20}|@me)'
-            r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
+            r'(?P<guild_id>[0-9]{17,19}|@me)'
+            r'/(?P<channel_id>[0-9]{17,19})/(?P<message_id>[0-9]{17,19})/?$'
         )
         match = id_regex.match(argument) or link_regex.match(argument)
         if not match:
@@ -461,8 +483,8 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
     def _parse_from_url(argument: str) -> Optional[re.Match[str]]:
         link_regex = re.compile(
             r'https?://(?:(?:ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
-            r'(?:[0-9]{15,20}|@me)'
-            r'/([0-9]{15,20})(?:/(?:[0-9]{15,20})/?)?$'
+            r'(?:[0-9]{17,19}|@me)'
+            r'/([0-9]{17,19})(?:/(?:[0-9]{17,19})/?)?$'
         )
         return link_regex.match(argument)
 
@@ -472,7 +494,7 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
 
         match = (
             IDConverter._get_id_match(argument)
-            or re.match(r'<#([0-9]{15,20})>$', argument)
+            or re.match(r'<#([0-9]{17,19})>$', argument)
             or GuildChannelConverter._parse_from_url(argument)
         )
         result = None
@@ -485,7 +507,7 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
                 result: Optional[CT] = discord.utils.get(iterable, name=argument)
             else:
 
-                def check(c):
+                def check(c: discord.abc.GuildChannel):
                     return isinstance(c, type) and c.name == argument
 
                 result = discord.utils.find(check, bot.get_all_channels())  # type: ignore
@@ -506,7 +528,7 @@ class GuildChannelConverter(IDConverter[discord.abc.GuildChannel]):
     def _resolve_thread(ctx: Context[BotT], argument: str, attribute: str, type: Type[TT]) -> TT:
         match = (
             IDConverter._get_id_match(argument)
-            or re.match(r'<#([0-9]{15,20})>$', argument)
+            or re.match(r'<#([0-9]{17,19})>$', argument)
             or GuildChannelConverter._parse_from_url(argument)
         )
         result = None
@@ -729,11 +751,15 @@ class RoleConverter(IDConverter[discord.Role]):
         if not guild:
             raise NoPrivateMessage()
 
-        match = self._get_id_match(argument) or re.match(r'<@&([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<@&([0-9]{17,19})>', argument)
         if match:
             result = guild.get_role(int(match.group(1)))
         else:
-            result = discord.utils.get(guild._roles.values(), name=argument)
+            roles = []
+            for res in discord.utils._fuzzy_find(argument, {r: unidecode(r.name).casefold() for r in guild.roles}):
+                roles.append(res[2])
+
+            result = roles[0] if roles else discord.utils.get(guild._roles.values(), name=argument)
 
         if result is None:
             raise RoleNotFound(argument)
@@ -808,7 +834,7 @@ class EmojiConverter(IDConverter[discord.Emoji]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.Emoji:
-        match = self._get_id_match(argument) or re.match(r'<a?:[a-zA-Z0-9\_]{1,32}:([0-9]{15,20})>$', argument)
+        match = self._get_id_match(argument) or re.search(r'<a?:[a-zA-Z0-9\_]{1,32}:([0-9]{17,19})>', argument)
         result = None
         bot = ctx.bot
         guild = ctx.guild
@@ -842,7 +868,7 @@ class PartialEmojiConverter(Converter[discord.PartialEmoji]):
     """
 
     async def convert(self, ctx: Context[BotT], argument: str) -> discord.PartialEmoji:
-        match = re.match(r'<(a?):([a-zA-Z0-9\_]{1,32}):([0-9]{15,20})>$', argument)
+        match = re.search(r'<(a?):([a-zA-Z0-9\_]{1,32}):([0-9]{17,19})>', argument)
 
         if match:
             emoji_animated = bool(match.group(1))
@@ -950,10 +976,10 @@ class ScheduledEventConverter(IDConverter[discord.ScheduledEvent]):
         else:
             pattern = (
                 r'https?://(?:(ptb|canary|www)\.)?discord\.com/events/'
-                r'(?P<guild_id>[0-9]{15,20})/'
-                r'(?P<event_id>[0-9]{15,20})$'
+                r'(?P<guild_id>[0-9]{17,19})/'
+                r'(?P<event_id>[0-9]{17,19})$'
             )
-            match = re.match(pattern, argument, flags=re.I)
+            match = re.search(pattern, argument, flags=re.IGNORECASE)
             if match:
                 # URL match
                 guild = ctx.bot.get_guild(int(match.group('guild_id')))
@@ -1087,13 +1113,13 @@ class clean_content(Converter[str]):
             '@&': resolve_role,
         }
 
-        def repl(match: re.Match) -> str:
+        def repl(match: re.Match[str]) -> str:
             type = match[1]
             id = int(match[2])
             transformed = transforms[type](id)
             return transformed
 
-        result = re.sub(r'<(@[!&]?|#)([0-9]{15,20})>', repl, argument)
+        result = re.sub(r'<(@[!&]?|#)([0-9]{17,19})>', repl, argument)
         if self.escape_markdown:
             result = discord.utils.escape_markdown(result)
         elif self.remove_markdown:
@@ -1327,6 +1353,7 @@ CONVERTER_MAPPING: Dict[type, Any] = {
     discord.ScheduledEvent: ScheduledEventConverter,
     discord.ForumChannel: ForumChannelConverter,
     discord.SoundboardSound: SoundboardSoundConverter,
+    discord.app_commands.AppCommandChannel: GuildChannelConverter,
 }
 
 

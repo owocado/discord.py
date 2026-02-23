@@ -33,6 +33,7 @@ from ..utils import _human_join
 __all__ = (
     'AppCommandError',
     'CommandInvokeError',
+    'AutocompleteError',
     'TransformerError',
     'TranslationError',
     'CheckFailure',
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
     from .translator import TranslationContextTypes, locale_str
     from ..types.snowflake import Snowflake, SnowflakeList
     from .checks import Cooldown
+    from ..interactions import Interaction
 
     CommandTypes = Union[Command[Any, ..., Any], Group, ContextMenu]
 
@@ -101,6 +103,31 @@ class CommandInvokeError(AppCommandError):
         super().__init__(f'Command {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
 
 
+class AutocompleteError(AppCommandError):
+    """An exception raised when an autocomplete interaction raises an exception.
+
+    This inherits from :exc:`~discord.app_commands.AppCommandError`.
+
+    .. versionadded:: 2.6
+
+    Attributes
+    -----------
+    original: :exc:`Exception`
+        The original exception that was raised. You can also get this via
+        the ``__cause__`` attribute.
+    command: Union[:class:`Command`, :class:`Group`]
+        The command that the autocomplete belongs to.
+    interaction: :class:`~discord.Interaction`
+        The interaction that triggered the autocomplete.
+    """
+
+    def __init__(self, command: Union[Command[Any, ..., Any], Group], interaction: Interaction, e: Exception) -> None:
+        self.original: Exception = e
+        self.command: Union[Command[Any, ..., Any], Group] = command
+        self.interaction: Interaction = interaction
+        super().__init__(f'Autocomplete for {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
+
+
 class TransformerError(AppCommandError):
     """An exception raised when a :class:`Transformer` or type annotation fails to
     convert to its target type.
@@ -130,7 +157,7 @@ class TransformerError(AppCommandError):
         self.type: AppCommandOptionType = opt_type
         self.transformer: Transformer = transformer
 
-        super().__init__(f'Failed to convert {value} to {transformer._error_display_name!s}')
+        super().__init__(f'Failed to convert {value!r} to {transformer._error_display_name!s}')
 
 
 class TranslationError(AppCommandError):
@@ -472,6 +499,7 @@ def _get_command_error(
 
             messages.extend(f'{indentation}  {message}' for message in errors)
         else:
+            errors = {}
             if isinstance(remaining, dict):
                 try:
                     inner_errors = remaining['_errors']

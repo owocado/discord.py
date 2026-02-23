@@ -41,7 +41,7 @@ import yarl
 
 from . import utils
 from .activity import BaseActivity
-from .enums import SpeakingState
+from .enums import SpeakingState, Platform
 from .errors import ConnectionClosed
 
 try:
@@ -90,6 +90,8 @@ class EventListener(NamedTuple):
 
 
 class GatewayRatelimiter:
+    __slots__ = ('max', 'remaining', 'window', 'per', 'lock', 'shard_id')
+
     def __init__(self, count: int = 110, per: float = 60.0) -> None:
         # The default is 110 to give room for at least 10 heartbeats per minute
         self.max: int = count
@@ -98,6 +100,9 @@ class GatewayRatelimiter:
         self.per: float = per
         self.lock: asyncio.Lock = asyncio.Lock()
         self.shard_id: Optional[int] = None
+
+    def __repr__(self):
+        return f'<GatewayRatelimiter max={self.max} remaining={self.remaining} per={self.per} window={self.window}>'
 
     def is_ratelimited(self) -> bool:
         current = time.time()
@@ -154,6 +159,9 @@ class KeepAliveHandler(threading.Thread):
         self.latency: float = float('inf')
         self.heartbeat_timeout: float = ws._max_heartbeat_timeout
 
+    def __repr__(self):
+        return f'<KeepAliveHandler interval={self.interval} latency={self.latency}>'
+
     def run(self) -> None:
         while not self._stop_ev.wait(self.interval):
             if self._last_recv + self.heartbeat_timeout < time.perf_counter():
@@ -166,7 +174,7 @@ class KeepAliveHandler(threading.Thread):
                 except Exception:
                     _log.exception('An error occurred while stopping the gateway. Ignoring.')
                 except BaseException as exc:
-                    _log.debug('A BaseException was raised while stopping the gateway', exc_info=exc)
+                    _log.warning('A BaseException was raised while stopping the gateway', exc_info=exc)
                 finally:
                     self.stop()
                 return
@@ -233,6 +241,9 @@ class VoiceKeepAliveHandler(KeepAliveHandler):
         self.msg: str = 'Keeping shard ID %s voice websocket alive with timestamp %s.'
         self.block_msg: str = 'Shard ID %s voice heartbeat blocked for more than %s seconds'
         self.behind_msg: str = 'High socket latency, shard ID %s heartbeat is %.1fs behind'
+
+    def __repr__(self):
+        return f'<VoiceKeepAliveHandler interval={self.interval} latency={self.latency} recent_ack_latencies={self.recent_ack_latencies!r}>'
 
     def get_payload(self) -> Dict[str, Any]:
         return {
@@ -309,6 +320,7 @@ class DiscordWebSocket:
         shard_count: Optional[int]
         gateway: yarl.URL
         _max_heartbeat_timeout: float
+        platform: Optional[Platform]
 
     # fmt: off
     DEFAULT_GATEWAY    = yarl.URL('wss://gateway.discord.gg/')
@@ -403,6 +415,7 @@ class DiscordWebSocket:
         ws.shard_id = shard_id
         ws._rate_limiter.shard_id = shard_id
         ws.shard_count = client._connection.shard_count
+        ws.platform = client._platform
         ws.session_id = session
         ws.sequence = sequence
         ws._max_heartbeat_timeout = client._connection.heartbeat_timeout
@@ -457,13 +470,13 @@ class DiscordWebSocket:
 
     async def identify(self) -> None:
         """Sends the IDENTIFY packet."""
-        payload = {
+        payload: dict[str, Any] = {
             'op': self.IDENTIFY,
             'd': {
                 'token': self.token,
                 'properties': {
                     'os': sys.platform,
-                    'browser': 'discord.py',
+                    'browser': 'discord.py' if self.platform is None else self.platform.value,
                     'device': 'discord.py',
                 },
                 'compress': True,
@@ -478,7 +491,7 @@ class DiscordWebSocket:
         if state._activity is not None or state._status is not None:
             payload['d']['presence'] = {
                 'status': state._status,
-                'game': state._activity,
+                'activities': [] if state._activity is None else [state._activity],
                 'since': 0,
                 'afk': False,
             }
@@ -513,7 +526,10 @@ class DiscordWebSocket:
                 return
 
         self.log_receive(msg)
-        msg = utils._from_json(msg)
+        try:
+            msg = utils._from_json(msg)
+        except Exception:
+            _log.warning('Error parsing the received payload: %s', msg)
 
         _log.debug('For Shard ID %s: WebSocket Event: %s', self.shard_id, msg)
         event = msg.get('t')
@@ -581,14 +597,18 @@ class DiscordWebSocket:
         elif event == 'RESUMED':
             # pass back the shard ID to the resumed handler
             data['__shard_id__'] = self.shard_id
-            _log.info('Shard ID %s has successfully RESUMED session %s.', self.shard_id, self.session_id)
+            _log.debug('Shard ID %s has successfully RESUMED session %s.', self.shard_id, self.session_id)
 
         try:
             func = self._discord_parsers[event]
         except KeyError:
-            _log.debug('Unknown event %s.', event)
+            if event != 'VOICE_CHANNEL_START_TIME_UPDATE':
+                _log.info('Unknown event %s: %r', event, data)
         else:
-            func(data)
+            try:
+                func(data)
+            except Exception as exc:
+                _log.warning('Error in parsing %s event: %r', event, data, exc_info=exc)
 
         # remove the dispatched listeners
         removed = []
@@ -648,7 +668,7 @@ class DiscordWebSocket:
             elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSE):
                 _log.debug('Received %s', msg)
                 raise WebSocketClosure
-        except (asyncio.TimeoutError, WebSocketClosure) as e:
+        except (TimeoutError, WebSocketClosure) as e:
             # Ensure the keep alive handler is closed
             if self._keep_alive:
                 self._keep_alive.stop()
@@ -677,7 +697,7 @@ class DiscordWebSocket:
 
     async def send_as_json(self, data: Any) -> None:
         try:
-            await self.send(utils._to_json(data))
+            await self.send(utils._to_json(data).decode(errors='ignore'))
         except RuntimeError as exc:
             if not self._can_handle_close():
                 raise ConnectionClosed(self.socket, shard_id=self.shard_id) from exc
@@ -685,7 +705,7 @@ class DiscordWebSocket:
     async def send_heartbeat(self, data: Any) -> None:
         # This bypasses the rate limit handling code since it has a higher priority
         try:
-            await self.socket.send_str(utils._to_json(data))
+            await self.socket.send_bytes(utils._to_json(data))
         except RuntimeError as exc:
             if not self._can_handle_close():
                 raise ConnectionClosed(self.socket, shard_id=self.shard_id) from exc
@@ -719,7 +739,7 @@ class DiscordWebSocket:
 
         sent = utils._to_json(payload)
         _log.debug('Sending "%s" to change status', sent)
-        await self.send(sent)
+        await self.send(sent.decode(errors='ignore'))
 
     async def request_chunks(
         self,
@@ -731,7 +751,7 @@ class DiscordWebSocket:
         presences: bool = False,
         nonce: Optional[str] = None,
     ) -> None:
-        payload = {
+        payload: dict[str, Any] = {
             'op': self.REQUEST_MEMBERS,
             'd': {
                 'guild_id': guild_id,
@@ -869,7 +889,7 @@ class DiscordVoiceWebSocket:
 
     async def send_as_json(self, data: Any) -> None:
         _log.debug('Sending voice websocket frame: %s.', data)
-        await self.ws.send_str(utils._to_json(data))
+        await self.ws.send_str(utils._to_json(data).decode())
 
     async def send_binary(self, opcode: int, data: bytes) -> None:
         _log.debug('Sending voice websocket binary frame: opcode=%s size=%d', opcode, len(data))
@@ -1043,6 +1063,8 @@ class DiscordVoiceWebSocket:
             state.dave_session.set_external_sender(msg[3:])
             _log.debug('Set MLS external sender')
         elif op == self.MLS_PROPOSALS:
+            import davey
+
             optype = msg[3]
             result = state.dave_session.process_proposals(
                 davey.ProposalsOperationType.append if optype == 0 else davey.ProposalsOperationType.revoke, msg[4:]

@@ -49,8 +49,13 @@ if TYPE_CHECKING:
 
     from ..components import Container as ContainerComponent
     from .dynamic import DynamicItem
+    from .button import Button
+    from .select import BaseSelect
+    from .text_display import TextDisplay
+    from .thumbnail import Thumbnail
+    from discord._types import ClientT
 
-S = TypeVar('S', bound='Container', covariant=True)
+S = TypeVar('S', bound='Container[LayoutView]', covariant=True)
 V = TypeVar('V', bound='LayoutView', covariant=True)
 
 __all__ = ('Container',)
@@ -93,7 +98,7 @@ class Container(Item[V]):
 
     Parameters
     ----------
-    \*children: :class:`Item`
+    \*children: Union[:class:`ActionRow`, :class:`File`, :class:`MediaGallery`, :class:`Section`, :class:`Separator`, :class:`TextDisplay`]
         The initial children of this container.
     accent_colour: Optional[Union[:class:`.Colour`, :class:`int`]]
         The colour of the container. Defaults to ``None``.
@@ -148,7 +153,7 @@ class Container(Item[V]):
             else:
                 # action rows can be created inside containers, and then callbacks can exist here
                 # so we create items based off them
-                item: Item = raw.__discord_ui_model_type__(**raw.__discord_ui_model_kwargs__)
+                item: Item[V] = raw.__discord_ui_model_type__(**raw.__discord_ui_model_kwargs__)
                 item.callback = _ItemCallback(raw, self, item)  # type: ignore
                 setattr(self, raw.__name__, item)
                 # this should not fail because in order for a function to be here it should be from
@@ -194,7 +199,7 @@ class Container(Item[V]):
     def _has_children(self):
         return True
 
-    def _swap_item(self, base: Item, new: DynamicItem, custom_id: str) -> None:
+    def _swap_item(self, base: Item[V], new: DynamicItem[V], custom_id: str) -> None:
         child_index = self._children.index(base)
         self._children[child_index] = new  # type: ignore
 
@@ -288,7 +293,7 @@ class Container(Item[V]):
 
         return sum(len(item.content) for item in self.walk_children() if isinstance(item, TextDisplay))
 
-    def add_item(self, item: Item[Any]) -> Self:
+    def add_item(self, item: Item[V]) -> Self:
         """Adds an item to this container.
 
         This function returns the class instance to allow for fluent-style
@@ -296,8 +301,8 @@ class Container(Item[V]):
 
         Parameters
         ----------
-        item: :class:`Item`
-            The item to append.
+        item: Union[:class:`ActionRow`, :class:`File`, :class:`MediaGallery`, :class:`Section`, :class:`Separator`, :class:`TextDisplay`]
+            The item to append to this container.
 
         Raises
         ------
@@ -316,6 +321,90 @@ class Container(Item[V]):
         item._update_view(self.view)
         item._parent = self
         return self
+
+    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
+        """Insert an item to this container.
+
+        This function returns the class instance to allow for fluent-style
+        chaining.
+
+        Parameters
+        ----------
+        position: int
+            The position at which to add the item. `0` to insert at the beginning.
+        item: :class:`Item`
+            The item to append.
+
+        Raises
+        ------
+        TypeError
+            An :class:`Item` was not passed.
+        ValueError
+            Maximum number of children has been exceeded (40) for the entire view.
+        """
+        if not isinstance(item, Item):
+            raise TypeError(f'expected Item not {item.__class__.__name__}')
+
+        if self._view:
+            self._view._add_count(item._total_count)
+
+        self._children.insert(position, item)
+        item._update_view(self.view)
+        item._parent = self
+        return self
+
+    def add_action_row(self, *children: Button[V] | BaseSelect[V], id: int | None = None):
+        """Adds an action row to this container.
+
+        This function returns the class instance to allow for fluent-style
+        chaining.
+
+        Parameters
+        ----------
+        item: Union[:class:`ActionRow`, :class:`File`, :class:`MediaGallery`, :class:`Section`, :class:`Separator`, :class:`TextDisplay`]
+            The item to append to this container.
+
+        Raises
+        ------
+        TypeError
+            An :class:`Item` was not passed.
+        ValueError
+            Maximum number of children has been exceeded (40) for the entire view.
+        """
+        from .action_row import ActionRow
+
+        return self.add_item(ActionRow(*children, id=id))
+
+    def add_section(
+        self,
+        *children: Union[TextDisplay[V], str],
+        accessory: Union[Button[V], Thumbnail[V]],
+        id: Optional[int] = None,
+    ) -> Self:
+        """Adds a section to this container.
+
+        This function returns the class instance to allow for fluent-style
+        chaining.
+
+        Parameters
+        ----------
+        *children: Union[:class:`str`, :class:`TextDisplay`]
+            The text displays of this section. Up to 3.
+        accessory: Union[:class:`Button`, :class:`Thumbnail`]
+            The section accessory.
+        id: Optional[:class:`int`]
+            The ID of this component. This must be unique across the view.
+
+        Raises
+        ------
+        TypeError
+            An :class:`Item` was not passed.
+        ValueError
+            Maximum number of children has been exceeded (40) for the entire view.
+        """
+        from .section import Section
+
+        return self.add_item(Section(*children, accessory=accessory, id=id))
 
     def remove_item(self, item: Item[Any]) -> Self:
         """Removes an item from this container.

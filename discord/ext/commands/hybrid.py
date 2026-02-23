@@ -40,14 +40,15 @@ from .view import StringView
 
 if TYPE_CHECKING:
     from typing_extensions import Self, ParamSpec, Concatenate, Unpack
+
     from ._types import ContextT, Coro, BotT
     from .bot import Bot
     from .context import Context
     from discord.app_commands.commands import (
         Check as AppCommandCheck,
         AutocompleteCallback,
-        ChoiceT,
     )
+    from discord.app_commands.models import ChoiceT
     from .core import _CommandKwargs
 
     class _HybridCommandKwargs(_CommandKwargs, total=False):
@@ -68,6 +69,7 @@ if TYPE_CHECKING:
         nsfw: bool
         description: str
         case_insensitive: bool
+        invoke_without_command: bool
 
     class _HybridGroupDecoratorKwargs(_HybridGroupKwargs, total=False):
         description: Union[str, app_commands.locale_str]
@@ -106,8 +108,8 @@ else:
 class _CallableDefault:
     __slots__ = ('func',)
 
-    def __init__(self, func: Callable[[Context], Any]) -> None:
-        self.func: Callable[[Context], Any] = func
+    def __init__(self, func: Callable[[Context[BotT]], Any]) -> None:
+        self.func: Callable[[Context[BotT]], Any] = func
 
     @property
     def __class__(self) -> Any:
@@ -345,6 +347,9 @@ class HybridAppCommand(discord.app_commands.Command[CogT, P, T]):
         )
         self.module = wrapped.module
 
+    def __repr__(self):
+        return super().__repr__()
+
     def _copy_with(self, **kwargs) -> Self:
         copy: Self = super()._copy_with(**kwargs)  # type: ignore
         copy.wrapped = self.wrapped
@@ -375,6 +380,20 @@ class HybridAppCommand(discord.app_commands.Command[CogT, P, T]):
                 else:
                     raise app_commands.CommandSignatureMismatch(self) from None
             else:
+                # TransformerError: AppCommandChannel could not be resolved to GuildChannel or Thread
+                if isinstance(value, app_commands.AppCommandChannel):
+                    from discord.channel import _guild_channel_factory
+
+                    factory, ch_type = _guild_channel_factory(value.type.value)
+                    guild = interaction._state._get_or_create_unavailable_guild(value.guild_id)
+                    if factory:
+                        value = factory(state=interaction._state, guild=guild, data=value.to_dict())  # type: ignore
+                # TransformerError: Failed to convert AppCommandThread to GuildChannel or Thread
+                if isinstance(value, app_commands.AppCommandThread):
+                    import discord  # avoid circular import
+
+                    guild = interaction._state._get_or_create_unavailable_guild(value.guild_id)
+                    value = discord.Thread(guild=guild, state=interaction._state, data=value.to_dict())
                 transformed_values[param.name] = await param.transform(interaction, value)
 
         if self.flag_converter is not None:
@@ -550,7 +569,7 @@ class HybridCommand(Command[CogT, P, T]):
 
     async def can_run(self, ctx: Context[BotT], /) -> bool:
         if not self.enabled:
-            raise DisabledCommand(f'{self.name} command is disabled')
+            raise DisabledCommand(f'Command {self.name!r} is disabled')
 
         if ctx.interaction is not None and self.app_command:
             return await self.app_command._check_can_run(ctx.interaction)

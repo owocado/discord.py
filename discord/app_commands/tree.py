@@ -51,6 +51,7 @@ from .models import AppCommand
 from .commands import Command, ContextMenu, Group
 from .errors import (
     AppCommandError,
+    AutocompleteError,
     CommandAlreadyRegistered,
     CommandNotFound,
     CommandSignatureMismatch,
@@ -153,8 +154,8 @@ class CommandTree(Generic[ClientT]):
         self.fallback_to_global: bool = fallback_to_global
         self.allowed_contexts = AppCommandContext() if allowed_contexts is MISSING else allowed_contexts
         self.allowed_installs = AppInstallationType() if allowed_installs is MISSING else allowed_installs
-        self._guild_commands: Dict[int, Dict[str, Union[Command, Group]]] = {}
-        self._global_commands: Dict[str, Union[Command, Group]] = {}
+        self._guild_commands: Dict[int, Dict[str, Union[Command[Any, ..., Any], Group]]] = {}
+        self._global_commands: Dict[str, Union[Command[Any, ..., Any], Group]] = {}
         # (name, guild_id, command_type): Command
         # The above two mappings can use this structure too but we need fast retrieval
         # by name and guild_id in the above case while here it isn't as important since
@@ -200,7 +201,9 @@ class CommandTree(Generic[ClientT]):
 
         return AppCommand(data=command, state=self._state)
 
-    async def fetch_commands(self, *, guild: Optional[Snowflake] = None) -> List[AppCommand]:
+    async def fetch_commands(
+        self, *, guild: Optional[Snowflake] = None, with_localizations: bool = False
+    ) -> List[AppCommand]:
         """|coro|
 
         Fetches the application's current commands.
@@ -217,6 +220,10 @@ class CommandTree(Generic[ClientT]):
         guild: Optional[:class:`~discord.abc.Snowflake`]
             The guild to fetch the commands from. If not passed then global commands
             are fetched instead.
+        with_localizations: :class:`bool`
+            Whether to fetch the localizations for the commands. Defaults to ``False``.
+
+            .. versionadded:: 2.5
 
         Raises
         -------
@@ -234,9 +241,13 @@ class CommandTree(Generic[ClientT]):
             raise MissingApplicationID
 
         if guild is None:
-            commands = await self._http.get_global_commands(self.client.application_id)
+            commands = await self._http.get_global_commands(
+                self.client.application_id, with_localizations=with_localizations
+            )
         else:
-            commands = await self._http.get_guild_commands(self.client.application_id, guild.id)
+            commands = await self._http.get_guild_commands(
+                self.client.application_id, guild.id, with_localizations=with_localizations
+            )
 
         return [AppCommand(data=data, state=self._state) for data in commands]
 
@@ -1177,7 +1188,7 @@ class CommandTree(Generic[ClientT]):
         # to be tracked above like the parents, the actual command type, and the
         # resulting options we care about
         searching = True
-        options: List[ApplicationCommandInteractionDataOption] = data.get('options', [])
+        options: List[ApplicationCommandInteractionDataOption] = data.get('options', []) or []
         while searching:
             for option in options:
                 # Find subcommands
@@ -1206,6 +1217,7 @@ class CommandTree(Generic[ClientT]):
     async def _call_context_menu(
         self, interaction: Interaction[ClientT], data: ApplicationCommandInteractionData, type: int
     ) -> None:
+        self.client.dispatch('raw_app_command_completion', data)
         name = data['name']
         guild_id = _get_as_snowflake(data, 'guild_id')
         ctx_menu = self._context_menus.get((name, guild_id, type))
@@ -1261,6 +1273,7 @@ class CommandTree(Generic[ClientT]):
             return
 
         data: ApplicationCommandInteractionData = interaction.data  # type: ignore
+        self.client.dispatch('raw_app_command_completion', data)
         type = data.get('type', 1)
         if type != 1:
             # Context menu command...
@@ -1287,8 +1300,11 @@ class CommandTree(Generic[ClientT]):
 
             try:
                 await command._invoke_autocomplete(interaction, focused, namespace)
-            except Exception:
+            except Exception as e:
                 # Suppress exception since it can't be handled anyway.
+                error = AutocompleteError(command, interaction, e)
+
+                await self.on_error(interaction, error)
                 _log.exception(
                     'Ignoring exception in autocomplete for %r (Guild: %s, User: %s)',
                     command.qualified_name,

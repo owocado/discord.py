@@ -27,7 +27,6 @@ from typing import TYPE_CHECKING, AsyncIterator, Union, Optional
 
 from .user import User
 from .object import Object
-from .enums import ReactionType
 
 # fmt: off
 __all__ = (
@@ -42,6 +41,7 @@ if TYPE_CHECKING:
     from .partial_emoji import PartialEmoji
     from .emoji import Emoji
     from .abc import Snowflake
+    from .enums import ReactionType
 
 
 class Reaction:
@@ -113,6 +113,13 @@ class Reaction:
     def is_custom_emoji(self) -> bool:
         """:class:`bool`: If this is a custom emoji."""
         return not isinstance(self.emoji, str)
+
+    def is_super(self) -> bool:
+        """:class:`bool`: Whether this reaction is a super reaction.
+
+        .. versionadded:: 2.6
+        """
+        return self.normal_count == 0 and self.burst_count > 0
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and other.emoji == self.emoji

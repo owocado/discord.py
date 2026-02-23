@@ -45,9 +45,7 @@ from typing import (
 from .item import Item, ContainedItemCallbackType as ItemCallbackType, _ItemCallback
 from .button import Button, button as _button
 from .select import select as _select, Select, UserSelect, RoleSelect, ChannelSelect, MentionableSelect
-from ..components import ActionRow as ActionRowComponent
 from ..enums import ButtonStyle, ComponentType, ChannelType
-from ..partial_emoji import PartialEmoji
 from ..utils import MISSING, get as _utils_get
 
 if TYPE_CHECKING:
@@ -64,13 +62,14 @@ if TYPE_CHECKING:
         SelectT,
     )
     from ..emoji import Emoji
-    from ..components import SelectOption
+    from ..components import SelectOption, ActionRow as ActionRowComponent
+    from ..partial_emoji import PartialEmoji
     from .container import Container
     from .dynamic import DynamicItem
 
     SelectCallbackDecorator = Callable[[ItemCallbackType['S', BaseSelectT]], BaseSelectT]
 
-S = TypeVar('S', bound=Union['ActionRow', 'Container', 'LayoutView'], covariant=True)
+S = TypeVar('S', bound=Union['ActionRow[LayoutView]', 'Container[LayoutView]', 'LayoutView'], covariant=True)
 V = TypeVar('V', bound='LayoutView', covariant=True)
 
 __all__ = ('ActionRow',)
@@ -135,7 +134,7 @@ class ActionRow(Item[V]):
             self.add_item(child)
 
         if self._weight > 5:
-            raise ValueError('maximum number of children exceeded')
+            raise ValueError(f'maximum number of children exceeded (expected 5, got {self._weight})')
 
         self.id = id
 
@@ -160,7 +159,7 @@ class ActionRow(Item[V]):
         children = []
 
         for func in self.__action_row_children_items__:
-            item: Item = func.__discord_ui_model_type__(**func.__discord_ui_model_kwargs__)
+            item: Item[V] = func.__discord_ui_model_type__(**func.__discord_ui_model_kwargs__)
             item.callback = _ItemCallback(func, self, item)  # type: ignore
             item._parent = self
             setattr(self, func.__name__, item)
@@ -200,7 +199,7 @@ class ActionRow(Item[V]):
         # it should error anyways.
         return True
 
-    def _swap_item(self, base: Item, new: DynamicItem, custom_id: str) -> None:
+    def _swap_item(self, base: Item[V], new: DynamicItem[Any], custom_id: str) -> None:
         child_index = self._children.index(base)
         self._children[child_index] = new  # type: ignore
 
@@ -240,7 +239,7 @@ class ActionRow(Item[V]):
 
         return sum(len(item.content) for item in self._children if isinstance(item, TextDisplay))
 
-    def add_item(self, item: Item[Any]) -> Self:
+    def add_item(self, item: Item[V]) -> Self:
         """Adds an item to this action row.
 
         This function returns the class instance to allow for fluent-style
@@ -261,10 +260,10 @@ class ActionRow(Item[V]):
         """
 
         if (self._weight + item.width) > 5:
-            raise ValueError('maximum number of children exceeded')
+            raise ValueError(f'maximum number of children exceeded (expected 5, not {self._weight + item.width})')
 
         if len(self._children) >= 5:
-            raise ValueError('maximum number of children exceeded')
+            raise ValueError(f'maximum number of children exceeded (expected 5, got {len(self._children)})')
 
         if not isinstance(item, Item):
             raise TypeError(f'expected Item not {item.__class__.__name__}')
@@ -276,6 +275,47 @@ class ActionRow(Item[V]):
         item._parent = self
         self._weight += 1
         self._children.append(item)
+
+        return self
+
+    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
+        """Insert an item to this action row.
+
+        This function returns the class instance to allow for fluent-style
+        chaining.
+
+        Parameters
+        ----------
+        position: int
+            The position at which to add the item. `0` to insert at the beginning.
+        item: :class:`Item`
+            The item to add to the action row.
+
+        Raises
+        ------
+        TypeError
+            An :class:`Item` was not passed.
+        ValueError
+            Maximum number of children has been exceeded (5)
+            or (40) for the entire view.
+        """
+
+        if (self._weight + item.width) > 5:
+            raise ValueError(f'maximum number of children exceeded (expected 5, not {self._weight + item.width})')
+
+        if len(self._children) >= 5:
+            raise ValueError(f'maximum number of children exceeded (expected 5, got {len(self._children)})')
+
+        if not isinstance(item, Item):
+            raise TypeError(f'expected Item not {item.__class__.__name__}')
+
+        if self._view:
+            self._view._add_count(1)
+
+        item._update_view(self.view)
+        item._parent = self
+        self._weight += 1
+        self._children.insert(position, item)
 
         return self
 
@@ -577,7 +617,7 @@ class ActionRow(Item[V]):
 
         def decorator(func: ItemCallbackType[S, BaseSelectT]) -> ItemCallbackType[S, BaseSelectT]:
             r = _select(  # type: ignore
-                cls=cls,  # type: ignore
+                cls=cls,  # pyright: ignore
                 placeholder=placeholder,
                 custom_id=custom_id,
                 min_values=min_values,
@@ -594,7 +634,7 @@ class ActionRow(Item[V]):
         return decorator  # type: ignore
 
     @classmethod
-    def from_component(cls, component: ActionRowComponent) -> ActionRow:
+    def from_component(cls, component: ActionRowComponent) -> ActionRow[V]:
         from .view import _component_to_item
 
         self = cls(id=component.id)

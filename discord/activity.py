@@ -118,10 +118,11 @@ class BaseActivity:
     .. versionadded:: 1.3
     """
 
-    __slots__ = ('_created_at',)
+    __slots__ = ('_created_at',)  # '_data'
 
     def __init__(self, **kwargs: Any) -> None:
         self._created_at: Optional[float] = kwargs.pop('created_at', None)
+        #  self._data = kwargs
 
     @property
     def created_at(self) -> Optional[datetime.datetime]:
@@ -130,7 +131,7 @@ class BaseActivity:
         .. versionadded:: 1.3
         """
         if self._created_at is not None:
-            return datetime.datetime.fromtimestamp(self._created_at / 1000, tz=datetime.timezone.utc)
+            return datetime.datetime.fromtimestamp(self._created_at / 1000, tz=datetime.UTC)
 
     def to_dict(self) -> ActivityPayload:
         raise NotImplementedError
@@ -450,7 +451,7 @@ class Game(BaseActivity):
         return str(self.name)
 
     def __repr__(self) -> str:
-        return f'<Game name={self.name!r} platform={self.platform!r}>'
+        return f'<Game name={self.name!r} platform={self.platform!r} assets={self.assets!r}>'
 
     def to_dict(self) -> Dict[str, Any]:
         timestamps: Dict[str, Any] = {}
@@ -546,7 +547,7 @@ class Streaming(BaseActivity):
         return str(self.name)
 
     def __repr__(self) -> str:
-        return f'<Streaming name={self.name!r} platform={self.platform!r}>'
+        return f'<Streaming name={self.name!r} platform={self.platform!r} assets={self.assets!r}>'
 
     @property
     def twitch_name(self) -> Optional[str]:
@@ -569,6 +570,8 @@ class Streaming(BaseActivity):
             'name': str(self.name),
             'url': str(self.url),
             'assets': self.assets,
+            'state': self.game,
+            'platform': self.platform,
         }
         if self.details:
             ret['details'] = self.details
@@ -616,8 +619,9 @@ class Spotify:
         self._assets: ActivityAssets = data.pop('assets', {})
         self._party: ActivityParty = data.pop('party', {})
         self._sync_id: str = data.pop('sync_id', '')
-        self._session_id: Optional[str] = data.pop('session_id')
+        self._session_id: Optional[str] = data.pop('session_id', None)
         self._created_at: Optional[float] = data.pop('created_at', None)
+        #  self._data = data
 
     @property
     def type(self) -> ActivityType:
@@ -661,6 +665,7 @@ class Spotify:
             'timestamps': self._timestamps,
             'details': self._details,
             'state': self._state,
+            'created_at': self._created_at,
         }
 
     @property
@@ -738,13 +743,13 @@ class Spotify:
     def start(self) -> datetime.datetime:
         """:class:`datetime.datetime`: When the user started playing this song in UTC."""
         # the start key will be present here
-        return datetime.datetime.fromtimestamp(self._timestamps['start'] / 1000, tz=datetime.timezone.utc)  # type: ignore
+        return datetime.datetime.fromtimestamp(self._timestamps['start'] / 1000, tz=datetime.UTC)  # type: ignore
 
     @property
     def end(self) -> datetime.datetime:
         """:class:`datetime.datetime`: When the user will stop playing this song in UTC."""
         # the end key will be present here
-        return datetime.datetime.fromtimestamp(self._timestamps['end'] / 1000, tz=datetime.timezone.utc)  # type: ignore
+        return datetime.datetime.fromtimestamp(self._timestamps['end'] / 1000, tz=datetime.UTC)  # type: ignore
 
     @property
     def duration(self) -> datetime.timedelta:
@@ -755,6 +760,10 @@ class Spotify:
     def party_id(self) -> str:
         """:class:`str`: The party ID of the listening party."""
         return self._party.get('id', '')
+
+    @property
+    def platform(self):  # Annoying AttributeError
+        return None
 
 
 class CustomActivity(BaseActivity):
@@ -821,7 +830,7 @@ class CustomActivity(BaseActivity):
 
     def to_dict(self) -> Dict[str, Any]:
         if self.name == self.state:
-            o = {
+            o: Dict[str, Any] = {
                 'type': ActivityType.custom.value,
                 'state': self.name,
                 'name': 'Custom Status',
@@ -855,6 +864,10 @@ class CustomActivity(BaseActivity):
 
     def __repr__(self) -> str:
         return f'<CustomActivity name={self.name!r} emoji={self.emoji!r}>'
+
+    @property
+    def platform(self):  # Annoying AttributeError
+        return None
 
 
 ActivityTypes = Union[Activity, Game, CustomActivity, Streaming, Spotify]

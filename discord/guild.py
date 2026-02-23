@@ -26,9 +26,11 @@ from __future__ import annotations
 
 import copy
 import datetime
+from operator import attrgetter
 from typing import (
     Any,
     AsyncIterator,
+    Callable,
     ClassVar,
     Collection,
     Coroutine,
@@ -88,7 +90,6 @@ from .scheduled_event import ScheduledEvent
 from .stage_instance import StageInstance
 from .threads import Thread, ThreadMember
 from .sticker import GuildSticker
-from .file import File
 from .audit_logs import AuditLogEntry
 from .object import OLDEST_OBJECT, Object
 from .onboarding import Onboarding
@@ -108,6 +109,7 @@ MISSING = utils.MISSING
 
 if TYPE_CHECKING:
     from .abc import Snowflake, SnowflakeTime
+    from .file import File
     from .types.guild import (
         Ban as BanPayload,
         Guild as GuildPayload,
@@ -115,6 +117,7 @@ if TYPE_CHECKING:
         RolePositionUpdate as RolePositionUpdatePayload,
         GuildFeature,
         IncidentData,
+        ModeratorReporting,
     )
     from .types.threads import (
         Thread as ThreadPayload,
@@ -138,13 +141,14 @@ if TYPE_CHECKING:
     from .types.integration import IntegrationType
     from .types.snowflake import SnowflakeList
     from .types.widget import EditWidgetSettings
-    from .types.audit_log import AuditLogEvent
+    from .types.audit_log import AuditLogEvent, AuditLogEntry as AuditLogEntryPayload
     from .message import EmojiInputType
     from .onboarding import OnboardingPrompt
 
     VocalGuildChannel = Union[VoiceChannel, StageChannel]
-    GuildChannel = Union[VocalGuildChannel, ForumChannel, TextChannel, CategoryChannel]
+    GuildChannel = Union[VocalGuildChannel, TextChannel]
     ByCategoryItem = Tuple[Optional[CategoryChannel], List[GuildChannel]]
+    WidgetStyle = Literal['shield', 'banner1', 'banner2', 'banner3', 'banner4']
 
 
 class BanEntry(NamedTuple):
@@ -220,6 +224,7 @@ class GuildPreview(Hashable):
         'description',
         'approximate_member_count',
         'approximate_presence_count',
+        '_data',
     )
 
     def __init__(self, *, data: GuildPreviewPayload, state: ConnectionState) -> None:
@@ -238,10 +243,11 @@ class GuildPreview(Hashable):
         self.stickers: Tuple[GuildSticker, ...] = tuple(
             map(lambda d: GuildSticker(state=state, data=d), data.get('stickers', []))
         )
-        self.features: List[GuildFeature] = data.get('features', [])
+        self.features: List[GuildFeature] = data.get('features', []) or []
         self.description: Optional[str] = data.get('description')
-        self.approximate_member_count: int = data.get('approximate_member_count')
-        self.approximate_presence_count: int = data.get('approximate_presence_count')
+        self.approximate_member_count: int = data.get('approximate_member_count', 0)
+        self.approximate_presence_count: int = data.get('approximate_presence_count', 0)
+        self._data = utils._to_json(data)
 
     def __str__(self) -> str:
         return self.name
@@ -249,7 +255,7 @@ class GuildPreview(Hashable):
     def __repr__(self) -> str:
         return (
             f'<{self.__class__.__name__} id={self.id} name={self.name!r} description={self.description!r} '
-            f'features={self.features}>'
+            f' member_count={self.approximate_member_count} features={self.features}>'
         )
 
     @property
@@ -277,6 +283,9 @@ class GuildPreview(Hashable):
         if self._discovery_splash is None:
             return None
         return Asset._from_guild_image(self._state, self.id, self._discovery_splash, path='discovery-splashes')
+
+    def to_dict(self) -> GuildPreviewPayload:
+        return utils._from_json(self._data)
 
 
 class Guild(Hashable):
@@ -449,6 +458,10 @@ class Guild(Hashable):
         'max_stage_video_users',
         '_incidents_data',
         '_soundboard_sounds',
+        '_home_header',
+        '_sticker_count',
+        'moderator_reporting',
+        '_data',
     )
 
     _PREMIUM_GUILD_LIMITS: ClassVar[Dict[Optional[int], _GuildLimit]] = {
@@ -525,12 +538,13 @@ class Guild(Hashable):
         attrs = (
             ('id', self.id),
             ('name', self.name),
-            ('shard_id', self.shard_id),
+            #  ('shard_id', self.shard_id),
             ('chunked', self.chunked),
             ('member_count', self._member_count),
+            ('owner_id', self.owner_id),
+            ('vanity_url_code', self.vanity_url_code),
         )
-        inner = ' '.join('%s=%r' % t for t in attrs)
-        return f'<Guild {inner}>'
+        return f'<Guild {" ".join(f"{k}={v!r}" for k, v in attrs if v)}>'
 
     def _update_voice_state(self, data: GuildVoiceState, channel_id: int) -> Tuple[Optional[Member], VoiceState, VoiceState]:
         user_id = int(data['user_id'])
@@ -593,7 +607,7 @@ class Guild(Hashable):
         self.id: int = int(guild['id'])
         self._roles: Dict[int, Role] = {}
         state = self._state  # speed up attribute access
-        for r in guild.get('roles', []):
+        for r in guild.get('roles', []) or []:
             role = Role(guild=self, data=r, state=state)
             self._roles[role.id] = role
 
@@ -607,7 +621,7 @@ class Guild(Hashable):
             if state.cache_guild_expressions
             else ()
         )
-        self.features: List[GuildFeature] = guild.get('features', [])
+        self.features: List[GuildFeature] = guild.get('features', []) or []
         self._splash: Optional[str] = guild.get('splash')
         self._system_channel_id: Optional[int] = utils._get_as_snowflake(guild, 'system_channel_id')
         self.description: Optional[str] = guild.get('description')
@@ -628,13 +642,17 @@ class Guild(Hashable):
         self._safety_alerts_channel_id: Optional[int] = utils._get_as_snowflake(guild, 'safety_alerts_channel_id')
         self.nsfw_level: NSFWLevel = try_enum(NSFWLevel, guild.get('nsfw_level', 0))
         self.mfa_level: MFALevel = try_enum(MFALevel, guild.get('mfa_level', 0))
-        self.approximate_presence_count: Optional[int] = guild.get('approximate_presence_count')
-        self.approximate_member_count: Optional[int] = guild.get('approximate_member_count')
+        self.approximate_presence_count: int = guild.get('approximate_presence_count') or guild.get('online_count') or 0
+        self.approximate_member_count: int = guild.get('approximate_member_count') or guild.get('member_count') or 0
         self.premium_progress_bar_enabled: bool = guild.get('premium_progress_bar_enabled', False)
         self.owner_id: Optional[int] = utils._get_as_snowflake(guild, 'owner_id')
         self._large: Optional[bool] = None if self._member_count is None else self._member_count >= 250
         self._afk_channel_id: Optional[int] = utils._get_as_snowflake(guild, 'afk_channel_id')
         self._incidents_data: Optional[IncidentData] = guild.get('incidents_data')
+        self._sticker_count: Optional[int] = guild.get('sticker_count')
+        self._home_header: Optional[str] = guild.get('home_header')
+        self.moderator_reporting: Optional[ModeratorReporting] = guild.get('moderator_reporting')
+        self._data: bytes = utils._to_json(guild)
 
         if 'channels' in guild:
             channels = guild['channels']
@@ -682,6 +700,9 @@ class Guild(Hashable):
                 soundboard_sound = SoundboardSound(guild=self, data=s, state=self._state)
                 self._add_soundboard_sound(soundboard_sound)
 
+    def to_dict(self) -> GuildPayload:
+        return utils._from_json(self._data)
+
     @property
     def channels(self) -> Sequence[GuildChannel]:
         """Sequence[:class:`abc.GuildChannel`]: A list of channels that belongs to this guild."""
@@ -715,7 +736,7 @@ class Guild(Hashable):
         This is sorted by the position and are in UI order from top to bottom.
         """
         r = [ch for ch in self._channels.values() if isinstance(ch, VoiceChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -727,7 +748,7 @@ class Guild(Hashable):
         This is sorted by the position and are in UI order from top to bottom.
         """
         r = [ch for ch in self._channels.values() if isinstance(ch, StageChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -751,7 +772,7 @@ class Guild(Hashable):
         This is sorted by the position and are in UI order from top to bottom.
         """
         r = [ch for ch in self._channels.values() if isinstance(ch, TextChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -761,7 +782,7 @@ class Guild(Hashable):
         This is sorted by the position and are in UI order from top to bottom.
         """
         r = [ch for ch in self._channels.values() if isinstance(ch, CategoryChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     @property
@@ -770,8 +791,18 @@ class Guild(Hashable):
 
         This is sorted by the position and are in UI order from top to bottom.
         """
-        r = [ch for ch in self._channels.values() if isinstance(ch, ForumChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.forum]
+        r.sort(key=attrgetter('position', 'id'))
+        return r
+
+    @property
+    def media_channels(self) -> List[ForumChannel]:
+        """List[:class:`ForumChannel`]: A list of media channels that belongs to this guild.
+
+        This is sorted by the position and are in UI order from top to bottom.
+        """
+        r = [ch for ch in self._channels.values() if ch.type == ChannelType.media]
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     def by_category(self) -> List[ByCategoryItem]:
@@ -811,7 +842,7 @@ class Guild(Hashable):
 
     def _resolve_channel(self, id: Optional[int], /) -> Optional[Union[GuildChannel, Thread]]:
         if id is None:
-            return
+            return None
 
         return self._channels.get(id) or self._threads.get(id)
 
@@ -1158,7 +1189,7 @@ class Guild(Hashable):
 
     def _resolve_soundboard_sound(self, id: Optional[int], /) -> Optional[SoundboardSound]:
         if id is None:
-            return
+            return None
 
         return self._soundboard_sounds.get(id)
 
@@ -1196,6 +1227,13 @@ class Guild(Hashable):
         return Asset._from_guild_image(self._state, self.id, self._discovery_splash, path='discovery-splashes')
 
     @property
+    def home_header(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's home header asset, if available."""
+        if self._home_header is None:
+            return None
+        return Asset._from_guild_image(self._state, self.id, self._home_header, path='home-headers')
+
+    @property
     def member_count(self) -> Optional[int]:
         """Optional[:class:`int`]: Returns the member count if available.
 
@@ -1208,7 +1246,7 @@ class Guild(Hashable):
 
             Now returns an ``Optional[int]``.
         """
-        return self._member_count
+        return self._member_count or self.approximate_member_count
 
     @property
     def chunked(self) -> bool:
@@ -1283,7 +1321,7 @@ class Guild(Hashable):
             return utils.find(lambda m: m.name == username and m.discriminator == discriminator, members)
 
         def pred(m: Member) -> bool:
-            return m.nick == name or m.global_name == name or m.name == name
+            return name in (m.nick, m.global_name, m.name)
 
         return utils.find(pred, members)
 
@@ -1351,7 +1389,7 @@ class Guild(Hashable):
     def _create_channel(
         self,
         name: str,
-        channel_type: Literal[ChannelType.forum],
+        channel_type: Literal[ChannelType.forum, ChannelType.media],
         overwrites: Mapping[Union[Role, Member, Object], PermissionOverwrite] = ...,
         category: Optional[Snowflake] = ...,
         **options: Any,
@@ -1933,7 +1971,7 @@ class Guild(Hashable):
             elif isinstance(default_reaction_emoji, str):
                 options['default_reaction_emoji'] = PartialEmoji.from_str(default_reaction_emoji)._to_forum_tag_payload()
             else:
-                raise ValueError(f'default_reaction_emoji parameter must be either Emoji, PartialEmoji, or str')
+                raise ValueError('default_reaction_emoji parameter must be either Emoji, PartialEmoji, or str')
 
         if not media and default_layout is not MISSING:
             if not isinstance(default_layout, ForumLayoutType):
@@ -2421,8 +2459,7 @@ class Guild(Hashable):
             if factory is None:
                 raise InvalidData('Unknown channel type {type} for channel ID {id}.'.format_map(d))
 
-            channel = factory(guild=self, state=self._state, data=d)
-            return channel
+            return factory(guild=self, state=self._state, data=d)
 
         return [convert(d) for d in data]
 
@@ -3592,6 +3629,8 @@ class Guild(Hashable):
         -------
         HTTPException
             Retrieving the roles failed.
+        NotFound
+            The guild could not be found.
 
         Returns
         -------
@@ -3907,7 +3946,7 @@ class Guild(Hashable):
 
         The guild must have ``COMMUNITY`` in :attr:`~Guild.features`.
 
-        You must have :attr:`~Permissions.manage_guild` to do this.as well.
+        You must have :attr:`~Permissions.manage_guild` to do this as well.
 
         .. versionadded:: 2.0
 
@@ -4255,7 +4294,7 @@ class Guild(Hashable):
                 self.id, limit=retrieve, user_id=user_id, action_type=action_type, before=before_id
             )
 
-            entries = data.get('audit_log_entries', [])
+            entries = data.get('audit_log_entries', []) or []
 
             if data and entries:
                 if limit is not None:
@@ -4271,7 +4310,7 @@ class Guild(Hashable):
                 self.id, limit=retrieve, user_id=user_id, action_type=action_type, after=after_id
             )
 
-            entries = data.get('audit_log_entries', [])
+            entries = data.get('audit_log_entries', []) or []
 
             if data and entries:
                 if limit is not None:
@@ -4300,7 +4339,7 @@ class Guild(Hashable):
             if after is MISSING:
                 after = OLDEST_OBJECT
 
-        predicate = None
+        predicate: Callable[[AuditLogEntryPayload], bool] | None = None
 
         if oldest_first:
             strategy, state = _after_strategy, after
@@ -4336,7 +4375,7 @@ class Guild(Hashable):
 
             automod_rules = (
                 AutoModRule(data=raw_rule, guild=self, state=self._state)
-                for raw_rule in data.get('auto_moderation_rules', [])
+                for raw_rule in data.get('auto_moderation_rules', []) or []
             )
             automod_rule_map = {rule.id: rule for rule in automod_rules}
 
@@ -4388,6 +4427,23 @@ class Guild(Hashable):
         data = await self._state.http.get_widget(self.id)
 
         return Widget(state=self._state, data=data)
+
+    def widget_image_url(self, style: WidgetStyle = 'banner2') -> Optional[str]:
+        """Returns the widget image URL of the guild.
+
+        Parameters
+        -----------
+        style: :class:`str`
+            The style which should be applied for the widget.
+
+        Returns
+        --------
+        :class:`str`
+            The widget image URL in the given style.
+        """
+        from .http import Route
+
+        return f'{Route.BASE}/guilds/{self.id}/widget.png?style={style}'
 
     async def edit_widget(
         self,
@@ -4922,7 +4978,7 @@ class Guild(Hashable):
 
         Edits the onboarding configuration for this guild.
 
-        You must have :attr:`Permissions.manage_guild` and
+        You must have :attr:`Permissions.manage_guild` or
         :attr:`Permissions.manage_roles` to do this.
 
         .. versionadded:: 2.6

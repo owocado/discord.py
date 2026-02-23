@@ -24,15 +24,28 @@ DEALINGS IN THE SOFTWARE.
 
 from __future__ import annotations
 
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, Dict, List, Optional, Sequence, Union, NamedTuple
+
 from .asset import Asset
-from .utils import parse_time, snowflake_time, _get_as_snowflake
+from .utils import parse_time, snowflake_time, _get_as_snowflake, MISSING
 from .object import Object
 from .mixins import Hashable
-from .enums import ChannelType, NSFWLevel, VerificationLevel, InviteTarget, InviteType, try_enum
+from .enums import (
+    ChannelType,
+    NSFWLevel,
+    VerificationLevel,
+    InviteTarget,
+    InviteType,
+    InviteUsersJobStatus,
+    Locale,
+    try_enum,
+)
 from .appinfo import PartialAppInfo
 from .scheduled_event import ScheduledEvent
-from .flags import InviteFlags
+from .flags import InviteFlags, SystemChannelFlags
+from .sticker import GuildSticker
+from .role import Role
+from . import utils
 
 __all__ = (
     'PartialInviteChannel',
@@ -45,10 +58,10 @@ if TYPE_CHECKING:
 
     from .types.invite import (
         Invite as InvitePayload,
-        InviteGuild as InviteGuildPayload,
         GatewayInvite as GatewayInvitePayload,
+        InviteTargetUsersJobStatus as InviteTargetUsersJobStatusPayload,
     )
-    from .types.guild import GuildFeature
+    from .types.guild import GuildFeature, InviteGuild as InviteGuildPayload
     from .types.channel import (
         PartialChannel as InviteChannelPayload,
     )
@@ -57,11 +70,58 @@ if TYPE_CHECKING:
     from .abc import GuildChannel
     from .user import User
     from .abc import Snowflake
+    from .emoji import Emoji
 
     InviteGuildType = Union[Guild, 'PartialInviteGuild', Object]
     InviteChannelType = Union[GuildChannel, 'PartialInviteChannel', Object]
 
     import datetime
+
+
+class _GuildLimit(NamedTuple):
+    emoji: int
+    stickers: int
+    bitrate: float
+    filesize: int
+
+
+class InviteUsersJob:
+    """Represents the status of an invite's target users job.
+
+    .. versionadded:: 2.7
+
+    Attributes
+    -----------
+    invite: :class:`Invite`
+        The invite this job status is for.
+    status: :class:`InviteUsersJob`
+        The status of the job.
+    total_users: :class:`int`
+        The total number of users in the job.
+    processed_users: :class:`int`
+        The number of users that have been processed so far.
+    created_at: Optional[:class:`datetime.datetime`]
+        The time the job was created.
+    error_message: :class:`str`
+        The error message.
+    completed_at: Optional[:class:`datetime.datetime`]
+        The time the job was completed, if applicable.
+    """
+
+    def __init__(self, *, invite: Invite, data: InviteTargetUsersJobStatusPayload) -> None:
+        self.invite: Invite = invite
+        self.status: InviteUsersJobStatus = try_enum(InviteUsersJobStatus, data['status'])
+        self.total_users: int = data['total_users']
+        self.processed_users: int = data['processed_users']
+        self.error_message: Optional[str] = data.get('error_message')
+        self.created_at: Optional[datetime.datetime] = parse_time(data.get('created_at'))
+        self.completed_at: Optional[datetime.datetime] = parse_time(data.get('completed_at'))
+
+    def __repr__(self) -> str:
+        return (
+            f'<InviteUsersJob invite={self.invite.code!r} status={self.status} '
+            f'total_users={self.total_users} processed_users={self.processed_users}>'
+        )
 
 
 class PartialInviteChannel:
@@ -96,20 +156,38 @@ class PartialInviteChannel:
         The partial channel's ID.
     type: :class:`ChannelType`
         The partial channel's type.
+    recipients: Optional[List[:class:`str`]]
+        The partial channel's recipient names.
+        This is applicable to channels of type :attr:`ChannelType.group`.
+
+        .. versionadded:: 2.4
     """
 
-    __slots__ = ('id', 'name', 'type')
+    __slots__ = ('id', 'name', 'type', 'recipients', '_icon', 'guild_id')
 
-    def __init__(self, data: InviteChannelPayload):
+    def __init__(self, data: InviteChannelPayload, *, guild_id: Optional[int] = None):
         self.id: int = int(data['id'])
         self.name: str = data['name']
         self.type: ChannelType = try_enum(ChannelType, data['type'])
+        self.recipients: List[str] = (
+            [user['username'] for user in data.get('recipients') or []]
+            if self.type in (ChannelType.private, ChannelType.group)
+            else []
+        )
+        self.guild_id = guild_id
+        self._icon: Optional[str] = data.get('icon')
 
     def __str__(self) -> str:
-        return self.name
+        if self.name:
+            return self.name
+
+        if self.type == ChannelType.group:
+            users = ', '.join(self.recipients) if self.recipients else 'Unknown users'
+            return f'Group DM with {users}'
+        return f'DM with {self.recipients[0] if self.recipients else "Unknown User"}'
 
     def __repr__(self) -> str:
-        return f'<PartialInviteChannel id={self.id} name={self.name} type={self.type!r}>'
+        return f'<PartialInviteChannel id={self.id} name={self.name!r} type={self.type!r}>'
 
     @property
     def mention(self) -> str:
@@ -120,6 +198,11 @@ class PartialInviteChannel:
     def created_at(self) -> datetime.datetime:
         """:class:`datetime.datetime`: Returns the channel's creation time in UTC."""
         return snowflake_time(self.id)
+
+    @property
+    def jump_url(self) -> str:
+        """:class:`str`: Returns a URL that allows the client to jump to the channel."""
+        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.id}'
 
 
 class PartialInviteGuild:
@@ -184,15 +267,38 @@ class PartialInviteGuild:
         'description',
         'vanity_url_code',
         'nsfw_level',
+        'nsfw',
         'premium_subscription_count',
+        'approximate_member_count',
+        'approximate_presence_count',
+        'emoji_count',
+        'preferred_locale',
+        'primary_category_id',
+        'emojis',
+        'stickers',
+        'premium_tier',
+        'roles',
+        '_sticker_count',
+        '_discovery_splash',
+        '_home_header',
+        '_system_channel_flags',
+        '_data',
     )
+
+    _PREMIUM_GUILD_LIMITS: ClassVar[Dict[Optional[int], _GuildLimit]] = {
+        None: _GuildLimit(emoji=50, stickers=5, bitrate=96e3, filesize=utils.DEFAULT_FILE_SIZE_LIMIT_BYTES),
+        0: _GuildLimit(emoji=50, stickers=5, bitrate=96e3, filesize=utils.DEFAULT_FILE_SIZE_LIMIT_BYTES),
+        1: _GuildLimit(emoji=100, stickers=15, bitrate=128e3, filesize=utils.DEFAULT_FILE_SIZE_LIMIT_BYTES),
+        2: _GuildLimit(emoji=150, stickers=30, bitrate=256e3, filesize=50 * 1024 * 1024),
+        3: _GuildLimit(emoji=250, stickers=60, bitrate=384e3, filesize=100 * 1024 * 1024),
+    }
 
     def __init__(self, state: ConnectionState, data: InviteGuildPayload, id: int):
         self._state: ConnectionState = state
         self.id: int = id
         self.name: str = data['name']
-        self.features: List[GuildFeature] = data.get('features', [])
-        self._icon: Optional[str] = data.get('icon')
+        self.features: List[GuildFeature] = data.get('features', []) or []
+        self._icon: Optional[str] = data.get('icon') or data.get('icon_hash')
         self._banner: Optional[str] = data.get('banner')
         self._splash: Optional[str] = data.get('splash')
         self.verification_level: VerificationLevel = try_enum(VerificationLevel, data.get('verification_level'))
@@ -200,6 +306,31 @@ class PartialInviteGuild:
         self.vanity_url_code: Optional[str] = data.get('vanity_url_code')
         self.nsfw_level: NSFWLevel = try_enum(NSFWLevel, data.get('nsfw_level', 0))
         self.premium_subscription_count: int = data.get('premium_subscription_count') or 0
+        self.premium_tier: int = data.get('premium_tier') or 0
+        self.nsfw: bool = data.get('nsfw', False)
+        # Only present in guild previews
+        self.approximate_member_count: int = data.get('approximate_member_count', 0)
+        self.approximate_presence_count: int = data.get('approximate_presence_count', 0)
+        self.preferred_locale: Locale = try_enum(Locale, data.get('preferred_locale', 'en-US'))
+        self.primary_category_id: Optional[int] = data.get('primary_category_id')
+        self.emoji_count: int = data.get('emoji_count') or 0
+        self.roles: List[Role] = []
+        self._sticker_count: int = data.get('sticker_count') or 0
+        self._discovery_splash: Optional[str] = data.get('discovery_splash')
+        self._home_header: Optional[str] = data.get('home_header')
+        self._system_channel_flags: int = data.get('system_channel_flags', 0)
+        self._data = utils._to_json(data)
+
+        try:
+            from .emoji import Emoji
+
+            self.emojis = [Emoji(guild=Object(self.id), state=state, data=e) for e in data['emojis']]
+        except KeyError:
+            self.emojis: List[Emoji] = []
+        try:
+            self.stickers = [GuildSticker(state=state, data=st) for st in data['stickers']]
+        except KeyError:
+            self.stickers: List[GuildSticker] = []
 
     def __str__(self) -> str:
         return self.name
@@ -207,8 +338,11 @@ class PartialInviteGuild:
     def __repr__(self) -> str:
         return (
             f'<{self.__class__.__name__} id={self.id} name={self.name!r} features={self.features} '
-            f'description={self.description!r}>'
+            f'description={self.description!r} vanity_url_code={self.vanity_url_code!r}>'
         )
+
+    def to_dict(self) -> InviteGuildPayload:
+        return utils._from_json(self._data)
 
     @property
     def created_at(self) -> datetime.datetime:
@@ -245,6 +379,51 @@ class PartialInviteGuild:
         if self._splash is None:
             return None
         return Asset._from_guild_image(self._state, self.id, self._splash, path='splashes')
+
+    @property
+    def discovery_splash(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's discovery splash asset, if available."""
+        if self._discovery_splash is None:
+            return None
+        return Asset._from_guild_image(self._state, self.id, self._discovery_splash, path='discovery-splashes')
+
+    @property
+    def home_header(self) -> Optional[Asset]:
+        """Optional[:class:`Asset`]: Returns the guild's home header asset, if available."""
+        if self._home_header is None:
+            return None
+        return Asset._from_guild_image(self._state, self.id, self._home_header, path='home-headers')
+
+    @property
+    def emoji_limit(self) -> int:
+        """:class:`int`: The maximum number of emoji slots this guild has."""
+        more_emoji = 200 if 'MORE_EMOJI' in self.features else 50
+        return max(more_emoji, self._PREMIUM_GUILD_LIMITS[self.premium_tier].emoji)
+
+    @property
+    def sticker_limit(self) -> int:
+        """:class:`int`: The maximum number of sticker slots this guild has.
+
+        .. versionadded:: 2.0
+        """
+        more_stickers = 60 if 'MORE_STICKERS' in self.features else 0
+        return max(more_stickers, self._PREMIUM_GUILD_LIMITS[self.premium_tier].stickers)
+
+    @property
+    def bitrate_limit(self) -> float:
+        """:class:`float`: The maximum bitrate for voice channels this guild can have."""
+        vip_guild = self._PREMIUM_GUILD_LIMITS[1].bitrate if 'VIP_REGIONS' in self.features else 96e3
+        return max(vip_guild, self._PREMIUM_GUILD_LIMITS[self.premium_tier].bitrate)
+
+    @property
+    def filesize_limit(self) -> int:
+        """:class:`int`: The maximum number of bytes files can have when uploaded to this guild."""
+        return self._PREMIUM_GUILD_LIMITS[self.premium_tier].filesize
+
+    @property
+    def system_channel_flags(self) -> SystemChannelFlags:
+        """:class:`SystemChannelFlags`: Returns the guild's system channel settings."""
+        return SystemChannelFlags._from_value(self._system_channel_flags)
 
 
 class Invite(Hashable):
@@ -358,6 +537,16 @@ class Invite(Hashable):
         The ID of the scheduled event associated with this invite, if any.
 
         .. versionadded:: 2.0
+    flags: :class:`InviteFlags`
+        Additional flags for the invite.
+
+        .. versionadded:: 2.6
+    roles: List[:class:`Role`]
+        A list of roles that are granted to users joining via this invite.
+
+        This is only filled if the bot is in the guild where the invite belongs.
+
+        .. versionadded:: 2.7
     """
 
     __slots__ = (
@@ -382,6 +571,9 @@ class Invite(Hashable):
         'scheduled_event_id',
         'type',
         '_flags',
+        'roles',
+        'is_nickname_changeable',
+        '_data',
     )
 
     BASE = 'https://discord.gg'
@@ -398,14 +590,15 @@ class Invite(Hashable):
         self.type: InviteType = try_enum(InviteType, data.get('type', 0))
         self.max_age: Optional[int] = data.get('max_age')
         self.code: str = data['code']
-        self.guild: Optional[InviteGuildType] = self._resolve_guild(data.get('guild'), guild)
+        self.guild: Optional[Union[PartialInviteGuild, Guild]] = self._resolve_guild(data.get('guild'), guild)
         self.revoked: Optional[bool] = data.get('revoked')
         self.created_at: Optional[datetime.datetime] = parse_time(data.get('created_at'))
         self.temporary: Optional[bool] = data.get('temporary')
         self.uses: Optional[int] = data.get('uses')
         self.max_uses: Optional[int] = data.get('max_uses')
-        self.approximate_presence_count: Optional[int] = data.get('approximate_presence_count')
-        self.approximate_member_count: Optional[int] = data.get('approximate_member_count')
+        self.approximate_presence_count: int = data.get('approximate_presence_count', 0)
+        self.approximate_member_count: int = data.get('approximate_member_count', 0)
+        self.is_nickname_changeable: bool = data.get('is_nickname_changeable') or False
 
         expires_at = data.get('expires_at', None)
         self.expires_at: Optional[datetime.datetime] = parse_time(expires_at) if expires_at else None
@@ -436,6 +629,25 @@ class Invite(Hashable):
         )
         self.scheduled_event_id: Optional[int] = self.scheduled_event.id if self.scheduled_event else None
         self._flags: int = data.get('flags', 0)
+        self._data: bytes = utils._to_json(data)
+
+        self.roles: List[Role] = []
+        roles = data.get('roles', [])
+        if guild and roles:
+            _guild = state._get_or_create_unavailable_guild(guild.id, data=data.get('guild', {}))
+            for role_data in roles:
+                self.roles.append(Role(guild=_guild, state=state, data=role_data))
+            if isinstance(self.guild, PartialInviteGuild):
+                self.guild.roles.extend(self.roles)
+
+        # We inject some missing data here since we can assume it
+        if self.type in (InviteType.group_dm, InviteType.friend):
+            self.temporary = False
+            if self.max_uses is None and self.type is InviteType.group_dm:
+                self.max_uses = 0
+
+    def to_dict(self) -> InvitePayload:
+        return utils._from_json(self._data)
 
     @classmethod
     def from_incomplete(cls, *, state: ConnectionState, data: InvitePayload) -> Self:
@@ -454,8 +666,15 @@ class Invite(Hashable):
 
         # As far as I know, invites always need a channel
         # So this should never raise.
-        channel: Union[PartialInviteChannel, GuildChannel] = PartialInviteChannel(data['channel'])
-        if guild is not None and not isinstance(guild, PartialInviteGuild):
+        channel: Optional[Union[PartialInviteChannel, GuildChannel]] = (
+            PartialInviteChannel(
+                data['channel'],
+                guild_id=guild.id if guild else None,
+            )
+            if data['type'] != 2
+            else None
+        )  # Ignore friend invites :husk:
+        if channel and guild is not None and not isinstance(guild, PartialInviteGuild):
             # Upgrade the partial data if applicable
             channel = guild.get_channel(channel.id) or channel
 
@@ -465,12 +684,12 @@ class Invite(Hashable):
     def from_gateway(cls, *, state: ConnectionState, data: GatewayInvitePayload) -> Self:
         guild_id: Optional[int] = _get_as_snowflake(data, 'guild_id')
         guild: Optional[Union[Guild, Object]] = state._get_guild(guild_id)
-        channel_id = int(data['channel_id'])
+        channel_id = _get_as_snowflake(data, 'channel_id')
         if guild is not None:
-            channel = guild.get_channel(channel_id) or Object(id=channel_id)
+            channel = (guild.get_channel(channel_id) or Object(id=channel_id)) if channel_id is not None else None
         else:
             guild = state._get_or_create_unavailable_guild(guild_id) if guild_id is not None else None
-            channel = Object(id=channel_id)
+            channel = Object(id=channel_id) if channel_id is not None else None
 
         return cls(state=state, data=data, guild=guild, channel=channel)  # type: ignore
 
@@ -478,7 +697,7 @@ class Invite(Hashable):
         self,
         data: Optional[InviteGuildPayload],
         guild: Optional[Union[Guild, PartialInviteGuild]] = None,
-    ) -> Optional[InviteGuildType]:
+    ) -> Optional[Union[Guild, PartialInviteGuild]]:
         if guild is not None:
             return guild
 
@@ -499,14 +718,14 @@ class Invite(Hashable):
         if data is None:
             return None
 
-        return PartialInviteChannel(data)
+        return PartialInviteChannel(data, guild_id=self.guild.id if self.guild else None)
 
     def __str__(self) -> str:
         return self.url
 
     def __repr__(self) -> str:
         return (
-            f'<Invite type={self.type} code={self.code!r} guild={self.guild!r} '
+            f'<Invite type={self.type!r} code={self.code!r} guild={self.guild!r} '
             f'online={self.approximate_presence_count} '
             f'members={self.approximate_member_count}>'
         )
@@ -582,3 +801,83 @@ class Invite(Hashable):
 
         data = await self._state.http.delete_invite(self.code, reason=reason)
         return self.from_incomplete(state=self._state, data=data)
+
+    async def target_users(self) -> list[int]:
+        """|coro|
+
+        Fetches the users that are allowed to join via this invite.
+
+        Requires the :attr:`~Permissions.manage_guild` permission.
+
+        Returns
+        --------
+        List[:class:`int`]
+            A list of user IDs.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to fetch target users.
+        NotFound
+            The invite is invalid or expired or the invite does not have target users.
+        HTTPException
+            Fetching the target users failed.
+        """
+
+        string = await self._state.http.get_invite_target_users(self.code)
+        users = string.lstrip('Users\n').split('\n')
+        return [int(user_id) for user_id in users if user_id]
+
+    async def fetch_target_users_job_status(self) -> InviteUsersJob:
+        """|coro|
+
+        Fetches the status of the target users job for this invite.
+
+        Requires the :attr:`~Permissions.manage_guild` permission.
+
+        Returns
+        --------
+        :class:`InviteUsersJobStatus`
+            The status of the target users job.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to fetch target users job status.
+        NotFound
+            The invite is invalid or expired or there is no ongoing target users job.
+        HTTPException
+            Fetching the target users job status failed.
+        """
+
+        data = await self._state.http.get_invite_target_users_job_status(self.code)
+        return InviteUsersJob(invite=self, data=data)
+
+    async def edit(
+        self,
+        *,
+        users: Sequence[Snowflake] = MISSING,
+    ) -> None:
+        """|coro|
+
+        Edits the invite.
+
+        Requires the :attr:`~Permissions.manage_guild` permission.
+
+        Parameters
+        -----------
+        users: List[:class:`~discord.abc.Snowflake`]
+            A list of users that should be able to use this invite.
+
+        Raises
+        -------
+        Forbidden
+            You do not have permissions to edit invites.
+        NotFound
+            The invite is invalid or expired.
+        HTTPException
+            Editing the invite failed.
+        """
+
+        if users:
+            await self._state.http.edit_invite_target_users(self.code, user_ids=[user.id for user in users])

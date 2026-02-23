@@ -26,7 +26,7 @@ from __future__ import annotations
 from typing import Any, Collection, Iterator, List, Optional, TYPE_CHECKING, Tuple
 
 from .asset import Asset, AssetMixin
-from .utils import SnowflakeList, snowflake_time, MISSING
+from .utils import SnowflakeList, snowflake_time, MISSING, _from_json, _to_json
 from .partial_emoji import _EmojiTag, PartialEmoji
 from .user import User
 from .errors import MissingApplicationID
@@ -112,6 +112,7 @@ class Emoji(_EmojiTag, AssetMixin):
         '_state',
         'user',
         'available',
+        '_data',
     )
 
     def __init__(self, *, guild: Snowflake, state: ConnectionState, data: EmojiPayload) -> None:
@@ -120,18 +121,19 @@ class Emoji(_EmojiTag, AssetMixin):
         self._from_data(data)
 
     def _from_data(self, emoji: EmojiPayload) -> None:
-        self.require_colons: bool = emoji.get('require_colons', False)
+        self.require_colons: bool = emoji.get('require_colons', True)
         self.managed: bool = emoji.get('managed', False)
         self.id: int = int(emoji['id'])  # type: ignore # This won't be None for full emoji objects.
         self.name: str = emoji['name']  # type: ignore # This won't be None for full emoji objects.
         self.animated: bool = emoji.get('animated', False)
         self.available: bool = emoji.get('available', True)
-        self._roles: SnowflakeList = SnowflakeList(map(int, emoji.get('roles', [])))
+        self._roles: SnowflakeList = SnowflakeList(map(int, emoji.get('roles', []) or []))
         user = emoji.get('user')
         self.user: Optional[User] = User(state=self._state, data=user) if user else None
+        self._data: bytes = _to_json(emoji)
 
     def _to_partial(self) -> PartialEmoji:
-        return PartialEmoji(name=self.name, animated=self.animated, id=self.id)
+        return PartialEmoji.with_state(self._state, name=self.name, animated=self.animated, id=self.id)
 
     def __iter__(self) -> Iterator[Tuple[str, Any]]:
         for attr in self.__slots__:
@@ -144,6 +146,9 @@ class Emoji(_EmojiTag, AssetMixin):
         if self.animated:
             return f'<a:{self.name}:{self.id}>'
         return f'<:{self.name}:{self.id}>'
+
+    def __int__(self) -> int:
+        return self.id
 
     def __repr__(self) -> str:
         return f'<Emoji id={self.id} name={self.name!r} animated={self.animated} managed={self.managed}>'
@@ -175,7 +180,7 @@ class Emoji(_EmojiTag, AssetMixin):
         If roles is empty, the emoji is unrestricted.
         """
         guild = self.guild
-        if guild is None:
+        if not self._roles or guild is None:
             return []
 
         return [role for role in guild.roles if self._roles.has(role.id)]
@@ -272,7 +277,7 @@ class Emoji(_EmojiTag, AssetMixin):
             The newly updated emoji.
         """
 
-        payload = {}
+        payload: dict[str, Any] = {}
         if name is not MISSING:
             payload['name'] = name
         if roles is not MISSING:
@@ -300,3 +305,16 @@ class Emoji(_EmojiTag, AssetMixin):
         .. versionadded:: 2.5
         """
         return self.guild_id == 0
+
+    def is_premium(self) -> bool:
+        """:class:`bool`: Whether the emoji is premium emoji added via Server Subscriptions.
+
+        .. versionadded:: 2.6
+        """
+        if not self.roles:
+            return False
+        return any(r for r in self.roles if r.tags and r.tags.subscription_listing_id)
+
+    def to_dict(self) -> EmojiPayload:
+        return _from_json(self._data)
+

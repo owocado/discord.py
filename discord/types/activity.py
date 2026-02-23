@@ -34,7 +34,7 @@ StatusType = Literal['idle', 'dnd', 'online', 'offline']
 StatusDisplayType = Literal[0, 1, 2]
 
 
-class PartialPresenceUpdate(TypedDict):
+class PartialPresenceUpdate(TypedDict, total=False):
     user: User
     guild_id: Snowflake
     status: StatusType
@@ -46,6 +46,8 @@ class ClientStatus(TypedDict, total=False):
     desktop: StatusType
     mobile: StatusType
     web: StatusType
+    embedded: StatusType
+    vr: StatusType
 
 
 class ActivityTimestamps(TypedDict, total=False):
@@ -79,7 +81,7 @@ class ActivityEmoji(TypedDict):
     animated: NotRequired[bool]
 
 
-ActivityType = Literal[0, 1, 2, 4, 5]
+ActivityType = Literal[0, 1, 2, 4, 5, 6]
 
 
 class SendableActivity(TypedDict):

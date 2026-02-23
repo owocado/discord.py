@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING, Any, Tuple, Union
 
 if TYPE_CHECKING:
     from aiohttp import ClientResponse, ClientWebSocketResponse
-    from requests import Response
+    from requests.models import Response
 
     _ResponseType = Union[ClientResponse, Response]
 

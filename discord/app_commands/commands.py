@@ -315,7 +315,7 @@ def _populate_renames(params: Dict[str, CommandParameter], renames: Dict[str, Un
         raise ValueError(f'unknown parameter given: {first}')
 
 
-def _populate_choices(params: Dict[str, CommandParameter], all_choices: Dict[str, List[Choice]]) -> None:
+def _populate_choices(params: Dict[str, CommandParameter], all_choices: Dict[str, List[Choice[float | str]]]) -> None:
     for name, param in params.items():
         choices = all_choices.pop(name, MISSING)
         if choices is MISSING:
@@ -372,7 +372,7 @@ def _extract_parameters_from_callback(func: Callable[..., Any], globalns: Dict[s
         raise TypeError(f'callback {func.__qualname__!r} must have more than {required_params - 1} parameter(s)')
 
     iterator = iter(params.values())
-    for _ in range(0, required_params):
+    for _ in range(required_params):
         next(iterator)
 
     parameters: List[CommandParameter] = []
@@ -498,6 +498,22 @@ class Parameter:
     def __init__(self, parent: CommandParameter, command: Command[Any, ..., Any]) -> None:
         self.__parent: CommandParameter = parent
         self.__command: Command[Any, ..., Any] = command
+
+    def __repr__(self) -> str:
+        attrs = (
+            ('name', self.name),
+            ('type', self.type),
+            ('display_name', self.display_name),
+            ('description', self.description),
+            ('autocomplete', self.autocomplete),
+            ('required', self.required),
+            ('channel_types', self.channel_types),
+            ('min_value', self.min_value),
+            ('max_value', self.max_value),
+            ('command', self.command),
+            ('default', self.default),
+        )
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
 
     @property
     def command(self) -> Command[Any, ..., Any]:
@@ -710,6 +726,18 @@ class Command(Generic[GroupT, P, T]):
         if auto_locale_strings:
             self._convert_to_locale_strings()
 
+    def __repr__(self):
+        attrs = (
+            ('name', self.name),
+            ('guild_only', self.guild_only),
+            ('default_permissions', self.default_permissions),
+            ('allowed_contexts', self.allowed_contexts),
+            ('allowed_installs', self.allowed_installs),
+            ('parent', self.parent),
+            ('parameters', self.parameters),
+        )
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
+
     def _convert_to_locale_strings(self) -> None:
         if self._locale_name is None:
             self._locale_name = locale_str(self.name)
@@ -727,6 +755,10 @@ class Command(Generic[GroupT, P, T]):
         """:ref:`coroutine <coroutine>`: The coroutine that is executed when the command is called."""
         return self._callback
 
+    @property
+    def type(self) -> AppCommandType:
+        return AppCommandType.chat_input
+
     def _copy_with(
         self,
         *,
@@ -734,7 +766,7 @@ class Command(Generic[GroupT, P, T]):
         binding: GroupT,
         bindings: MutableMapping[GroupT, GroupT] = MISSING,
         set_on_binding: bool = True,
-    ) -> Command:
+    ) -> Command[GroupT, ..., Any]:
         bindings = {} if bindings is MISSING else bindings
 
         copy = shallow_copy(self)
@@ -876,7 +908,7 @@ class Command(Generic[GroupT, P, T]):
         except Exception as e:
             raise CommandInvokeError(self, e) from e
 
-    async def _invoke_with_namespace(self, interaction: Interaction, namespace: Namespace) -> T:
+    async def _invoke_with_namespace(self, interaction: Interaction[ClientT], namespace: Namespace) -> T:
         if not await self._check_can_run(interaction):
             raise CheckFailure(f'The check functions for command {self.name!r} failed.')
 
@@ -927,7 +959,7 @@ class Command(Generic[GroupT, P, T]):
 
         await interaction.response.autocomplete(choices)
 
-    def _get_internal_command(self, name: str) -> Optional[Union[Command, Group]]:
+    def _get_internal_command(self, name: str) -> Optional[Union[Command[GroupT, ..., Any], Group]]:
         return None
 
     @property
@@ -1648,7 +1680,7 @@ class Group:
             except (AttributeError, IndexError, KeyError):
                 self.module = None
 
-        self._children: Dict[str, Union[Command, Group]] = {}
+        self._children: Dict[str, Union[Command[Any, ..., Any], Group]] = {}
         self.extras: Dict[Any, Any] = extras or {}
 
         bindings: Dict[Group, Group] = {}
@@ -1672,6 +1704,17 @@ class Group:
 
         if auto_locale_strings:
             self._convert_to_locale_strings()
+
+    def __repr__(self):
+        attrs = (
+            ('name', self.name),
+            ('guild_only', self.guild_only),
+            ('default_permissions', self.default_permissions),
+            ('allowed_contexts', self.allowed_contexts),
+            ('allowed_installs', self.allowed_installs),
+            ('parent', self.parent),
+        )
+        return f'<{self.__class__.__name__} {" ".join("%s=%r" % t for t in attrs)}>'
 
     def _convert_to_locale_strings(self) -> None:
         if self._locale_name is None:
@@ -1786,6 +1829,10 @@ class Group:
     def commands(self) -> List[Union[Command[Any, ..., Any], Group]]:
         """List[Union[:class:`Command`, :class:`Group`]]: The commands that this group contains."""
         return list(self._children.values())
+
+    @property
+    def type(self) -> AppCommandType:
+        return AppCommandType.chat_input
 
     def walk_commands(self) -> Generator[Union[Command[Any, ..., Any], Group], None, None]:
         """An iterator that recursively walks through all commands that this group contains.
@@ -2482,9 +2529,11 @@ def check(predicate: Check) -> Callable[[T], T]:
             if not hasattr(func, '__discord_app_commands_checks__'):
                 func.__discord_app_commands_checks__ = []  # type: ignore # Runtime attribute assignment
 
-            func.__discord_app_commands_checks__.append(predicate)  # type: ignore # Runtime attribute access
+            func.__discord_app_commands_checks__.append(predicate)  # type: ignore # Runtime attribute assignment
 
         return func
+
+    decorator.predicate = predicate
 
     return decorator  # type: ignore
 

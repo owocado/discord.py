@@ -148,6 +148,11 @@ class SoundboardDefaultSound(BaseSoundboardSound):
         inner = ' '.join('%s=%r' % t for t in attrs)
         return f'<{self.__class__.__name__} {inner}>'
 
+    @property
+    def mention(self):
+        """:class:`str`: Returns a string that allows you to mention this default sound."""
+        return f'<sound:0:{self.id}>'
+
 
 class SoundboardSound(BaseSoundboardSound):
     """Represents a Discord soundboard sound.
@@ -184,7 +189,7 @@ class SoundboardSound(BaseSoundboardSound):
         Whether this sound is available for use.
     """
 
-    __slots__ = ('_state', 'name', 'emoji', '_user', 'available', '_user_id', 'guild')
+    __slots__ = ('name', 'emoji', '_user', 'available', '_user_id', 'guild')
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: SoundboardSoundPayload):
         super().__init__(state=state, data=data)
@@ -231,6 +236,11 @@ class SoundboardSound(BaseSoundboardSound):
                 return None
             return self._state.get_user(self._user_id)
         return User(state=self._state, data=self._user)
+
+    @property
+    def mention(self):
+        """:class:`str`: Returns a string that allows you to mention the sound."""
+        return f'<sound:{self.guild.id}:{self.id}>'
 
     async def edit(
         self,

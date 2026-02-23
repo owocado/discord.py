@@ -87,6 +87,15 @@ __all__ = (
     'MediaItemLoadingState',
     'CollectibleType',
     'NameplatePalette',
+    'InviteUsersJobStatus',
+    'PremiumType',
+    'MemberJoinType',
+    'DisplayNameFont',
+    'DisplayNameEffect',
+    'InteractionEphemeralityReason',
+    'ApplicationIntegrationType',
+    'ApplicationType',
+    'Platform',
 )
 
 
@@ -104,7 +113,7 @@ def _create_value_cls(name: str, comparable: bool):
     return cls
 
 
-def _is_descriptor(obj):
+def _is_descriptor(obj: Any):
     return hasattr(obj, '__get__') or hasattr(obj, '__set__') or hasattr(obj, '__delete__')
 
 
@@ -179,8 +188,8 @@ class EnumMeta(type):
     def __call__(cls, value: str) -> Any:
         try:
             return cls._enum_value_map_[value]
-        except (KeyError, TypeError):
-            raise ValueError(f'{value!r} is not a valid {cls.__name__}')
+        except (KeyError, TypeError) as e:
+            raise ValueError(f'{value!r} is not a valid {cls.__name__}') from e
 
     def __getitem__(cls, key: str) -> Any:
         return cls._enum_member_map_[key]
@@ -220,12 +229,17 @@ class ChannelType(Enum):
     group = 3
     category = 4
     news = 5
+    store = 6
+    lfg = 7
     news_thread = 10
     public_thread = 11
     private_thread = 12
     stage_voice = 13
+    directory = 14
     forum = 15
     media = 16
+    lobby = 17
+    dm_sdk = 18
 
     def __str__(self) -> str:
         return self.name
@@ -271,13 +285,39 @@ class MessageType(Enum):
     stage_raise_hand = 30
     stage_topic = 31
     guild_application_premium_subscription = 32
+    private_channel_integration_added = 33
+    private_channel_integration_removed = 34
+    premium_referral = 35
     guild_incident_alert_mode_enabled = 36
     guild_incident_alert_mode_disabled = 37
     guild_incident_report_raid = 38
     guild_incident_report_false_alarm = 39
+    guild_deadchat_revive_prompt = 40
+    custom_gift = 41
+    guild_gaming_stats_prompt = 42
+    poll = 43
     purchase_notification = 44
+    voice_hangout_invite = 45
     poll_result = 46
+    changelog = 47
+    nitro_notification = 48
+    channel_linked_to_lobby = 49
+    gifting_prompt = 50
+    in_game_message_nux = 51
+    guild_join_request_accept_notification = 52
+    guild_join_request_reject_notification = 53
+    guild_join_request_withdrawn_notification = 54
+    hd_streaming_upgraded = 55
+    dm_chat_wallpaper_set = 56
+    dm_chat_wallpaper_removed = 57
+    report_to_mod_deleted_message = 58
+    report_to_mod_timeout_user = 59
+    report_to_mod_kick_user = 60
+    report_to_mod_ban_user = 61
+    report_to_mod_closed_report = 62
     emoji_added = 63
+    premium_group_invite = 64
+    voice_session = 65
 
     def is_deletable(self) -> bool:
         return self not in {
@@ -287,6 +327,7 @@ class MessageType(Enum):
             MessageType.channel_name_change,
             MessageType.channel_icon_change,
             MessageType.thread_starter_message,
+            MessageType.auto_moderation_action,
         }
 
 
@@ -318,6 +359,7 @@ class ContentFilter(Enum, comparable=True):
     disabled = 0
     no_role = 1
     all_members = 2
+    members_without_roles = 1
 
     def __str__(self) -> str:
         return self.name
@@ -419,8 +461,12 @@ class AuditLogAction(Enum):
     automod_flag_message                              = 144
     automod_timeout_member                            = 145
     automod_quarantine_user                           = 146
+    automod_quarantine_member                         = 146
     creator_monetization_request_created              = 150
     creator_monetization_terms_accepted               = 151
+    role_prompt_create                                = 160
+    role_prompt_update                                = 161
+    role_prompt_delete                                = 162
     onboarding_prompt_create                          = 163
     onboarding_prompt_update                          = 164
     onboarding_prompt_delete                          = 165
@@ -428,6 +474,21 @@ class AuditLogAction(Enum):
     onboarding_update                                 = 167
     home_settings_create                              = 190
     home_settings_update                              = 191
+    guild_home_feature_item                           = 171
+    guild_home_remove_item                            = 172
+    harmful_links_blocked_message                     = 180
+    server_guide_create                               = 190
+    server_guide_update                               = 191
+    voice_channel_status_update                       = 192
+    voice_channel_status_delete                       = 193
+    scheduled_event_exception_create                  = 200
+    scheduled_event_exception_update                  = 201
+    scheduled_event_exception_delete                  = 202
+    guild_member_verification_update                  = 210
+    guild_profile_update                              = 211
+    pin_permission_migration_complete                 = 212
+    bypass_slowmode_permission_migration_complete     = 213
+
     # fmt: on
 
     @property
@@ -494,6 +555,9 @@ class AuditLogAction(Enum):
             AuditLogAction.soundboard_sound_create:                  AuditLogActionCategory.create,
             AuditLogAction.soundboard_sound_update:                  AuditLogActionCategory.update,
             AuditLogAction.soundboard_sound_delete:                  AuditLogActionCategory.delete,
+            AuditLogAction.role_prompt_create:                       AuditLogActionCategory.create,
+            AuditLogAction.role_prompt_update:                       AuditLogActionCategory.update,
+            AuditLogAction.role_prompt_delete:                       AuditLogActionCategory.delete,
             AuditLogAction.onboarding_prompt_create:                 AuditLogActionCategory.create,
             AuditLogAction.onboarding_prompt_update:                 AuditLogActionCategory.update,
             AuditLogAction.onboarding_prompt_delete:                 AuditLogActionCategory.delete,
@@ -501,6 +565,18 @@ class AuditLogAction(Enum):
             AuditLogAction.onboarding_update:                        AuditLogActionCategory.update,
             AuditLogAction.home_settings_create:                     AuditLogActionCategory.create,
             AuditLogAction.home_settings_update:                     AuditLogActionCategory.update,
+            AuditLogAction.guild_home_feature_item:                  None,
+            AuditLogAction.guild_home_remove_item:                   None,
+            AuditLogAction.harmful_links_blocked_message:            None,
+            AuditLogAction.server_guide_create:                      AuditLogActionCategory.create,
+            AuditLogAction.server_guide_update:                      AuditLogActionCategory.update,
+            AuditLogAction.voice_channel_status_update:              AuditLogActionCategory.create,
+            AuditLogAction.voice_channel_status_delete:              AuditLogActionCategory.delete,
+            AuditLogAction.scheduled_event_exception_create:         AuditLogActionCategory.create,
+            AuditLogAction.scheduled_event_exception_delete:         AuditLogActionCategory.delete,
+            AuditLogAction.scheduled_event_exception_update:         AuditLogActionCategory.update,
+            AuditLogAction.guild_member_verification_update:         AuditLogActionCategory.update,
+            AuditLogAction.guild_profile_update:                     AuditLogActionCategory.update,
         }
         # fmt: on
         return lookup.get(self, None)
@@ -550,8 +626,12 @@ class AuditLogAction(Enum):
             return 'onboarding_prompt'
         elif v < 168:
             return 'onboarding'
+        elif v == 180:
+            return 'harmful_link'
         elif v < 192:
             return 'home_settings'
+        elif v < 194:
+            return 'voice_channel_status'
 
 
 class UserFlags(Enum):
@@ -575,6 +655,7 @@ class UserFlags(Enum):
     bot_http_interactions = 524288
     spammer = 1048576
     active_developer = 4194304
+    provisional_account = 8388608
 
 
 class ActivityType(Enum):
@@ -585,6 +666,7 @@ class ActivityType(Enum):
     watching = 3
     custom = 4
     competing = 5
+    hang = 6
 
     def __int__(self) -> int:
         return self.value
@@ -643,6 +725,8 @@ class InviteTarget(Enum):
     unknown = 0
     stream = 1
     embedded_application = 2
+    role_subscriptions = 3
+    creator_page = 4
 
 
 class InteractionType(Enum):
@@ -664,6 +748,7 @@ class InteractionResponseType(Enum):
     autocomplete_result = 8
     modal = 9  # for modals
     # premium_required = 10 (deprecated)
+    iframe = 11  # for iframe modals
     launch_activity = 12
 
 
@@ -819,6 +904,7 @@ class Locale(Enum):
     turkish = 'tr'
     ukrainian = 'uk'
     vietnamese = 'vi'
+    arabic = 'ar'
 
     def __str__(self) -> str:
         return self.value
@@ -835,6 +921,7 @@ class EntityType(Enum):
     stage_instance = 1
     voice = 2
     external = 3
+    prime_time = 4
 
 
 class EventStatus(Enum):
@@ -880,6 +967,12 @@ class AutoModRuleTriggerType(Enum):
     keyword_preset = 4
     mention_spam = 5
     member_profile = 6
+    server_policy = 7
+    # aliases as found in client code
+    spam_link = 2
+    ml_spam = 3
+    default_keyword_list = 4
+    user_profile = 6
 
 
 class AutoModRuleEventType(Enum):
@@ -935,13 +1028,19 @@ class EntitlementOwnerType(Enum):
 
 
 class PollLayoutType(Enum):
+    unknown = 0
     default = 1
+    image_only_answers = 2
+
+    normal = 1
 
 
 class InviteType(Enum):
     guild = 0
     group_dm = 1
     friend = 2
+
+    gdm = 1
 
 
 class ReactionType(Enum):
@@ -974,6 +1073,7 @@ class OnboardingPromptType(Enum):
 class OnboardingMode(Enum):
     default = 0
     advanced = 1
+    regular = 0
 
 
 class SeparatorSpacing(Enum):
@@ -1006,6 +1106,111 @@ class NameplatePalette(Enum):
     white = 'white'
 
 
+class InviteUsersJobStatus(Enum):
+    unspecified = 0
+    pending = 1
+    completed = 2
+    failed = 3
+
+
+class MemberJoinType(Enum):
+    unknown = 0
+    bot = 1
+    integration = 2
+    discovery = 3
+    hub = 4
+    invite = 5
+    vanity_url = 6
+    manual_member_verification = 7
+    social_layer_integration_linked_channel = 8
+    gaming_sdk_linked_channel = 8
+
+
+class ApplicationIntegrationType(Enum):
+    guild = 0
+    user = 1
+
+
+class DisplayNameEffect(Enum):
+    solid = 1
+    gradient = 2
+    neon = 3
+    toon = 4
+    pop = 5
+    glow = 6
+    wumpus = 7
+
+
+class DisplayNameFont(Enum):
+    default = 11
+    bangers = 1
+    bio_rhyme = 2
+    cherry_bomb = 3
+    chicle = 4
+    compagnon = 5
+    museo_moderno = 6
+    neo_castel = 7
+    pixelify = 8
+    ribes = 9
+    sinistre = 10
+    gg_sans = 11
+    zilla_slab = 12
+
+    @property
+    def fname(self):
+        o = {
+            2: 'Tempo',
+            3: 'Sakura',
+            4: 'Jellybean',
+            6: 'Modern',
+            7: 'Medieval',
+            8: '8Bit',
+            10: 'Vampyre',
+            11: 'gg sans',
+        }
+        return o.get(self.value, self.name.replace('_', ' ').title())
+
+    @property
+    def cdn_url(self):
+        o = {
+            1: 'https://fonts.google.com/specimen/Bangers',
+            2: 'https://fonts.google.com/specimen/BioRhyme',
+            3: 'https://fonts.google.com/specimen/Cherry+Bomb+One',
+            4: 'https://fonts.google.com/specimen/Chicle',
+            5: 'https://velvetyne.fr/fonts/compagnon/',
+            6: 'https://fonts.google.com/specimen/MuseoModerno',
+            7: 'https://maxlilllo.gumroad.com/l/neo-castel',
+            8: 'https://fonts.google.com/specimen/Pixelify+Sans',
+            9: 'https://www.collletttivo.it/typefaces/ribes',
+            10: 'https://www.collletttivo.it/typefaces/sinistre',
+            11: 'https://en.fontsloader.com/types/gg-sans',
+            12: 'https://fonts.google.com/specimen/Zilla+Slab',
+        }
+        return o[self.value]
+
+
+class InteractionEphemeralityReason(Enum):
+    none = 0
+    feature_limited = 1
+    guild_feature_limited = 2
+    user_feature_limited = 3
+    slowmode = 4
+    rate_limit = 5
+    cannot_message_user = 6
+    user_verification_level = 7
+    cannot_unarchive_thread = 8
+    cannot_join_thread = 9
+    missing_permissions = 10
+    cannot_send_attachments = 11
+    cannot_send_embeds = 12
+    cannot_send_stickers = 13
+    automod_blocked = 14
+    harmful_link = 15
+    cannot_use_command = 16
+    beta_guild_size = 17
+    cannot_use_external_apps = 18
+
+
 def create_unknown_value(cls: Type[E], val: Any) -> E:
     value_cls = cls._enum_value_cls_  # type: ignore # This is narrowed below
     name = f'unknown_{val}'
@@ -1022,3 +1227,103 @@ def try_enum(cls: Type[E], val: Any) -> E:
         return cls._enum_value_map_[val]  # type: ignore # All errors are caught below
     except (KeyError, TypeError, AttributeError):
         return create_unknown_value(cls, val)
+
+
+class ConnectionType(Enum):
+    amazon_music = 'amazon-music'
+    battle_net = 'battlenet'
+    bluesky = 'bluesky'
+    bungie = 'bungie'
+    contacts = 'contacts'
+    crunchyroll = 'crunchyroll'
+    domain = 'domain'
+    ebay = 'ebay'
+    epic_games = 'epicgames'
+    facebook = 'facebook'
+    github = 'github'
+    instagram = 'instagram'
+    league_of_legends = 'leagueoflegends'
+    mastodon = 'mastodon'
+    paypal = 'paypal'
+    playstation = 'playstation'
+    playstation_stg = 'playstation-stg'
+    reddit = 'reddit'
+    riot_games = 'riotgames'
+    roblox = 'roblox'
+    samsung = 'samsung'
+    soundcloud = 'soundcloud'
+    spotify = 'spotify'
+    skype = 'skype'
+    steam = 'steam'
+    tiktok = 'tiktok'
+    twitch = 'twitch'
+    twitter = 'twitter'
+    xbox = 'xbox'
+    youtube = 'youtube'
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class PremiumType(Enum):
+    none = 0
+    nitro_classic = 1
+    nitro = 2
+    nitro_basic = 3
+
+    @classmethod
+    def from_sku_id(cls, sku_id: int) -> Optional[PremiumType]:
+        if sku_id == 628379670982688768:
+            return cls.none
+        elif sku_id == 521846918637420545:
+            return cls.nitro_classic
+        elif sku_id in (521842865731534868, 521847234246082599):
+            return cls.nitro
+        elif sku_id == 978380684370378762:
+            return cls.nitro_basic
+
+
+class ApplicationType(Enum):
+    unknown = 0
+    deprecated_game = 1
+    """[Deprecated] A game integrating with Discord"""
+    music = 2
+    """~~A music service integrating with Discord~~"""
+    ticketed_events = 3
+    """A limited application used for ticketed event SKUs"""
+    creator_monetization = 4
+    """A limited application used for creator monetization (e.g. role subscription) SKUs"""
+    game = 5
+    """A game integrating with Discord"""
+    non_game_detectable = 6
+    """A non game detectable application"""
+
+
+class GuildVisibility(Enum):
+    unknown = 0
+    public = 1
+    restricted = 2
+    public_with_recruitment = 3
+
+
+class Platform(Enum):
+    desktop = 'Discord Client'
+    android_native = 'Discord Android'
+    ios = 'Discord iOS'
+    embedded = 'Discord Embedded'
+    android_chrome = 'Android Chrome'
+    android_browser = 'Android Mobile'
+    blackberry = 'BlackBerry'
+    chrome = 'Chrome'
+    ios_chrome = 'Chrome iOS'
+    edge = 'Edge'
+    facebook_mobile = 'Facebook Mobile'
+    firefox = 'Firefox'
+    internet_explorer = 'Internet Explorer'
+    konqueror = 'Konqueror'
+    safari_mobile = 'Mobile Safari'
+    mozilla = 'Mozilla'
+    opera = 'Opera'
+    opera_mini = 'Opera Mini'
+    safari = 'Safari'
+    vr = 'Discord VR'

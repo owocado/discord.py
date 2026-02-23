@@ -22,9 +22,9 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 """
 
-from typing import Optional, TypedDict
-from .snowflake import SnowflakeList
-from .user import User, AvatarDecorationData
+from typing import Optional, TypedDict, List, Literal, Any, Dict
+from .snowflake import SnowflakeList, Snowflake
+from .user import User, AvatarDecorationData, PrimaryGuild, APIUser, DisplayNameStyle, UserCollectibles
 from typing_extensions import NotRequired
 
 
@@ -38,33 +38,66 @@ class PartialMember(TypedDict):
     deaf: bool
     mute: bool
     flags: int
+    banner: Optional[str]
+    bio: NotRequired[str]
+    collectibles: Optional[UserCollectibles]
+    display_name_styles: Optional[DisplayNameStyle]
 
 
 class Member(PartialMember, total=False):
-    avatar: str
+    avatar: Optional[str]
     user: User
-    nick: str
+    nick: Optional[str]
     premium_since: Optional[str]
     pending: bool
     permissions: str
-    communication_disabled_until: str
-    banner: NotRequired[Optional[str]]
-    avatar_decoration_data: NotRequired[AvatarDecorationData]
+    communication_disabled_until: Optional[str]
+    banner: Optional[str]
+    avatar_decoration_data: Optional[AvatarDecorationData]
+    unusual_dm_activity_until: Optional[str]
+    primary_guild: Optional[PrimaryGuild]
 
 
 class _OptionalMemberWithUser(PartialMember, total=False):
-    avatar: str
-    nick: str
+    avatar: Optional[str]
+    nick: Optional[str]
     premium_since: Optional[str]
     pending: bool
     permissions: str
-    communication_disabled_until: str
-    avatar_decoration_data: NotRequired[AvatarDecorationData]
+    communication_disabled_until: Optional[str]
+    avatar_decoration_data: Optional[AvatarDecorationData]
+    unusual_dm_activity_until: Optional[str]
+    primary_guild: Optional[PrimaryGuild]
 
 
 class MemberWithUser(_OptionalMemberWithUser):
-    user: User
+    user: APIUser
+    permissions: int
+    activities: NotRequired[List[Dict[str, Any]]]
 
 
 class UserWithMember(User, total=False):
     member: _OptionalMemberWithUser
+
+
+JoinType = Literal[0, 1, 2, 3, 4, 5, 6]
+
+
+class MemberSearch(TypedDict):
+    member: MemberWithUser
+    source_invite_code: Optional[str]
+    join_source_type: JoinType
+    inviter_id: Optional[Snowflake]
+
+
+class MemberSearchResults(TypedDict):
+    guild_id: Snowflake
+    members: List[MemberSearch]
+    page_result_count: int
+    total_result_count: int
+
+
+class PrivateMember(MemberWithUser):
+    bio: str
+    banner: Optional[str]
+    unusual_dm_activity_until: NotRequired[Optional[str]]

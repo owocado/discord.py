@@ -23,7 +23,7 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from .snowflake import Snowflake
-from typing import Literal, Optional, TypedDict
+from typing import Literal, Optional, TypedDict, Any
 from typing_extensions import NotRequired
 
 
@@ -33,14 +33,15 @@ NameplatePallete = Literal['crimson', 'berry', 'sky', 'teal', 'forest', 'bubble_
 
 class _UserSKU(TypedDict):
     asset: str
-    sku_id: Snowflake
+    sku_id: str
+    expires_at: Optional[int]
 
 
 AvatarDecorationData = _UserSKU
 
 
 class PrimaryGuild(TypedDict):
-    identity_guild_id: Optional[int]
+    identity_guild_id: Optional[str]
     identity_enabled: Optional[bool]
     tag: Optional[str]
     badge: Optional[str]
@@ -48,7 +49,7 @@ class PrimaryGuild(TypedDict):
 
 class Collectible(_UserSKU):
     label: str
-    expires_at: Optional[str]
+    expires_at: Optional[int]
 
 
 class NameplateCollectible(Collectible):
@@ -59,15 +60,25 @@ class UserCollectibles(TypedDict):
     nameplate: NameplateCollectible
 
 
+class DisplayNameStyle(TypedDict):
+    font_id: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    effect_id: Literal[1, 2, 3, 4, 5]
+    colors: list[int]
+
+
 class PartialUser(TypedDict):
     id: Snowflake
     username: str
     discriminator: str
     avatar: Optional[str]
     global_name: Optional[str]
-    avatar_decoration_data: NotRequired[AvatarDecorationData]
-    primary_guild: NotRequired[PrimaryGuild]
-    collectibles: NotRequired[UserCollectibles]
+    avatar_decoration_data: Optional[AvatarDecorationData]
+    primary_guild: Optional[PrimaryGuild]
+    collectibles: Optional[UserCollectibles]
+    display_name_styles: Optional[DisplayNameStyle]
+    public_flags: NotRequired[int]
+    bot: NotRequired[bool]
+    system: NotRequired[bool]
 
 
 class User(PartialUser, total=False):
@@ -80,3 +91,37 @@ class User(PartialUser, total=False):
     flags: int
     premium_type: PremiumType
     public_flags: int
+    purchased_flags: int
+    premium_usage_flags: int
+    banner: Optional[str]
+    accent_color: Optional[int]
+    bio: str
+    analytics_token: str
+    phone: NotRequired[str]
+    token: str
+    nsfw_allowed: NotRequired[bool]
+
+
+class PartialConnection(TypedDict):
+    id: str
+    type: str
+    name: str
+    verified: bool
+    metadata: NotRequired[dict[str, Any]]
+
+
+class Connection(PartialConnection):
+    revoked: bool
+    visibility: Literal[0, 1]
+    metadata_visibility: Literal[0, 1]
+    show_activity: bool
+    friend_sync: bool
+    two_way_link: bool
+    access_token: NotRequired[str]
+
+
+class APIUser(PartialUser, total=False):
+    flags: int
+    banner: Optional[str]
+    banner_color: Optional[str]
+    accent_color: Optional[int]

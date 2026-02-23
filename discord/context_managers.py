@@ -41,7 +41,7 @@ __all__ = (
 # fmt: on
 
 
-def _typing_done_callback(fut: asyncio.Future) -> None:
+def _typing_done_callback(fut: asyncio.Future[None]) -> None:
     # just retrieve any exception and call it a day
     try:
         fut.exception()
@@ -64,7 +64,10 @@ class Typing:
 
     async def wrapped_typer(self) -> None:
         channel = await self._get_channel()
-        await channel._state.http.send_typing(channel.id)
+        try:
+            await channel._state.http.send_typing(channel.id)
+        except Exception:
+            pass
 
     def __await__(self) -> Generator[None, None, None]:
         return self.wrapped_typer().__await__()
@@ -75,7 +78,10 @@ class Typing:
 
         while True:
             await asyncio.sleep(5)
-            await typing(channel.id)
+            try:
+                await typing(channel.id)
+            except Exception:  # dont we love Discord API outages?
+                pass
 
     async def __aenter__(self) -> None:
         channel = await self._get_channel()

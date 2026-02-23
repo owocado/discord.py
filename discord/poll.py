@@ -31,7 +31,8 @@ import datetime
 
 from .enums import PollLayoutType, try_enum, MessageType
 from . import utils
-from .emoji import PartialEmoji, Emoji
+from .emoji import Emoji
+from .partial_emoji import PartialEmoji
 from .user import User
 from .object import Object
 from .errors import ClientException
@@ -541,7 +542,7 @@ class Poll:
         """
 
         if not self._message:
-            return
+            return None
         return self._message.created_at
 
     @property

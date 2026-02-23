@@ -44,6 +44,7 @@ from typing import (
     overload,
 )
 import datetime
+from operator import attrgetter
 
 import discord.abc
 from .scheduled_event import ScheduledEvent
@@ -117,7 +118,9 @@ if TYPE_CHECKING:
     )
     from .types.snowflake import SnowflakeList
     from .types.soundboard import BaseSoundboardSound as BaseSoundboardSoundPayload
+    from .types.threads import Thread as ThreadPayload
     from .soundboard import SoundboardSound
+    from .scheduled_event import ScheduledEvent
 
     OverwriteKeyT = TypeVar('OverwriteKeyT', Role, BaseUser, Object, Union[Role, Member, Object])
 
@@ -197,7 +200,7 @@ class VoiceChannelSoundEffect(BaseSoundboardSound):
         The volume of the sound as floating point percentage (e.g. ``1.0`` for 100%).
     """
 
-    __slots__ = ('_state',)
+    __slots__ = ()
 
     def __init__(self, *, state: ConnectionState, id: int, volume: float):
         data: BaseSoundboardSoundPayload = {
@@ -243,7 +246,7 @@ class VoiceChannelEffect:
         The sound of the effect. Returns ``None`` if it's an emoji effect.
     """
 
-    __slots__ = ('channel', 'user', 'animation', 'emoji', 'sound')
+    __slots__ = ('channel', 'user', 'animation', 'emoji', 'sound', '_data')
 
     def __init__(self, *, state: ConnectionState, data: VoiceChannelEffectPayload, guild: Guild):
         self.channel: VoiceChannel = guild.get_channel(int(data['channel_id']))  # type: ignore # will always be a VoiceChannel
@@ -258,6 +261,7 @@ class VoiceChannelEffect:
         emoji = data.get('emoji')
         self.emoji: Optional[PartialEmoji] = PartialEmoji.from_dict(emoji) if emoji is not None else None
         self.sound: Optional[VoiceChannelSoundEffect] = None
+        self._data = utils._to_json(data)
 
         sound_id: Optional[int] = utils._get_as_snowflake(data, 'sound_id')
         if sound_id is not None:
@@ -278,6 +282,9 @@ class VoiceChannelEffect:
     def is_sound(self) -> bool:
         """:class:`bool`: Whether the effect is a sound or not."""
         return self.sound is not None
+
+    def to_dict(self) -> VoiceChannelEffectPayload:
+        return utils._from_json(self._data)
 
 
 class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
@@ -322,7 +329,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between sending messages
         in this channel. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
     nsfw: :class:`bool`
         If the channel is marked as "not safe for work" or "age restricted".
     default_auto_archive_duration: :class:`int`
@@ -350,6 +357,11 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         'last_message_id',
         'default_auto_archive_duration',
         'default_thread_slowmode_delay',
+        'icon_emoji',
+        '_last_pin',
+        '_theme_color',
+        '_flags',
+        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[TextChannelPayload, NewsChannelPayload]):
@@ -359,14 +371,14 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         self._update(guild, data)
 
     def __repr__(self) -> str:
-        attrs = [
+        attrs = (
             ('id', self.id),
             ('name', self.name),
             ('position', self.position),
             ('nsfw', self.nsfw),
             ('news', self.is_news()),
             ('category_id', self.category_id),
-        ]
+        )
         joined = ' '.join('%s=%r' % t for t in attrs)
         return f'<{self.__class__.__name__} {joined}>'
 
@@ -378,12 +390,21 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         self.position: int = data['position']
         self.nsfw: bool = data.get('nsfw', False)
         # Does this need coercion into `int`? No idea yet.
-        self.slowmode_delay: int = data.get('rate_limit_per_user', 0)
+        self.slowmode_delay: int = data.get('rate_limit_per_user', 0) or 0
         self.default_auto_archive_duration: ThreadArchiveDuration = data.get('default_auto_archive_duration', 1440)
-        self.default_thread_slowmode_delay: int = data.get('default_thread_rate_limit_per_user', 0)
+        self.default_thread_slowmode_delay: int = data.get('default_thread_rate_limit_per_user', 0) or 0
         self._type: Literal[0, 5] = data.get('type', self._type)
         self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
+        self._last_pin = utils.parse_time(data.get('last_pin_timestamp'))
+        self._flags: int = data.get('flags') or 0
+        self._theme_color: Optional[int] = data.get('theme_color')
+        self.icon_emoji: Optional[PartialEmoji] = None
+        icon_emoji = data.get('icon_emoji')
+        if icon_emoji:
+            _id = utils._get_as_snowflake(icon_emoji, 'id') or None
+            self.icon_emoji = PartialEmoji.with_state(self._state, id=_id, name=icon_emoji.get('name') or '')
         self._fill_overwrites(data)
+        self._data = utils._to_json(data)
 
     async def _get_channel(self) -> Self:
         return self
@@ -412,6 +433,17 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         denied = Permissions.voice()
         base.value &= ~denied.value
         return base
+
+    def to_dict(self) -> Union[TextChannelPayload, NewsChannelPayload]:
+        return utils._from_json(self._data)
+
+    @property
+    def flags(self) -> ChannelFlags:
+        """:class:`ChannelFlags`: The flags associated with this text channel.
+
+        .. versionadded:: 2.6
+        """
+        return ChannelFlags._from_value(self._flags)
 
     @property
     def members(self) -> List[Member]:
@@ -1038,10 +1070,14 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
                 before_timestamp = utils.snowflake_time(before.id).isoformat()
 
         update_before = lambda data: data['thread_metadata']['archive_timestamp']
+
         endpoint = self.guild._state.http.get_public_archived_threads
 
         if joined:
-            update_before = lambda data: data['id']
+
+            def update_before(data: ThreadPayload):
+                return data['id']
+
             endpoint = self.guild._state.http.get_joined_private_archived_threads
         elif private:
             endpoint = self.guild._state.http.get_private_archived_threads
@@ -1055,7 +1091,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
 
             data = await endpoint(self.id, before=before_timestamp, limit=retrieve)
 
-            threads = data.get('threads', [])
+            threads = data.get('threads', []) or []
             for raw_thread in threads:
                 yield Thread(guild=self.guild, state=self.guild._state, data=raw_thread)
                 # Currently the API doesn't let you request less than 2 threads.
@@ -1087,6 +1123,11 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         'rtc_region',
         'video_quality_mode',
         'last_message_id',
+        'icon_emoji',
+        '_theme_color',
+        '_flags',
+        '_last_pin',
+        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[VoiceChannelPayload, StageChannelPayload]):
@@ -1115,7 +1156,17 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         self.slowmode_delay = data.get('rate_limit_per_user', 0)
         self.bitrate: int = data['bitrate']
         self.user_limit: int = data['user_limit']
+
+        self._flags: int = data.get('flags') or 0
+        self._theme_color: Optional[int] = data.get('theme_color')
+        self.icon_emoji: Optional[PartialEmoji] = None
+        icon_emoji = data.get('icon_emoji')
+        if icon_emoji:
+            _id = utils._get_as_snowflake(icon_emoji, 'id') or None
+            self.icon_emoji = PartialEmoji.with_state(self._state, id=_id, name=icon_emoji.get('name') or '')
+        self._last_pin = utils.parse_time(data.get('last_pin_timestamp'))
         self._fill_overwrites(data)
+        self._data = utils._to_json(data)
 
     @property
     def _sorting_bucket(self) -> int:
@@ -1127,6 +1178,9 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
         .. versionadded:: 2.0
         """
         return self.nsfw
+
+    def to_dict(self) -> Union[VoiceChannelPayload, StageChannelPayload]:
+        return utils._from_json(self._data)
 
     @property
     def members(self) -> List[Member]:
@@ -1183,6 +1237,14 @@ class VocalGuildChannel(discord.abc.Messageable, discord.abc.Connectable, discor
             denied.update(manage_channels=True, manage_roles=True)
             base.value &= ~denied.value
         return base
+
+    @property
+    def flags(self) -> ChannelFlags:
+        """:class:`ChannelFlags`: The flags associated with this channel.
+
+        .. versionadded:: 2.6
+        """
+        return ChannelFlags._from_value(self._flags)
 
     @property
     def last_message(self) -> Optional[Message]:
@@ -1515,12 +1577,28 @@ class VoiceChannel(VocalGuildChannel):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between sending messages
         in this channel. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
 
         .. versionadded:: 2.2
+    status: Optional[:class:`str`]
+        The status of the voice channel. ``None`` if no status is set.
+        This is not available for the fetch methods such as :func:`Guild.fetch_channel`
+        or :func:`Client.fetch_channel`
+
+        .. versionadded:: 2.6
     """
 
-    __slots__ = ()
+    __slots__ = ('topic', 'status', 'hd_streaming_until', '_hd_streaming_buyer_id')
+
+    def __init__(self, *, state: ConnectionState, guild: Guild, data: VoiceChannelPayload) -> None:
+        super().__init__(state=state, guild=guild, data=data)
+        self.topic: Optional[str] = data.get('topic')
+        self.status: Optional[str] = data.get('status') or None  # empty string -> None
+        self._hd_streaming_buyer_id = data.get('hd_streaming_buyer_id')
+        try:
+            self.hd_streaming_until = utils.parse_time(data['hd_streaming_until'])
+        except KeyError:
+            self.hd_streaming_until: Optional[datetime.datetime] = None
 
     def __repr__(self) -> str:
         attrs = [
@@ -1742,7 +1820,7 @@ class StageChannel(VocalGuildChannel):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between sending messages
         in this channel. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
 
         .. versionadded:: 2.2
     """
@@ -1750,7 +1828,7 @@ class StageChannel(VocalGuildChannel):
     __slots__ = ('topic',)
 
     def __repr__(self) -> str:
-        attrs = [
+        attrs = (
             ('id', self.id),
             ('name', self.name),
             ('topic', self.topic),
@@ -1760,7 +1838,7 @@ class StageChannel(VocalGuildChannel):
             ('video_quality_mode', self.video_quality_mode),
             ('user_limit', self.user_limit),
             ('category_id', self.category_id),
-        ]
+        )
         joined = ' '.join('%s=%r' % t for t in attrs)
         return f'<{self.__class__.__name__} {joined}>'
 
@@ -2049,7 +2127,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
             To check if the channel or the guild of that channel are marked as NSFW, consider :meth:`is_nsfw` instead.
     """
 
-    __slots__ = ('name', 'id', 'guild', 'nsfw', '_state', 'position', '_overwrites', 'category_id')
+    __slots__ = ('name', 'id', 'guild', 'nsfw', '_state', 'position', '_overwrites', 'category_id', '_data')
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: CategoryChannelPayload):
         self._state: ConnectionState = state
@@ -2066,6 +2144,10 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         self.nsfw: bool = data.get('nsfw', False)
         self.position: int = data['position']
         self._fill_overwrites(data)
+        self._data = utils._to_json(data)
+
+    def to_dict(self) -> CategoryChannelPayload:
+        return utils._from_json(self._data)
 
     @property
     def _sorting_bucket(self) -> int:
@@ -2188,14 +2270,14 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
     def text_channels(self) -> List[TextChannel]:
         """List[:class:`TextChannel`]: Returns the text channels that are under this category."""
         ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, TextChannel)]
-        ret.sort(key=lambda c: (c.position, c.id))
+        ret.sort(key=attrgetter('position', 'id'))
         return ret
 
     @property
     def voice_channels(self) -> List[VoiceChannel]:
         """List[:class:`VoiceChannel`]: Returns the voice channels that are under this category."""
         ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, VoiceChannel)]
-        ret.sort(key=lambda c: (c.position, c.id))
+        ret.sort(key=attrgetter('position', 'id'))
         return ret
 
     @property
@@ -2205,7 +2287,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         .. versionadded:: 1.7
         """
         ret = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, StageChannel)]
-        ret.sort(key=lambda c: (c.position, c.id))
+        ret.sort(key=attrgetter('position', 'id'))
         return ret
 
     @property
@@ -2215,7 +2297,7 @@ class CategoryChannel(discord.abc.GuildChannel, Hashable):
         .. versionadded:: 2.4
         """
         r = [c for c in self.guild.channels if c.category_id == self.id and isinstance(c, ForumChannel)]
-        r.sort(key=lambda c: (c.position, c.id))
+        r.sort(key=attrgetter('position', 'id'))
         return r
 
     async def create_text_channel(self, name: str, **options: Unpack[_CreateTextChannelOptions]) -> TextChannel:
@@ -2336,6 +2418,8 @@ class ForumTag(Hashable):
             self.emoji = None
         else:
             self.emoji = PartialEmoji.with_state(state=state, name=emoji_name, id=emoji_id)
+            if e := state.get_emoji(emoji_id):
+                self.emoji.animated = e.animated
         return self
 
     def to_dict(self) -> Dict[str, Any]:
@@ -2406,7 +2490,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between creating threads
         in this forum. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
     nsfw: :class:`bool`
         If the forum is marked as "not safe for work" or "age restricted".
     default_auto_archive_duration: :class:`int`
@@ -2450,8 +2534,11 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         'default_reaction_emoji',
         'default_layout',
         'default_sort_order',
+        'icon_emoji',
         '_available_tags',
-        '_flags',
+        '_theme_color',
+        '_last_pin',
+        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[ForumChannelPayload, MediaChannelPayload]):
@@ -2482,7 +2569,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         self.default_auto_archive_duration: ThreadArchiveDuration = data.get('default_auto_archive_duration', 1440)
         self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
         # This takes advantage of the fact that dicts are ordered since Python 3.7
-        tags = [ForumTag.from_data(state=self._state, data=tag) for tag in data.get('available_tags', [])]
+        tags = [ForumTag.from_data(state=self._state, data=tag) for tag in data.get('available_tags', []) or []]
         self.default_thread_slowmode_delay: int = data.get('default_thread_rate_limit_per_user', 0)
         self.default_layout: ForumLayoutType = try_enum(ForumLayoutType, data.get('default_forum_layout', 0))
         self._available_tags: Dict[int, ForumTag] = {tag.id: tag for tag in tags}
@@ -2502,7 +2589,19 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
             self.default_sort_order = try_enum(ForumOrderType, default_sort_order)
 
         self._flags: int = data.get('flags', 0)
+        self._theme_color: Optional[int] = data.get('theme_color')
+        self.icon_emoji: Optional[PartialEmoji] = None
+        icon_emoji = data.get('icon_emoji')
+        if icon_emoji:
+            _id = utils._get_as_snowflake(icon_emoji, 'id') or None
+            self.icon_emoji = PartialEmoji.with_state(self._state, id=_id, name=icon_emoji.get('name') or '')
+        self._type = data.get('type', self._type)
+        self._last_pin = utils.parse_time(data.get('last_pin_timestamp'))
         self._fill_overwrites(data)
+        self._data = utils._to_json(data)
+
+    def to_dict(self) -> Union[ForumChannelPayload, MediaChannelPayload]:
+        return utils._from_json(self._data)
 
     @property
     def type(self) -> Literal[ChannelType.forum, ChannelType.media]:
@@ -3159,7 +3258,8 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         elif before is not None:
             before_timestamp = utils.snowflake_time(before.id).isoformat()
 
-        update_before = lambda data: data['thread_metadata']['archive_timestamp']
+        def update_before(data: ThreadPayload):
+            return data['thread_metadata']['archive_timestamp']
 
         while True:
             retrieve = 100
@@ -3170,7 +3270,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
 
             data = await self.guild._state.http.get_public_archived_threads(self.id, before=before_timestamp, limit=retrieve)
 
-            threads = data.get('threads', [])
+            threads = data.get('threads', []) or []
             for raw_thread in threads:
                 yield Thread(guild=self.guild, state=self.guild._state, data=raw_thread)
                 # Currently the API doesn't let you request less than 2 threads.
@@ -3223,24 +3323,30 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
         The direct message channel ID.
     """
 
-    __slots__ = ('id', 'recipients', 'me', '_state')
+    __slots__ = ('id', 'recipients', 'me', 'last_message_id', '_state', '_flags', '_data')
 
     def __init__(self, *, me: ClientUser, state: ConnectionState, data: DMChannelPayload):
         self._state: ConnectionState = state
-        self.recipients: List[User] = [state.store_user(u) for u in data.get('recipients', [])]
+        self.recipients: List[User] = [state.store_user(u) for u in data.get('recipients', []) or []]
         self.me: ClientUser = me
         self.id: int = int(data['id'])
+        self.last_message_id = utils._get_as_snowflake(data, 'last_message_id')
+        self._flags: int = data.get('flags') or 0
+        self._data = utils._to_json(data)
+
+    def to_dict(self) -> DMChannelPayload:
+        return utils._from_json(self._data)
 
     async def _get_channel(self) -> Self:
         return self
 
     def __str__(self) -> str:
         if self.recipient:
-            return f'Direct Message with {self.recipient}'
-        return 'Direct Message with Unknown User'
+            return f'DM with {self.recipient}'
+        return 'DM with Unknown User'
 
     def __repr__(self) -> str:
-        return f'<DMChannel id={self.id} recipient={self.recipient!r}>'
+        return f'<DMChannel id={self.id} recipient={self.recipient!r} flags={getattr(self, "flags", None)!r}>'
 
     @classmethod
     def _from_message(cls, state: ConnectionState, channel_id: int) -> Self:
@@ -3250,7 +3356,16 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
         self.recipients = []
         # state.user won't be None here
         self.me = state.user  # type: ignore
+        self._data = b''
         return self
+
+    @property
+    def flags(self) -> ChannelFlags:
+        """:class:`ChannelFlags`: The flags associated with this DM channel.
+
+        .. versionadded:: 2.6
+        """
+        return ChannelFlags._from_value(self._flags)
 
     @property
     def recipient(self) -> Optional[User]:
@@ -3280,6 +3395,11 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
         .. versionadded:: 2.0
         """
         return f'https://discord.com/channels/@me/{self.id}'
+
+    @property
+    def mention(self) -> str:
+        """:class:`str`: The string that allows you to mention this DM channel."""
+        return f'<#{self.id}>'
 
     @property
     def created_at(self) -> datetime.datetime:
@@ -3350,6 +3470,10 @@ class DMChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
 
         return PartialMessage(channel=self, id=message_id)
 
+    def is_nsfw(self) -> bool:
+        """:class:`bool`: Checks if the channel is NSFW."""
+        return False
+
 
 class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable):
     """Represents a Discord group channel.
@@ -3390,7 +3514,7 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         The group channel's name if provided.
     """
 
-    __slots__ = ('id', 'recipients', 'owner_id', 'owner', '_icon', 'name', 'me', '_state')
+    __slots__ = ('id', 'recipients', 'owner_id', '_icon', 'name', 'me', 'last_message_id', '_state', '_flags', '_data')
 
     def __init__(self, *, me: ClientUser, state: ConnectionState, data: GroupChannelPayload):
         self._state: ConnectionState = state
@@ -3402,13 +3526,14 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         self.owner_id: Optional[int] = utils._get_as_snowflake(data, 'owner_id')
         self._icon: Optional[str] = data.get('icon')
         self.name: Optional[str] = data.get('name')
-        self.recipients: List[User] = [self._state.store_user(u) for u in data.get('recipients', [])]
+        self.recipients: List[User] = [self._state.store_user(u) for u in data.get('recipients', []) or []]
 
-        self.owner: Optional[BaseUser]
-        if self.owner_id == self.me.id:
-            self.owner = self.me
-        else:
-            self.owner = utils.find(lambda u: u.id == self.owner_id, self.recipients)
+        self.last_message_id: Optional[int] = utils._get_as_snowflake(data, 'last_message_id')
+        self._flags: int = data.get('flags') or 0
+        self._data = utils._to_json(data)
+
+    def to_dict(self) -> GroupChannelPayload:
+        return utils._from_json(self._data)
 
     async def _get_channel(self) -> Self:
         return self
@@ -3420,10 +3545,10 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         if len(self.recipients) == 0:
             return 'Unnamed'
 
-        return ', '.join(map(lambda x: x.name, self.recipients))
+        return ', '.join(x.name for x in self.recipients)
 
     def __repr__(self) -> str:
-        return f'<GroupChannel id={self.id} name={self.name!r}>'
+        return f'<GroupChannel id={self.id} name={self.name!r} owner_id={self.owner_id} flags={self._flags}>'
 
     @property
     def type(self) -> Literal[ChannelType.group]:
@@ -3459,6 +3584,27 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
         .. versionadded:: 2.0
         """
         return f'https://discord.com/channels/@me/{self.id}'
+
+    @property
+    def flags(self) -> ChannelFlags:
+        """:class:`ChannelFlags`: The flags associated with this group DM channel.
+
+        .. versionadded:: 2.6
+        """
+        return ChannelFlags._from_value(self._flags)
+
+    @property
+    def mention(self) -> str:
+        """:class:`str`: The string that allows you to mention this group channel."""
+        return f'<#{self.id}>'
+
+    @property
+    def owner(self) -> Optional[User | Object]:
+        """Optional[:class:`User`]: The owner that owns the group channel."""
+        # Only reason it wouldn't be in recipients is if it's a managed channel
+        owner_id = self.owner_id
+        if owner_id is not None:
+            return utils.get(self.recipients, id=owner_id) or self._state.get_user(owner_id) or Object(owner_id)
 
     def permissions_for(self, obj: Snowflake, /) -> Permissions:
         """Handles permission resolution for a :class:`User`.
@@ -3520,6 +3666,9 @@ class GroupChannel(discord.abc.Messageable, discord.abc.PrivateChannel, Hashable
 
         await self._state.http.leave_group(self.id)
 
+    def is_nsfw(self) -> bool:
+        return False
+
 
 class PartialMessageable(discord.abc.Messageable, Hashable):
     """Represents a partial messageable to aid with working messageable channels when
@@ -3562,7 +3711,7 @@ class PartialMessageable(discord.abc.Messageable, Hashable):
         self.type: Optional[ChannelType] = type
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} id={self.id} type={self.type!r}>'
+        return f'<{self.__class__.__name__} id={self.id} type={self.type!r} guild_id={self.guild_id}>'
 
     async def _get_channel(self) -> PartialMessageable:
         return self
@@ -3634,6 +3783,12 @@ class PartialMessageable(discord.abc.Messageable, Hashable):
         from .message import PartialMessage
 
         return PartialMessage(channel=self, id=message_id)
+
+    def is_nsfw(self) -> bool:
+        return False
+
+    def to_dict(self):
+        return {'id': self.id, 'guild_id': self.guild_id, 'type': self.type.value if self.type else None}
 
 
 def _guild_channel_factory(channel_type: int):

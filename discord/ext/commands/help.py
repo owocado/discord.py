@@ -249,7 +249,7 @@ def _not_overridden(f: FuncT) -> FuncT:
     return f
 
 
-class _HelpCommandImpl(Command):
+class _HelpCommandImpl(Command[Any, ..., Any]):
     def __init__(self, inject: HelpCommand, *args: Any, **kwargs: Unpack[_CommandKwargs]) -> None:
         super().__init__(inject.command_callback, *args, **kwargs)
         self._original: HelpCommand = inject
@@ -300,7 +300,7 @@ class _HelpCommandImpl(Command):
         # Ditto here
         def wrapped_walk_commands(
             *, _original: Callable[[], Generator[Command[Any, ..., Any], None, None]] = cog.walk_commands
-        ):
+        ) -> Generator[Command[Any, ..., Any], None, None]:
             yield from _original()
             yield self
 
@@ -536,7 +536,7 @@ class HelpCommand:
             The string with mentions removed.
         """
 
-        def replace(obj: re.Match, *, transforms: Dict[str, str] = self.MENTION_TRANSFORMS) -> str:
+        def replace(obj: re.Match[str], *, transforms: Dict[str, str] = self.MENTION_TRANSFORMS) -> str:
             return transforms.get(obj.group(0), '@invalid')
 
         return self.MENTION_PATTERN.sub(replace, string)
@@ -1275,7 +1275,7 @@ class DefaultHelpCommand(HelpCommand):
 
         no_category = f'\u200b{self.no_category}:'
 
-        def get_category(command, *, no_category=no_category):
+        def get_category(command: Command[Any, ..., Any], *, no_category=no_category):
             cog = command.cog
             return cog.qualified_name + ':' if cog is not None else no_category
 

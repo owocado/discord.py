@@ -34,17 +34,21 @@ from ..enums import (
     AppCommandType,
     AppCommandPermissionType,
     ChannelType,
+    ForumLayoutType,
+    ForumOrderType,
     Locale,
     try_enum,
 )
 import array
 from ..mixins import Hashable
-from ..utils import _get_as_snowflake, parse_time, snowflake_time, MISSING
+from ..utils import _get_as_snowflake, parse_time, snowflake_time, SequenceProxy, MISSING, _from_json, _to_json
 from ..object import Object
 from ..role import Role
 from ..member import Member
+from ..channel import ForumTag
+from ..partial_emoji import PartialEmoji
 
-from typing import Any, Dict, Generic, List, TYPE_CHECKING, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, TYPE_CHECKING, Optional, TypeVar, Union, Sequence
 
 __all__ = (
     'AppCommand',
@@ -80,12 +84,13 @@ if TYPE_CHECKING:
     from ..types.threads import (
         ThreadMetadata,
         ThreadArchiveDuration,
+        Thread as ThreadPayload,
     )
 
     from ..abc import Snowflake
     from ..state import ConnectionState
     from ..guild import GuildChannel, Guild
-    from ..channel import TextChannel, ForumChannel, ForumTag
+    from ..channel import TextChannel, ForumChannel
     from ..threads import Thread
     from ..user import User
 
@@ -214,7 +219,7 @@ class AppCommand(Hashable):
         self.guild_id: Optional[int] = _get_as_snowflake(data, 'guild_id')
         self.type: AppCommandType = try_enum(AppCommandType, data.get('type', 1))
         self.options: List[Union[Argument, AppCommandGroup]] = [
-            app_command_option_factory(data=d, parent=self, state=self._state) for d in data.get('options', [])
+            app_command_option_factory(data=d, parent=self, state=self._state) for d in data.get('options', []) or []
         ]
         self.default_member_permissions: Optional[Permissions]
         permissions = data.get('default_member_permissions')
@@ -621,6 +626,16 @@ class AppCommandChannel(Hashable):
         '_last_pin',
         '_flags',
         '_state',
+        'default_thread_slowmode_delay',
+        'default_layout',
+        '_available_tags',
+        'default_reaction_emoji',
+        'default_sort_order',
+        'default_auto_archive_duration',
+        'rtc_region',
+        'bitrate',
+        'user_limit',
+        '_data',
     )
 
     def __init__(
@@ -640,16 +655,64 @@ class AppCommandChannel(Hashable):
         self.position: int = data.get('position') or 0
         self.nsfw: bool = data.get('nsfw') or False
         self.category_id: Optional[int] = _get_as_snowflake(data, 'parent_id')
-        self.slowmode_delay: int = data.get('rate_limit_per_user') or 0
+
+        # Category channel does not have a slowmode_delay, so we return None (instead of 0) to avoid implying CategoryChannel has a slowmode
+        self.slowmode_delay: Optional[int] = (
+            data.get('rate_limit_per_user', 0) if self.type != ChannelType.category else None
+        )
         self.last_message_id: Optional[int] = _get_as_snowflake(data, 'last_message_id')
         self._last_pin: Optional[datetime] = parse_time(data.get('last_pin_timestamp'))
         self._flags: int = data.get('flags', 0)
+        # Only a Text/Forum Channel have a 'default_auto_archive_duration', anything else we return None to avoid implying they have a 'default_auto_archive_duration' field
+        self.default_auto_archive_duration: Optional[ThreadArchiveDuration] = (
+            data.get('default_auto_archive_duration', 1440)
+            if self.type in (ChannelType.text, ChannelType.forum, ChannelType.news, ChannelType.media)
+            else None
+        )
+
+        # This takes advantage of the fact that dicts are ordered since Python 3.7
+        tags = [ForumTag.from_data(state=self._state, data=tag) for tag in data.get('available_tags', [])]
+        self._available_tags: Dict[int, ForumTag] = {tag.id: tag for tag in tags}
+
+        self.default_thread_slowmode_delay: Optional[int] = (
+            data.get('default_thread_rate_limit_per_user', 0)
+            if self.type in (ChannelType.text, ChannelType.forum, ChannelType.news, ChannelType.media)
+            else None
+        )
+        self.default_layout: Optional[ForumLayoutType] = (
+            try_enum(ForumLayoutType, data.get('default_forum_layout', 0)) if self.type is ChannelType.forum else None
+        )
+        self.default_reaction_emoji: Optional[PartialEmoji] = None
+        default_reaction_emoji = data.get('default_reaction_emoji')
+        if default_reaction_emoji:
+            self.default_reaction_emoji = PartialEmoji.with_state(
+                state=self._state,
+                id=_get_as_snowflake(default_reaction_emoji, 'emoji_id') or None,  # Coerce 0 -> None
+                name=default_reaction_emoji.get('emoji_name') or '',
+            )
+        self.default_sort_order: Optional[ForumOrderType] = None
+        default_sort_order = data.get('default_sort_order')
+        if default_sort_order is not None:
+            self.default_sort_order = try_enum(ForumOrderType, default_sort_order)
+
+        self.rtc_region: Optional[str] = data.get('rtc_region')
+        self.bitrate: Optional[int] = data.get('bitrate')
+        self.user_limit: Optional[int] = data.get('user_limit')
+        self._data: bytes = _to_json(data)
 
     def __str__(self) -> str:
         return self.name
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} id={self.id!r} name={self.name!r} type={self.type!r}>'
+        return f'<{self.__class__.__name__} id={self.id!r} name={self.name!r} type={self.type!r} guild_id={self.guild_id!r} permissions={self.permissions!r}>'
+
+    @property
+    def available_tags(self) -> Sequence[ForumTag]:
+        """Sequence[:class:`~discord.ForumTag`]: Returns all the available tags in a :class:`~discord.ForumChannel`.
+
+        .. versionadded:: 2.7
+        """
+        return SequenceProxy(self._available_tags.values())
 
     @property
     def guild(self) -> Optional[Guild]:
@@ -721,7 +784,7 @@ class AppCommandChannel(Hashable):
 
     @property
     def jump_url(self) -> str:
-        """:class:`str`: Returns a URL that allows the client to jump to the channel.
+        """:class:`str`: Returns a URL that allows the client to jump to the thread.
 
         .. versionadded:: 2.6
         """
@@ -731,6 +794,9 @@ class AppCommandChannel(Hashable):
     def created_at(self) -> datetime:
         """:class:`datetime.datetime`: An aware timestamp of when this channel was created in UTC."""
         return snowflake_time(self.id)
+
+    def to_dict(self) -> PartialChannel:
+        return _from_json(self._data)
 
 
 class AppCommandThread(Hashable):
@@ -837,6 +903,11 @@ class AppCommandThread(Hashable):
         '_flags',
         '_created_at',
         '_state',
+        'last_message_id',
+        'slowmode_delay',
+        '_member_ids',
+        '_last_pin',
+        '_data',
     )
 
     def __init__(
@@ -858,9 +929,12 @@ class AppCommandThread(Hashable):
         self.message_count: int = int(data['message_count'])
         self.last_message_id: Optional[int] = _get_as_snowflake(data, 'last_message_id')
         self.slowmode_delay: int = data.get('rate_limit_per_user', 0)
-        self.total_message_sent: int = data.get('total_message_sent', 0)
+        self.total_message_sent: int = data.get('total_message_sent', 0) or 0
         self._applied_tags: array.array[int] = array.array('Q', map(int, data.get('applied_tags', [])))
         self._flags: int = data.get('flags', 0)
+        self._member_ids: array.array[int] = array.array('Q', map(int, data.get('member_ids_preview') or []))
+        self._last_pin = parse_time(data.get('last_pin_timestamp'))
+        self._data: bytes = _to_json(data)
         self._unroll_metadata(data['thread_metadata'])
 
     def __str__(self) -> str:
@@ -946,6 +1020,22 @@ class AppCommandThread(Hashable):
         """
         return self._created_at
 
+    def is_private(self) -> bool:
+        """:class:`bool`: Whether the thread is a private thread.
+
+        A private thread is only viewable by those that have been explicitly
+        invited or have :attr:`~.Permissions.manage_threads`.
+        """
+        return self.type is ChannelType.private_thread
+
+    def is_news(self) -> bool:
+        """:class:`bool`: Whether the thread is a news thread.
+
+        A news thread is a thread that has a parent that is a news channel,
+        i.e. :meth:`.TextChannel.is_news` is ``True``.
+        """
+        return self.type is ChannelType.news_thread
+
     def resolve(self) -> Optional[Thread]:
         """Resolves the application command channel to the appropriate channel
         from cache if found.
@@ -959,6 +1049,9 @@ class AppCommandThread(Hashable):
         if guild is not None:
             return guild.get_thread(self.id)
         return None
+
+    def to_dict(self) -> ThreadPayload:
+        return _from_json(self._data)
 
     async def fetch(self) -> Thread:
         """|coro|
@@ -1124,7 +1217,7 @@ class AppCommandGroup:
         self._from_data(data)
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} name={self.name!r} type={self.type!r}>'
+        return f'<{self.__class__.__name__} name={self.name!r} type={self.type!r} options={self.options!r}>'
 
     @property
     def qualified_name(self) -> str:
@@ -1157,7 +1250,7 @@ class AppCommandGroup:
         self.name: str = data['name']
         self.description: str = data['description']
         self.options: List[Union[Argument, AppCommandGroup]] = [
-            app_command_option_factory(data=d, parent=self, state=self._state) for d in data.get('options', [])
+            app_command_option_factory(data=d, parent=self, state=self._state) for d in data.get('options', []) or []
         ]
         self.name_localizations: Dict[Locale, str] = _to_locale_dict(data.get('name_localizations') or {})
         self.description_localizations: Dict[Locale, str] = _to_locale_dict(data.get('description_localizations') or {})

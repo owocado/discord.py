@@ -28,7 +28,7 @@ import unicodedata
 
 from .mixins import Hashable
 from .asset import Asset, AssetMixin
-from .utils import cached_slot_property, snowflake_time, get, MISSING, _get_as_snowflake
+from .utils import cached_slot_property, snowflake_time, get, MISSING, _get_as_snowflake, _from_json, _to_json
 from .enums import StickerType, StickerFormatType, try_enum
 
 __all__ = (
@@ -120,7 +120,9 @@ class StickerPack(Hashable):
     @property
     def banner(self) -> Optional[Asset]:
         """:class:`Asset`: The banner asset of the sticker pack."""
-        return self._banner and Asset._from_sticker_banner(self._state, self._banner)  # type: ignore
+        if not self._banner:
+            return None
+        return Asset._from_sticker_banner(self._state, self._banner)  # type: ignore
 
     def __repr__(self) -> str:
         return f'<StickerPack id={self.id} name={self.name!r} description={self.description!r}>'
@@ -212,6 +214,9 @@ class StickerItem(_StickerTag):
     def __str__(self) -> str:
         return self.name
 
+    def to_dict(self) -> StickerItemPayload:
+        return {'id': self.id, 'name': self.name, 'format_type': self.format.value}
+
     async def fetch(self) -> Union[Sticker, StandardSticker, GuildSticker]:
         """|coro|
 
@@ -265,7 +270,7 @@ class Sticker(_StickerTag):
         The URL for the sticker's image.
     """
 
-    __slots__ = ('_state', 'id', 'name', 'description', 'format', 'url')
+    __slots__ = ('_state', 'id', 'name', 'description', 'format', 'url', '_data')
 
     def __init__(self, *, state: ConnectionState, data: StickerPayload) -> None:
         self._state: ConnectionState = state
@@ -280,6 +285,7 @@ class Sticker(_StickerTag):
             self.url: str = f'https://media.discordapp.net/stickers/{self.id}.gif'
         else:
             self.url: str = f'{Asset.BASE}/stickers/{self.id}.{self.format.file_extension}'
+        self._data: bytes = _to_json(data)
 
     def __repr__(self) -> str:
         return f'<Sticker id={self.id} name={self.name!r}>'
@@ -291,6 +297,9 @@ class Sticker(_StickerTag):
     def created_at(self) -> datetime.datetime:
         """:class:`datetime.datetime`: Returns the sticker's creation time in UTC."""
         return snowflake_time(self.id)
+
+    def to_dict(self) -> StickerPayload:
+        return _from_json(self._data)
 
 
 class StandardSticker(Sticker):
@@ -509,6 +518,9 @@ class GuildSticker(Sticker):
             An error occurred deleting the sticker.
         """
         await self._state.http.delete_guild_sticker(self.guild_id, self.id, reason)
+
+    def to_dict(self) -> GuildStickerPayload:
+        return _from_json(self._data)
 
 
 def _sticker_factory(sticker_type: Literal[1, 2]) -> Tuple[Type[Union[StandardSticker, GuildSticker, Sticker]], StickerType]:

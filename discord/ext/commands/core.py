@@ -52,7 +52,6 @@ import discord
 
 from ._types import _BaseCommand, CogT
 from .cog import Cog
-from .context import Context
 from .converter import Greedy, run_converters
 from .cooldowns import BucketType, Cooldown, CooldownMapping, DynamicCooldownMapping, MaxConcurrency
 from .errors import *
@@ -62,6 +61,7 @@ from discord.app_commands.commands import NUMPY_DOCSTRING_ARG_REGEX
 if TYPE_CHECKING:
     from typing_extensions import Concatenate, ParamSpec, Self, Unpack
 
+    from .context import Context
     from ._types import BotT, Check, ContextT, Coro, CoroFunc, Error, Hook, UserCheck
 
     from discord.permissions import _PermissionsKwargs
@@ -127,6 +127,7 @@ T = TypeVar('T')
 CommandT = TypeVar('CommandT', bound='Command[Any, ..., Any]')
 # CHT = TypeVar('CHT', bound='Check')
 GroupT = TypeVar('GroupT', bound='Group[Any, ..., Any]')
+SpecialDataT = TypeVar('SpecialDataT', discord.Attachment, discord.StickerItem)
 
 if TYPE_CHECKING:
     P = ParamSpec('P')
@@ -161,7 +162,7 @@ def get_signature_parameters(
         raise TypeError(f'Command signature requires at least {required_params - 1} parameter(s)')
 
     iterator = iter(signature.parameters.items())
-    for _ in range(0, required_params):
+    for _ in range(required_params):
         next(iterator)
 
     for name, parameter in iterator:
@@ -199,7 +200,7 @@ def get_signature_parameters(
     return params
 
 
-PARAMETER_HEADING_REGEX = re.compile(r'Parameters?\n---+\n', re.I)
+PARAMETER_HEADING_REGEX = re.compile(r'Parameters?\n---+\n', re.IGNORECASE)
 
 
 def _fold_text(input: str) -> str:
@@ -272,7 +273,7 @@ def hooked_wrapped_callback(
             return
         except Exception as exc:
             ctx.command_failed = True
-            raise CommandInvokeError(exc) from exc
+            raise CommandInvokeError(exc, command) from exc
         finally:
             if command._max_concurrency is not None:
                 await command._max_concurrency.release(ctx.message)
@@ -283,35 +284,60 @@ def hooked_wrapped_callback(
     return wrapped
 
 
-class _CaseInsensitiveDict(dict):
-    def __contains__(self, k):
+async def _convert_stickers(
+    sticker_type: Type[Union[discord.StickerItem, discord.Sticker, discord.StandardSticker, discord.GuildSticker]],
+    stickers: _SpecialIterator[discord.StickerItem],
+    param: Parameter,
+    /,
+) -> Union[discord.StickerItem, discord.Sticker, discord.StandardSticker, discord.GuildSticker]:
+    if sticker_type is discord.StickerItem:
+        try:
+            return next(stickers)
+        except StopIteration:
+            raise MissingRequiredSticker(param)
+
+    while not stickers.is_empty():
+        try:
+            sticker = next(stickers)
+        except StopIteration:
+            raise MissingRequiredSticker(param)
+
+        fetched = await sticker.fetch()
+        if isinstance(fetched, sticker_type):
+            return fetched
+
+    raise MissingRequiredSticker(param)
+
+
+class _CaseInsensitiveDict(Dict[str, Any]):
+    def __contains__(self, k: str):
         return super().__contains__(k.casefold())
 
-    def __delitem__(self, k):
+    def __delitem__(self, k: str):
         return super().__delitem__(k.casefold())
 
-    def __getitem__(self, k):
+    def __getitem__(self, k: str):
         return super().__getitem__(k.casefold())
 
-    def get(self, k, default=None):
+    def get(self, k: str, default=None):
         return super().get(k.casefold(), default)
 
-    def pop(self, k, default=None):
+    def pop(self, k: str, default=None):
         return super().pop(k.casefold(), default)
 
-    def __setitem__(self, k, v):
+    def __setitem__(self, k: str, v):
         super().__setitem__(k.casefold(), v)
 
 
-class _AttachmentIterator:
-    def __init__(self, data: List[discord.Attachment]):
-        self.data: List[discord.Attachment] = data
+class _SpecialIterator(Generic[SpecialDataT]):
+    def __init__(self, data: List[SpecialDataT]):
+        self.data: List[SpecialDataT] = data
         self.index: int = 0
 
     def __iter__(self) -> Self:
         return self
 
-    def __next__(self) -> discord.Attachment:
+    def __next__(self) -> SpecialDataT:
         try:
             value = self.data[self.index]
         except IndexError:
@@ -462,7 +488,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
             checks = func.__commands_checks__
             checks.reverse()
         except AttributeError:
-            checks = kwargs.get('checks', [])
+            checks = kwargs.get('checks', []) or []
 
         self.checks: List[UserCheck[Context[Any]]] = checks
 
@@ -495,7 +521,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         parent: Optional[GroupMixin[Any]] = kwargs.get('parent')
         self.parent: Optional[GroupMixin[Any]] = parent if isinstance(parent, _BaseCommand) else None
 
-        self._before_invoke: Optional[Hook] = None
+        self._before_invoke: Optional[Hook[CogT, Any]] = None
         try:
             before_invoke = func.__before_invoke__
         except AttributeError:
@@ -503,7 +529,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         else:
             self.before_invoke(before_invoke)
 
-        self._after_invoke: Optional[Hook] = None
+        self._after_invoke: Optional[Hook[CogT, Any]] = None
         try:
             after_invoke = func.__after_invoke__
         except AttributeError:
@@ -684,7 +710,14 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         finally:
             ctx.bot.dispatch('command_error', ctx, error)
 
-    async def transform(self, ctx: Context[BotT], param: Parameter, attachments: _AttachmentIterator, /) -> Any:
+    async def transform(
+        self,
+        ctx: Context[BotT],
+        param: Parameter,
+        attachments: _SpecialIterator[discord.Attachment],
+        stickers: _SpecialIterator[discord.StickerItem],
+        /,
+    ) -> Any:
         converter = param.converter
         consume_rest_is_special = param.kind == param.KEYWORD_ONLY and not self.rest_is_raw
         view = ctx.view
@@ -696,6 +729,15 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
             # Special case for Greedy[discord.Attachment] to consume the attachments iterator
             if converter.converter is discord.Attachment:
                 return list(attachments)
+            # Special case for Greedy[discord.StickerItem] to consume the stickers iterator
+            elif converter.converter in (
+                discord.StickerItem,
+                discord.Sticker,
+                discord.StandardSticker,
+                discord.GuildSticker,
+            ):
+                # can only send one sticker at a time
+                return [await _convert_stickers(converter.converter, stickers, param)]
 
             if param.kind in (param.POSITIONAL_OR_KEYWORD, param.POSITIONAL_ONLY):
                 return await self._transform_greedy_pos(ctx, param, param.required, converter.constructed_converter)
@@ -714,12 +756,27 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
             except StopIteration:
                 raise MissingRequiredAttachment(param)
 
-        if self._is_typing_optional(param.annotation) and param.annotation.__args__[0] is discord.Attachment:
-            if attachments.is_empty():
-                # I have no idea who would be doing Optional[discord.Attachment] = 1
-                # but for those cases then 1 should be returned instead of None
-                return None if param.default is param.empty else param.default
-            return next(attachments)
+        # Try to detect Optional[discord.StickerItem] or discord.StickerItem special converter
+        if converter in (discord.StickerItem, discord.Sticker, discord.StandardSticker, discord.GuildSticker):
+            return await _convert_stickers(converter, stickers, param)
+
+        if self._is_typing_optional(param.annotation):
+            if param.annotation.__args__[0] is discord.Attachment:
+                if attachments.is_empty():
+                    # I have no idea who would be doing Optional[discord.Attachment] = 1
+                    # but for those cases then 1 should be returned instead of None
+                    return None if param.default is param.empty else param.default
+                return next(attachments)
+            elif param.annotation.__args__[0] in (
+                discord.StickerItem,
+                discord.Sticker,
+                discord.StandardSticker,
+                discord.GuildSticker,
+            ):
+                if stickers.is_empty():
+                    return None if param.default is param.empty else param.default
+
+                return await _convert_stickers(param.annotation.__args__[0], stickers, param)
 
         if view.eof:
             if param.kind == param.VAR_POSITIONAL:
@@ -807,7 +864,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         This the base command name required to execute it. For example,
         in ``?one two three`` the parent name would be ``one two``.
         """
-        entries = []
+        entries: list[str] = []
         command = self
         # command.parent is type-hinted as GroupMixin some attributes are resolved via MRO
         while command.parent is not None:  # type: ignore
@@ -826,7 +883,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
 
         .. versionadded:: 1.1
         """
-        entries = []
+        entries: List[Group[Any, ..., Any]] = []
         command = self
         while command.parent is not None:  # type: ignore
             command = command.parent  # type: ignore
@@ -869,7 +926,9 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         ctx.kwargs = {}
         args = ctx.args
         kwargs = ctx.kwargs
-        attachments = _AttachmentIterator(ctx.message.attachments)
+
+        attachments = _SpecialIterator(ctx.message.attachments)
+        stickers = _SpecialIterator(ctx.message.stickers)
 
         view = ctx.view
         iterator = iter(self.params.items())
@@ -877,7 +936,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         for name, param in iterator:
             ctx.current_parameter = param
             if param.kind in (param.POSITIONAL_OR_KEYWORD, param.POSITIONAL_ONLY):
-                transformed = await self.transform(ctx, param, attachments)
+                transformed = await self.transform(ctx, param, attachments, stickers)
                 args.append(transformed)
             elif param.kind == param.KEYWORD_ONLY:
                 # kwarg only param denotes "consume rest" semantics
@@ -885,14 +944,14 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
                     ctx.current_argument = argument = view.read_rest()
                     kwargs[name] = await run_converters(ctx, param.converter, argument, param)
                 else:
-                    kwargs[name] = await self.transform(ctx, param, attachments)
+                    kwargs[name] = await self.transform(ctx, param, attachments, stickers)
                 break
             elif param.kind == param.VAR_POSITIONAL:
                 if view.eof and self.require_var_positional:
                     raise MissingRequiredArgument(param)
                 while not view.eof:
                     try:
-                        transformed = await self.transform(ctx, param, attachments)
+                        transformed = await self.transform(ctx, param, attachments, stickers)
                         args.append(transformed)
                     except RuntimeError:
                         break
@@ -1209,7 +1268,7 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
         if not params:
             return ''
 
-        result = []
+        result: list[str] = []
         for param in params.values():
             name = param.displayed_name or param.name
 
@@ -1235,6 +1294,22 @@ class Command(_BaseCommand, Generic[CogT, P, T]):
                     result.append(f'[{name} (upload files)]...')
                 else:
                     result.append(f'<{name} (upload a file)>')
+                continue
+
+            if annotation in (discord.StickerItem, discord.Sticker, discord.StandardSticker, discord.GuildSticker):
+                if annotation is discord.GuildSticker:
+                    sticker_type = 'server sticker'
+                elif annotation is discord.StandardSticker:
+                    sticker_type = 'standard sticker'
+                else:
+                    sticker_type = 'sticker'
+
+                if optional:
+                    result.append(f'[{name} (upload a {sticker_type})]')
+                elif greedy:
+                    result.append(f'[{name} (upload {sticker_type}s)]...')
+                else:
+                    result.append(f'<{name} (upload a {sticker_type})>')
                 continue
 
             # for typing.Literal[...], typing.Optional[typing.Literal[...]], and Greedy[typing.Literal[...]], the
@@ -1339,7 +1414,7 @@ class GroupMixin(Generic[CogT]):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        case_insensitive = kwargs.get('case_insensitive', False)
+        case_insensitive = kwargs.get('case_insensitive', True)
         self.all_commands: Dict[str, Command[CogT, ..., Any]] = _CaseInsensitiveDict() if case_insensitive else {}
         self.case_insensitive: bool = case_insensitive
         super().__init__(*args, **kwargs)
@@ -2063,6 +2138,7 @@ def has_role(item: Union[int, str], /) -> Check[Any]:
             raise NoPrivateMessage()
 
         # ctx.guild is None doesn't narrow ctx.author to Member
+        assert isinstance(ctx.author, discord.Member)
         if isinstance(item, int):
             role = ctx.author.get_role(item)  # type: ignore
         else:
@@ -2106,11 +2182,12 @@ def has_any_role(*items: Union[int, str]) -> Callable[[T], T]:
             await ctx.send('You are cool indeed')
     """
 
-    def predicate(ctx):
+    def predicate(ctx: Context[BotT]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
 
         # ctx.guild is None doesn't narrow ctx.author to Member
+        assert isinstance(ctx.author, discord.Member)
         if any(
             ctx.author.get_role(item) is not None
             if isinstance(item, int)
@@ -2141,14 +2218,14 @@ def bot_has_role(item: int, /) -> Callable[[T], T]:
         ``item`` parameter is now positional-only.
     """
 
-    def predicate(ctx):
+    def predicate(ctx: Context[BotT]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
 
         if isinstance(item, int):
-            role = ctx.me.get_role(item)
+            role = ctx.guild.me.get_role(item)
         else:
-            role = discord.utils.get(ctx.me.roles, name=item)
+            role = discord.utils.get(ctx.guild.me.roles, name=item)
         if role is None:
             raise BotMissingRole(item)
         return True
@@ -2170,11 +2247,11 @@ def bot_has_any_role(*items: int) -> Callable[[T], T]:
         instead of generic checkfailure
     """
 
-    def predicate(ctx):
+    def predicate(ctx: Context[BotT]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
 
-        me = ctx.me
+        me = ctx.guild.me
         if any(
             me.get_role(item) is not None if isinstance(item, int) else discord.utils.get(me.roles, name=item) is not None
             for item in items
@@ -2275,6 +2352,7 @@ def has_guild_permissions(**perms: Unpack[_PermissionsKwargs]) -> Check[Any]:
         if not ctx.guild:
             raise NoPrivateMessage
 
+        assert isinstance(ctx.author, discord.Member)
         permissions = ctx.author.guild_permissions  # type: ignore
         missing = [perm for perm, value in perms.items() if getattr(permissions, perm) != value]
 
@@ -2301,7 +2379,7 @@ def bot_has_guild_permissions(**perms: Unpack[_PermissionsKwargs]) -> Check[Any]
         if not ctx.guild:
             raise NoPrivateMessage
 
-        permissions = ctx.me.guild_permissions  # type: ignore
+        permissions = ctx.guild.me.guild_permissions  # type: ignore
         missing = [perm for perm, value in perms.items() if getattr(permissions, perm) != value]
 
         if not missing:
@@ -2353,7 +2431,7 @@ def guild_only() -> Check[Any]:
             raise NoPrivateMessage()
         return True
 
-    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+    def decorator(func: Union[Command[Any, ..., Any], CoroFunc]) -> Union[Command[Any, ..., Any], CoroFunc]:
         if isinstance(func, Command):
             func.checks.append(predicate)
             if hasattr(func, '__commands_is_hybrid__'):
@@ -2428,7 +2506,7 @@ def is_nsfw() -> Check[Any]:
             return True
         raise NSFWChannelRequired(ch)  # type: ignore
 
-    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+    def decorator(func: Union[Command[Any, ..., Any], CoroFunc]) -> Union[Command[Any, ..., Any], CoroFunc]:
         if isinstance(func, Command):
             func.checks.append(predicate)
             if hasattr(func, '__commands_is_hybrid__'):
@@ -2492,7 +2570,7 @@ def cooldown(
             rather than :class:`~discord.Message` as its only argument.
     """
 
-    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+    def decorator(func: Union[Command[Any, ..., Any], CoroFunc]) -> Union[Command[Any, ..., Any], CoroFunc]:
         if isinstance(func, Command):
             func._buckets = CooldownMapping(Cooldown(rate, per), type)
         else:
@@ -2540,7 +2618,7 @@ def dynamic_cooldown(
     if type is BucketType.default:
         raise ValueError('BucketType.default cannot be used in dynamic cooldowns')
 
-    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+    def decorator(func: Union[Command[Any, ..., Any], CoroFunc]) -> Union[Command[Any, ..., Any], CoroFunc]:
         if isinstance(func, Command):
             func._buckets = DynamicCooldownMapping(cooldown, type)
         else:
@@ -2574,7 +2652,7 @@ def max_concurrency(number: int, per: BucketType = BucketType.default, *, wait: 
         then the command waits until it can be executed.
     """
 
-    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+    def decorator(func: Union[Command[Any, ..., Any], CoroFunc]) -> Union[Command[Any, ..., Any], CoroFunc]:
         value = MaxConcurrency(number, per=per, wait=wait)
         if isinstance(func, Command):
             func._max_concurrency = value
@@ -2627,7 +2705,7 @@ def before_invoke(coro: Hook[CogT, ContextT], /) -> Callable[[T], T]:
 
     """
 
-    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+    def decorator(func: Union[Command[Any, ..., Any], CoroFunc]) -> Union[Command[Any, ..., Any], CoroFunc]:
         if isinstance(func, Command):
             func.before_invoke(coro)
         else:
@@ -2650,7 +2728,7 @@ def after_invoke(coro: Hook[CogT, ContextT], /) -> Callable[[T], T]:
         ``coro`` parameter is now positional-only.
     """
 
-    def decorator(func: Union[Command, CoroFunc]) -> Union[Command, CoroFunc]:
+    def decorator(func: Union[Command[Any, ..., Any], CoroFunc]) -> Union[Command[Any, ..., Any], CoroFunc]:
         if isinstance(func, Command):
             func.after_invoke(coro)
         else:

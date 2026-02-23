@@ -29,15 +29,17 @@ from typing_extensions import NotRequired, Required
 
 from .snowflake import Snowflake, SnowflakeList
 from .member import Member, UserWithMember
-from .user import User
+from .user import User, APIUser
 from .emoji import PartialEmoji
 from .embed import Embed
 from .channel import ChannelType
-from .components import ComponentBase
+from .components import Component
 from .interactions import MessageInteraction, MessageInteractionMetadata
 from .sticker import StickerItem
 from .threads import Thread
 from .poll import Poll
+from .soundboard import SoundboardSound, SoundboardDefaultSound
+from .appinfo import PartialAppInfo
 
 
 class PartialMessage(TypedDict):
@@ -84,6 +86,9 @@ class Attachment(TypedDict):
     duration_secs: NotRequired[float]
     waveform: NotRequired[str]
     flags: NotRequired[int]
+    clip_created_at: NotRequired[str]
+    clip_participants: NotRequired[List[APIUser]]
+    application: NotRequired[PartialAppInfo]
 
 
 MessageActivityType = Literal[1, 2, 3, 5]
@@ -179,7 +184,7 @@ MessageType = Literal[
 ]
 
 
-class MessageSnapshot(TypedDict):
+class MessageSnapshot(TypedDict, total=False):
     type: MessageType
     content: str
     embeds: List[Embed]
@@ -190,7 +195,7 @@ class MessageSnapshot(TypedDict):
     mentions: List[UserWithMember]
     mention_roles: SnowflakeList
     sticker_items: NotRequired[List[StickerItem]]
-    components: NotRequired[List[ComponentBase]]
+    components: NotRequired[List[Component]]
 
 
 class Message(PartialMessage):
@@ -222,12 +227,14 @@ class Message(PartialMessage):
     referenced_message: NotRequired[Optional[Message]]
     interaction: NotRequired[MessageInteraction]  # deprecated, use interaction_metadata
     interaction_metadata: NotRequired[MessageInteractionMetadata]
-    components: NotRequired[List[ComponentBase]]
+    components: NotRequired[List[Component]]
     position: NotRequired[int]
     role_subscription_data: NotRequired[RoleSubscriptionData]
     thread: NotRequired[Thread]
     call: NotRequired[CallMessage]
     purchase_notification: NotRequired[PurchaseNotificationResponse]
+    soundboard_sounds: NotRequired[List[Union[SoundboardSound, SoundboardDefaultSound]]]
+    message_snapshots: NotRequired[List[dict[Literal['message'], MessageSnapshot]]]
 
 
 AllowedMentionType = Literal['roles', 'users', 'everyone']
@@ -248,3 +255,12 @@ class MessagePin(TypedDict):
 class ChannelPins(TypedDict):
     items: List[MessagePin]
     has_more: bool
+
+
+class RefreshAttachmentURL(TypedDict):
+    original: str
+    refreshed: str
+
+
+class AttachmentRefresh(TypedDict):
+    refreshed_urls: List[RefreshAttachmentURL]

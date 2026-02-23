@@ -114,8 +114,8 @@ class AsyncDeferredLock:
 
     async def __aexit__(
         self,
-        exc_type: Optional[Type[BE]],
-        exc: Optional[BE],
+        exc_type: Optional[Type[BaseException]],
+        exc: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> None:
         if self.delta:
@@ -143,7 +143,7 @@ class AsyncWebhookAdapter:
     ) -> Any:
         headers: Dict[str, str] = {}
         files = files or []
-        to_send: Optional[Union[str, aiohttp.FormData]] = None
+        to_send: Optional[Union[str, bytes, aiohttp.FormData]] = None
         bucket = (route.webhook_id, route.webhook_token)
 
         try:
@@ -175,7 +175,11 @@ class AsyncWebhookAdapter:
                 if multipart:
                     form_data = aiohttp.FormData(quote_fields=False)
                     for p in multipart:
-                        form_data.add_field(**p)
+                        # Convert 'data' to 'value' for aiohttp.FormData compatibility
+                        field_params = p.copy()
+                        if 'data' in field_params:
+                            field_params['value'] = field_params.pop('data')
+                        form_data.add_field(**field_params)
                     to_send = form_data
 
                 try:
@@ -221,6 +225,8 @@ class AsyncWebhookAdapter:
                         if response.status == 403:
                             raise Forbidden(response, data)
                         elif response.status == 404:
+                            fmt = 'Webhook ID %s is unknown, not found.'
+                            _log.warning(fmt, webhook_id)
                             raise NotFound(response, data)
                         else:
                             raise HTTPException(response, data)
@@ -374,7 +380,7 @@ class AsyncWebhookAdapter:
             message_id=message_id,
         )
         params = {'with_components': int(with_components)}
-        if thread_id:
+        if thread_id is not None:
             params['thread_id'] = thread_id
         return self.request(
             route,
@@ -633,13 +639,13 @@ def interaction_message_response_params(
 
         data['attachments'] = attachments_payload
 
-    if poll is not MISSING:
+    if poll:
         data['poll'] = poll._to_dict()
 
     multipart = []
     if files:
         data = {'type': type, 'data': data}
-        multipart.append({'name': 'payload_json', 'value': utils._to_json(data)})
+        multipart.append({'name': 'payload_json', 'value': utils._to_json(data).decode('utf-8')})
         data = None
         for index, file in enumerate(files):
             multipart.append(
@@ -814,6 +820,7 @@ class WebhookMessage(Message):
         attachments: Sequence[Union[Attachment, File]] = MISSING,
         view: Optional[BaseView] = MISSING,
         allowed_mentions: Optional[AllowedMentions] = None,
+        suppress_embeds: bool = MISSING,
     ) -> WebhookMessage:
         """|coro|
 
@@ -880,6 +887,13 @@ class WebhookMessage(Message):
         :class:`WebhookMessage`
             The newly edited message.
         """
+
+        if suppress_embeds is not MISSING:
+            flags = MessageFlags._from_value(self.flags.value)
+            flags.suppress_embeds = suppress_embeds
+        else:
+            flags = MISSING
+
         return await self._state._webhook.edit_message(
             self.id,
             content=content,
@@ -889,6 +903,7 @@ class WebhookMessage(Message):
             view=view,
             allowed_mentions=allowed_mentions,
             thread=self._state._thread,
+            suppress_embeds=suppress_embeds,
         )
 
     async def add_files(self, *files: File) -> WebhookMessage:
@@ -973,7 +988,7 @@ class WebhookMessage(Message):
                 except HTTPException:
                     pass
 
-            asyncio.create_task(inner_call())
+            utils.create_task(inner_call())
         else:
             await self._state._webhook.delete_message(self.id, thread=self._state._thread)
 
@@ -1334,7 +1349,7 @@ class Webhook(BaseWebhook):
         return cls(data, session, token=bot_token, state=state)  # type: ignore  # Casting dict[str, Any] to WebhookPayload
 
     @classmethod
-    def _as_follower(cls, data, *, channel, user) -> Self:
+    def _as_follower(cls, data, *, channel, user: User) -> Self:
         name = f'{channel.guild} #{channel}'
         feed: WebhookPayload = {
             'id': data['webhook_id'],
@@ -1349,6 +1364,9 @@ class Webhook(BaseWebhook):
                 'avatar': user._avatar,
                 'avatar_decoration_data': user._avatar_decoration_data,
                 'global_name': user.global_name,
+                'display_name_styles': user.display_name_style.to_dict() if user.display_name_style else None,
+                'primary_guild': user.primary_guild.to_dict() if user.primary_guild else None,
+                'collectibles': user.nameplate.to_dict() if user.nameplate else None,
             },
         }
 
@@ -1592,26 +1610,27 @@ class Webhook(BaseWebhook):
             state=self._state,
         )
 
-    def _create_message(self, data, *, thread: Snowflake):
+    def _create_message(self, data: MessagePayload, *, thread: Snowflake):
         state = _WebhookState(self, parent=self._state, thread=thread)
         # state may be artificial (unlikely at this point...)
+        guild_id = utils._get_as_snowflake(data, 'guild_id') or self.guild_id
+        channel_id = int(data['channel_id'])
         if thread is MISSING:
-            channel_id = int(data['channel_id'])
             channel = self.channel
             # If this thread is created via thread_name then the channel_id would not be the same as the webhook's channel_id
             # which would be the forum channel.
             if self.channel_id != channel_id:
-                type = ChannelType.public_thread if isinstance(channel, ForumChannel) else (channel and channel.type)
-                channel = PartialMessageable(state=self._state, guild_id=self.guild_id, id=channel_id, type=type)  # type: ignore
+                type = ChannelType.public_thread if isinstance(channel, ForumChannel) else channel.type if channel else None
+                channel = PartialMessageable(state=self._state, guild_id=guild_id, id=channel_id, type=type)  # type: ignore
             else:
-                channel = self.channel or PartialMessageable(state=self._state, guild_id=self.guild_id, id=channel_id)  # type: ignore
+                channel = self.channel or PartialMessageable(state=self._state, guild_id=guild_id, id=channel_id)  # type: ignore
         else:
             channel = self.channel
             if isinstance(channel, (ForumChannel, TextChannel)):
                 channel = channel.get_thread(thread.id)
 
             if channel is None:
-                channel = PartialMessageable(state=self._state, guild_id=self.guild_id, id=int(data['channel_id']))  # type: ignore
+                channel = PartialMessageable(state=self._state, guild_id=guild_id, id=channel_id)  # type: ignore
 
         # state is artificial
         return WebhookMessage(data=data, state=state, channel=channel)  # type: ignore
@@ -1704,7 +1723,7 @@ class Webhook(BaseWebhook):
 
     async def send(
         self,
-        content: str = MISSING,
+        content: Optional[str] = MISSING,
         *,
         username: str = MISSING,
         avatar_url: Any = MISSING,
@@ -1928,7 +1947,7 @@ class Webhook(BaseWebhook):
             message_id = None if msg is None else msg.id
             self._state.store_view(view, message_id)
 
-        if poll is not MISSING and msg:
+        if poll and msg:
             poll._update(msg)
 
         return msg
@@ -2019,6 +2038,7 @@ class Webhook(BaseWebhook):
         view: Optional[BaseView] = MISSING,
         allowed_mentions: Optional[AllowedMentions] = None,
         thread: Snowflake = MISSING,
+        suppress_embeds: bool = False,
     ) -> WebhookMessage:
         """|coro|
 
@@ -2098,9 +2118,16 @@ class Webhook(BaseWebhook):
         if view:
             if not hasattr(view, '__discord_ui_view__'):
                 raise TypeError(f'expected view parameter to be of type View or LayoutView, not {view.__class__.__name__}')
-
             if isinstance(self._state, _WebhookState) and view.is_dispatchable():
                 raise ValueError('Webhook views with interactable components require an associated state with the webhook')
+
+            self._state.prevent_view_updates_for(message_id)
+
+        if suppress_embeds is not MISSING:
+            flags = MessageFlags._from_value(0)
+            flags.suppress_embeds = suppress_embeds
+        else:
+            flags = MISSING
 
         previous_mentions: Optional[AllowedMentions] = getattr(self._state, 'allowed_mentions', None)
         with handle_message_parameters(
@@ -2111,6 +2138,7 @@ class Webhook(BaseWebhook):
             view=view,
             allowed_mentions=allowed_mentions,
             previous_allowed_mentions=previous_mentions,
+            flags=flags,
         ) as params:
             thread_id: Optional[int] = None
             if thread is not MISSING:

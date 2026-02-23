@@ -29,6 +29,7 @@ from typing_extensions import NotRequired
 
 from .emoji import PartialEmoji
 from .channel import ChannelType
+from .snowflake import Snowflake
 
 ComponentType = Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 21, 22, 23]
 ButtonStyle = Literal[1, 2, 3, 4, 5, 6]
@@ -161,7 +162,7 @@ class ThumbnailComponent(ComponentBase):
 
 class MediaGalleryItem(TypedDict):
     media: UnfurledMediaItem
-    description: NotRequired[str]
+    description: NotRequired[Optional[str]]
     spoiler: NotRequired[bool]
 
 
@@ -241,7 +242,6 @@ ContainerChildComponent = Union[
     MediaGalleryComponent,
     FileComponent,
     SectionComponent,
-    SectionComponent,
     SeparatorComponent,
     ThumbnailComponent,
 ]
@@ -260,3 +260,33 @@ Component = Union[
     ContainerChildComponent,
     ContainerComponent,
 ]
+
+
+class Trait(TypedDict, total=False):
+    type: int
+    trending: NotRequired[int]
+    duration_seconds: NotRequired[int]
+    streak_count_days: NotRequired[int]
+    first_time: NotRequired[bool]
+    resurrected_last_played: NotRequired[str]  # ISO8601 datetime
+
+
+class CIExtra(TypedDict, total=False):
+    type: str
+    application_id: Snowflake
+    activity_name: NotRequired[str]
+    platform: NotRequired[int]
+    game_name: NotRequired[str]
+
+
+class ContentInventory(TypedDict, total=False):
+    traits: List[Trait]
+    participants: List[Snowflake]
+    id: Snowflake
+    extra: CIExtra
+    content_type: int
+    author_type: int
+    author_id: Snowflake
+    started_at: NotRequired[str]  # ISO8601 datetime
+    expires_at: NotRequired[str]  # ISO8601 datetime
+    ended_at: NotRequired[str]  # ISO8601 datetime

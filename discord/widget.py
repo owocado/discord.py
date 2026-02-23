@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import List, Optional, TYPE_CHECKING, Union
 
-from .utils import snowflake_time, _get_as_snowflake, resolve_invite
+from .utils import snowflake_time, _get_as_snowflake, resolve_invite, _from_json, _to_json
 from .user import BaseUser
 from .activity import BaseActivity, Spotify, create_activity
 from .invite import Invite
@@ -246,7 +246,7 @@ class Widget:
 
     """
 
-    __slots__ = ('_state', 'channels', '_invite', 'id', 'members', 'name', 'presence_count')
+    __slots__ = ('_state', 'channels', '_invite', 'id', 'members', 'name', 'presence_count', '_data')
 
     def __init__(self, *, state: ConnectionState, data: WidgetPayload) -> None:
         self._state = state
@@ -272,6 +272,7 @@ class Widget:
             self.members.append(WidgetMember(state=self._state, data=member, connected_channel=connected_channel))
 
         self.presence_count: int = data['presence_count']
+        self._data: bytes = _to_json(data)
 
     def __str__(self) -> str:
         return self.json_url
@@ -298,6 +299,9 @@ class Widget:
     def invite_url(self) -> Optional[str]:
         """Optional[:class:`str`]: The invite URL for the guild, if available."""
         return self._invite
+
+    def to_dict(self) -> WidgetPayload:
+        return _from_json(self._data)
 
     async def fetch_invite(self, *, with_counts: bool = True) -> Optional[Invite]:
         """|coro|

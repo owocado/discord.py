@@ -27,13 +27,15 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
 import discord.abc
+import msgspec
+
 from .asset import Asset
 from .colour import Colour
 from .enums import DefaultAvatar
 from .flags import PublicUserFlags
 from .utils import snowflake_time, _bytes_to_base64_data, MISSING, _get_as_snowflake
-from .primary_guild import PrimaryGuild
-from .collectible import Collectible
+from .primary_guild import PrimaryGuild, AvatarDecoration, DisplayNameStyle, NamePlate
+#  from .collectible import Collectible
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -51,6 +53,7 @@ if TYPE_CHECKING:
         AvatarDecorationData,
         PrimaryGuild as PrimaryGuildPayload,
         UserCollectibles as UserCollectiblesPayload,
+        APIUser as APIUserPayload,
     )
 
 
@@ -78,9 +81,15 @@ class BaseUser(_UserTag):
         'system',
         '_public_flags',
         '_state',
-        '_avatar_decoration_data',
-        '_primary_guild',
-        '_collectibles',
+        #  '_avatar_decoration_data',
+        #  '_primary_guild',
+        #  '_collectibles',
+        'avatar_decoration_data',
+        'primary_guild',
+        'nameplate',
+        'display_name_style',
+        'bio',
+        #  '_data',
     )
 
     if TYPE_CHECKING:
@@ -97,7 +106,7 @@ class BaseUser(_UserTag):
         _public_flags: int
         _avatar_decoration_data: Optional[AvatarDecorationData]
         _primary_guild: Optional[PrimaryGuildPayload]
-        _collectibles: Optional[UserCollectiblesPayload]
+        #  _collectibles: Optional[UserCollectiblesPayload]
 
     def __init__(self, *, state: ConnectionState, data: Union[UserPayload, PartialUserPayload]) -> None:
         self._state = state
@@ -106,13 +115,16 @@ class BaseUser(_UserTag):
     def __repr__(self) -> str:
         return (
             f'<BaseUser id={self.id} name={self.name!r} global_name={self.global_name!r}'
-            f' bot={self.bot} system={self.system}>'
+            f' bot={self.bot} system={self.system} discriminator={self.discriminator!r}>'
         )
 
     def __str__(self) -> str:
         if self.discriminator == '0':
             return self.name
         return f'{self.name}#{self.discriminator}'
+
+    def __int__(self) -> int:
+        return self.id
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, _UserTag) and other.id == self.id
@@ -134,9 +146,35 @@ class BaseUser(_UserTag):
         self._public_flags = data.get('public_flags', 0)
         self.bot = data.get('bot', False)
         self.system = data.get('system', False)
-        self._avatar_decoration_data = data.get('avatar_decoration_data')
-        self._primary_guild = data.get('primary_guild', None)
-        self._collectibles = data.get('collectibles', None)
+        #  self._avatar_decoration_data = data.get('avatar_decoration_data')
+        #  self._primary_guild = data.get('primary_guild', None)
+        #  self._collectibles = data.get('collectibles', None)
+        self.bio = data.get('bio') or ''
+        #  self._data: bytes = _to_json(data)
+
+        try:
+            deco = data['avatar_decoration_data']
+            self.avatar_decoration_data = AvatarDecoration(**deco) if deco else None
+        except (KeyError, TypeError, msgspec.ValidationError):
+            self.avatar_decoration_data: Optional[AvatarDecoration] = None
+
+        try:
+            guild = data['primary_guild']
+            self.primary_guild = PrimaryGuild(**guild) if guild else None
+        except (KeyError, TypeError, msgspec.ValidationError):
+            self.primary_guild: Optional[PrimaryGuild] = None
+
+        try:
+            c = data['collectibles']
+            self.nameplate = NamePlate(**c['nameplate']) if c is not None else None
+        except Exception:
+            self.nameplate: Optional[NamePlate] = None
+
+        try:
+            dns = data['display_name_styles']
+            self.display_name_style = DisplayNameStyle(**dns) if dns is not None else None
+        except Exception:
+            self.display_name_style: Optional[DisplayNameStyle] = None
 
     @classmethod
     def _copy(cls, user: Self) -> Self:
@@ -152,9 +190,14 @@ class BaseUser(_UserTag):
         self.bot = user.bot
         self._state = user._state
         self._public_flags = user._public_flags
-        self._avatar_decoration_data = user._avatar_decoration_data
-        self._primary_guild = user._primary_guild
-        self._collectibles = user._collectibles
+        #  self._avatar_decoration_data = user._avatar_decoration_data
+        #  self._primary_guild = user._primary_guild
+        #  self._collectibles = user._collectibles
+        self.avatar_decoration_data = user.avatar_decoration_data
+        self.primary_guild = user.primary_guild
+        self.nameplate = user.nameplate
+        self.display_name_style = user.display_name_style
+        self.bio = user.bio
 
         return self
 
@@ -174,15 +217,15 @@ class BaseUser(_UserTag):
         return PublicUserFlags._from_value(self._public_flags)
 
     @property
-    def avatar(self) -> Optional[Asset]:
-        """Optional[:class:`Asset`]: Returns an :class:`Asset` for the avatar the user has.
+    def avatar(self) -> Asset:
+        """:class:`Asset`: Returns an :class:`Asset` for the avatar the user has.
 
-        If the user has not uploaded a global avatar, ``None`` is returned.
+        If the user has not uploaded a global avatar, then :attr:`default_avatar` is returned.
         If you want the avatar that a user has displayed, consider :attr:`display_avatar`.
         """
         if self._avatar is not None:
             return Asset._from_avatar(self._state, self.id, self._avatar)
-        return None
+        return self.default_avatar
 
     @property
     def default_avatar(self) -> Asset:
@@ -192,6 +235,8 @@ class BaseUser(_UserTag):
         else:
             avatar_id = int(self.discriminator) % 5
 
+        if self.public_flags.provisional_account:
+            return Asset._from_slayer_avatar(self._state, avatar_id)
         return Asset._from_default_avatar(self._state, avatar_id)
 
     @property
@@ -205,6 +250,12 @@ class BaseUser(_UserTag):
         return self.avatar or self.default_avatar
 
     @property
+    def _avatar_decoration_data(self):
+        if self.avatar_decoration_data is None:
+            return None
+        return self.avatar_decoration_data.to_dict()
+
+    @property
     def avatar_decoration(self) -> Optional[Asset]:
         """Optional[:class:`Asset`]: Returns an :class:`Asset` for the avatar decoration the user has.
 
@@ -212,8 +263,8 @@ class BaseUser(_UserTag):
 
         .. versionadded:: 2.4
         """
-        if self._avatar_decoration_data is not None:
-            return Asset._from_avatar_decoration(self._state, self._avatar_decoration_data['asset'])
+        if self.avatar_decoration_data is not None:
+            return Asset._from_avatar_decoration(self._state, self.avatar_decoration_data.asset)
         return None
 
     @property
@@ -224,9 +275,8 @@ class BaseUser(_UserTag):
 
         .. versionadded:: 2.4
         """
-        if self._avatar_decoration_data is not None:
-            return _get_as_snowflake(self._avatar_decoration_data, 'sku_id')
-        return None
+        deco = self.avatar_decoration_data
+        return deco._sku_id if deco is not None else None
 
     @property
     def banner(self) -> Optional[Asset]:
@@ -322,23 +372,16 @@ class BaseUser(_UserTag):
         return self.name
 
     @property
-    def primary_guild(self) -> PrimaryGuild:
+    def clan(self) -> Optional[PrimaryGuild]:
         """:class:`PrimaryGuild`: Returns the user's primary guild.
 
         .. versionadded:: 2.6"""
-        if self._primary_guild is not None:
-            return PrimaryGuild(state=self._state, data=self._primary_guild)
-        return PrimaryGuild._default(self._state)
+        return self.primary_guild
 
     @property
-    def collectibles(self) -> List[Collectible]:
-        """List[:class:`Collectible`]: Returns a list of the user's collectibles.
-
-        .. versionadded:: 2.7
-        """
-        if self._collectibles is None:
-            return []
-        return [Collectible(state=self._state, type=key, data=value) for key, value in self._collectibles.items() if value]  # type: ignore
+    def jump_url(self) -> str:
+        """:class:`str`: Returns a URL that allows the client to jump to the user."""
+        return f'https://discord.com/users/{self.id}'
 
     def mentioned_in(self, message: Message) -> bool:
         """Checks if the user is mentioned in the specified message.
@@ -358,6 +401,24 @@ class BaseUser(_UserTag):
             return True
 
         return any(user.id == self.id for user in message.mentions)
+
+    def to_dict(self) -> APIUserPayload:
+        guild = self.primary_guild
+        dns = self.display_name_style
+        return {
+            'id': str(self.id),
+            'username': self.name,
+            'avatar': self._avatar,
+            'discriminator': self.discriminator,
+            'public_flags': self._public_flags,
+            'banner': self._banner,
+            'accent_color': self._accent_colour,
+            'global_name': self.global_name,
+            'avatar_decoration_data': self._avatar_decoration_data,
+            'collectibles': self.nameplate.to_dict() if self.nameplate is not None else None,
+            'display_name_styles': dns.to_dict() if dns is not None else None,
+            'primary_guild': guild.to_dict() if guild is not None else None,
+        }
 
 
 class ClientUser(BaseUser):
@@ -559,8 +620,7 @@ class User(BaseUser, discord.abc.Messageable):
         return f'<User id={self.id} name={self.name!r} global_name={self.global_name!r} bot={self.bot}>'
 
     async def _get_channel(self) -> DMChannel:
-        ch = await self.create_dm()
-        return ch
+        return await self.create_dm()
 
     @property
     def dm_channel(self) -> Optional[DMChannel]:
@@ -603,3 +663,16 @@ class User(BaseUser, discord.abc.Messageable):
         state = self._state
         data: DMChannelPayload = await state.http.start_private_message(self.id)
         return state.add_dm_channel(data)
+
+    def has_default_avatar(self) -> bool:
+        return self.avatar == self.default_avatar
+
+    def is_deleted(self) -> bool:
+        """This is just a best guess and will not be accurate."""
+        import re
+
+        if self.bot:
+            check = bool(self.discriminator and re.match(r'Deleted User [a-z0-9]{8}', self.name))
+        else:
+            check = bool(re.match(r'deleted_user_[a-f0-9]{12}', self.name) and not self.mutual_guilds)
+        return bool(self.has_default_avatar() and check)

@@ -29,7 +29,7 @@ from .asset import Asset
 from .permissions import Permissions
 from .colour import Colour
 from .mixins import Hashable
-from .utils import snowflake_time, _bytes_to_base64_data, _get_as_snowflake, MISSING
+from .utils import snowflake_time, _bytes_to_base64_data, _get_as_snowflake, MISSING, _from_json, _to_json
 from .flags import RoleFlags
 
 __all__ = (
@@ -220,10 +220,12 @@ class Role(Hashable):
         'hoist',
         'guild',
         'tags',
+        'description',
         '_flags',
         '_state',
         '_secondary_colour',
         '_tertiary_colour',
+        '_data',
     )
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: RolePayload):
@@ -235,8 +237,11 @@ class Role(Hashable):
     def __str__(self) -> str:
         return self.name
 
+    def __int__(self) -> int:
+        return self.id
+
     def __repr__(self) -> str:
-        return f'<Role id={self.id} name={self.name!r}>'
+        return f'<Role id={self.id} name={self.name!r} color={self._colour}>'
 
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, Role) or not isinstance(self, Role):
@@ -286,9 +291,11 @@ class Role(Hashable):
         self.managed: bool = data.get('managed', False)
         self.mentionable: bool = data.get('mentionable', False)
         self.tags: Optional[RoleTags]
+        self.description: Optional[str] = data.get('description')
         self._flags: int = data.get('flags', 0)
         self._secondary_colour = colors.get('secondary_color', None)
         self._tertiary_colour = colors.get('tertiary_color', None)
+        self._data: bytes = _to_json(data)
 
         try:
             self.tags = RoleTags(data['tags'])  # pyright: ignore[reportTypedDictNotRequiredAccess]
@@ -407,6 +414,8 @@ class Role(Hashable):
     @property
     def mention(self) -> str:
         """:class:`str`: Returns a string that allows you to mention a role."""
+        if self.is_default():
+            return '@everyone'
         return f'<@&{self.id}>'
 
     @property
@@ -461,6 +470,7 @@ class Role(Hashable):
         display_icon: Optional[Union[bytes, str]] = MISSING,
         mentionable: bool = MISSING,
         position: int = MISSING,
+        description: str = MISSING,
         reason: Optional[str] = MISSING,
         secondary_color: Optional[Union[Colour, int]] = MISSING,
         tertiary_color: Optional[Union[Colour, int]] = MISSING,
@@ -574,6 +584,9 @@ class Role(Hashable):
 
         if mentionable is not MISSING:
             payload['mentionable'] = mentionable
+
+        if description is not MISSING:
+            payload['description'] = description
 
         actual_secondary_colour = secondary_colour or secondary_color
         actual_tertiary_colour = tertiary_colour or tertiary_color
@@ -721,3 +734,7 @@ class Role(Hashable):
         """
 
         await self._state.http.delete_role(self.guild.id, self.id, reason=reason)
+
+    def to_dict(self) -> RolePayload:
+        return _from_json(self._data)
+

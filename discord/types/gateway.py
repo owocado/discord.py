@@ -41,7 +41,7 @@ from .message import Message, ReactionType
 from .sticker import GuildSticker
 from .appinfo import GatewayAppInfo, PartialAppInfo
 from .guild import Guild, UnavailableGuild
-from .user import User, AvatarDecorationData
+from .user import User, AvatarDecorationData, PrimaryGuild, APIUser, DisplayNameStyle, UserCollectibles
 from .threads import Thread, ThreadMember
 from .scheduled_event import GuildScheduledEvent
 from .audit_log import AuditLogEntry
@@ -92,7 +92,8 @@ class MessageDeleteBulkEvent(TypedDict):
     guild_id: NotRequired[Snowflake]
 
 
-MessageUpdateEvent = MessageCreateEvent
+class MessageUpdateEvent(Message):
+    channel_id: Snowflake
 
 
 class MessageReactionAddEvent(TypedDict):
@@ -233,6 +234,9 @@ class GuildMemberUpdateEvent(TypedDict):
     pending: NotRequired[bool]
     communication_disabled_until: NotRequired[str]
     avatar_decoration_data: NotRequired[AvatarDecorationData]
+    primary_guild: Optional[PrimaryGuild]
+    collectibles: Optional[UserCollectibles]
+    display_name_styles: Optional[DisplayNameStyle]
 
 
 class GuildEmojisUpdateEvent(TypedDict):
@@ -380,3 +384,77 @@ class PollVoteActionEvent(TypedDict):
 
 
 SubscriptionCreateEvent = SubscriptionUpdateEvent = SubscriptionDeleteEvent = Subscription
+
+
+class VoiceChannelStatusUpdate(TypedDict):
+    id: Snowflake
+    guild_id: Snowflake
+    status: Optional[str]
+
+
+class MemberVerificationForm(TypedDict):
+    values: NotRequired[List[str]]
+    response: NotRequired[Optional[str | int | bool]]
+    required: bool
+    placeholder: Optional[str]
+    label: str
+    field_type: Literal['TERMS', 'TEXT_INPUT', 'PARAGRAPH', 'MULTIPLE_CHOICE']
+    description: Optional[str]
+    choices: NotRequired[List[str]]
+    automations: List[str]
+
+
+class GuildJoinRequest(TypedDict, total=False):
+    id: Snowflake
+    created_at: str
+    application_status: Literal['STARTED', 'SUBMITTED', 'REJECTED', 'APPROVED']
+    guild_id: Snowflake
+    form_responses: List[MemberVerificationForm]
+    last_seen: Optional[str]
+    join_request_id: Snowflake
+    interview_channel_id: Optional[Snowflake]
+    actioned_at: NotRequired[Snowflake]
+    actioned_by_user: NotRequired[APIUser]
+    rejection_reason: Optional[str]
+    user_id: Snowflake
+    user: NotRequired[APIUser]
+
+
+class GuildJoinRequestCreate(TypedDict, total=False):
+    status: Literal['STARTED', 'SUBMITTED', 'REJECTED', 'APPROVED']
+    request: GuildJoinRequest
+    rejection_reason: Optional[str]
+    last_seen: Optional[str]
+    join_request_id: Snowflake
+    interview_channel_id: Optional[Snowflake]
+    id: Snowflake
+    guild_id: Snowflake
+    form_responses: List[MemberVerificationForm]
+
+
+class GuildJoinRequestUpdate(TypedDict, total=False):
+    status: Literal['STARTED', 'SUBMITTED', 'REJECTED', 'APPROVED']
+    request: GuildJoinRequest
+    rejection_reason: Optional[str]
+    last_seen: Optional[str]
+    join_request_id: Snowflake
+    interview_channel_id: Optional[Snowflake]
+    id: Snowflake
+    guild_id: Snowflake
+    form_responses: List[MemberVerificationForm]
+
+
+class GuildJoinRequestDelete(TypedDict, total=False):
+    guild_id: Snowflake
+    id: Snowflake
+    user_id: Snowflake
+
+
+class GuildBoostUpdateEvent(TypedDict):
+    id: str
+    user_id: str
+    guild_id: str
+    ends_at: str | None
+    pause_ends_at: str | None
+    ended: bool
+

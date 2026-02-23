@@ -74,6 +74,7 @@ import typing
 import warnings
 import logging
 
+import msgspec
 import yarl
 
 try:
@@ -96,6 +97,13 @@ except ImportError:
         _ZSTD_SOURCE = 'compression.zstd'
     except ImportError:
         import zlib
+
+try:
+    import msgspec  # type: ignore
+except ModuleNotFoundError:
+    HAS_MSGSPEC = False
+else:
+    HAS_MSGSPEC = True
 
 
 __all__ = (
@@ -156,6 +164,7 @@ class _cached_property:
 
 
 if TYPE_CHECKING:
+    from contextvars import Context
     from functools import cached_property as cached_property
 
     from typing_extensions import ParamSpec, Self, TypeGuard
@@ -332,6 +341,7 @@ def oauth_url(
     scopes: Optional[Iterable[str]] = MISSING,
     disable_guild_select: bool = False,
     state: str = MISSING,
+    integration_type: Literal[0, 1] = MISSING,
 ) -> str:
     """A helper function that returns the OAuth2 URL for inviting the bot
     into guilds.
@@ -383,6 +393,8 @@ def oauth_url(
         url += '&response_type=code&' + urlencode({'redirect_uri': redirect_uri})
     if state is not MISSING:
         url += f'&{urlencode({"state": state})}'
+    if integration_type is not MISSING:
+        url += f'&integration_type={integration_type}'
     return url
 
 
@@ -607,7 +619,7 @@ def get(iterable: _Iter[T], /, **attrs: Any) -> Union[Optional[T], Coro[Optional
 
 
 def _unique(iterable: Iterable[T]) -> List[T]:
-    return [x for x in dict.fromkeys(iterable)]
+    return list(dict.fromkeys(iterable))
 
 
 def _get_as_snowflake(data: Any, key: str) -> Optional[int]:
@@ -633,7 +645,7 @@ def _get_mime_type_for_image(data: bytes):
 
 
 def _get_mime_type_for_audio(data: bytes):
-    if data.startswith(b'\x49\x44\x33') or data.startswith(b'\xff\xfb'):
+    if data.startswith((b'\x49\x44\x33', b'\xff\xfb')):
         return 'audio/mpeg'
     else:
         raise ValueError('Unsupported audio type given')
@@ -657,17 +669,26 @@ def _is_submodule(parent: str, child: str) -> bool:
     return parent == child or child.startswith(parent + '.')
 
 
-if HAS_ORJSON:
+#  if HAS_ORJSON:
+if HAS_MSGSPEC:
+    import msgspec
+    import orjson
 
-    def _to_json(obj: Any) -> str:
-        return orjson.dumps(obj).decode('utf-8')
+    encoder = msgspec.json.Encoder()
+    decoder = msgspec.json.Decoder()
 
-    _from_json = orjson.loads  # type: ignore
+    def _to_json(obj: Any) -> bytes:
+        try:
+            return encoder.encode(obj)
+        except Exception:
+            return orjson.dumps(obj)
+
+    _from_json = decoder.decode
 
 else:
 
-    def _to_json(obj: Any) -> str:
-        return json.dumps(obj, separators=(',', ':'), ensure_ascii=True)
+    def _to_json(obj: Any) -> bytes:
+        return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode('utf-8', errors='ignore')
 
     _from_json = json.loads
 
@@ -733,7 +754,7 @@ async def sane_wait_for(futures: Iterable[Awaitable[T]], *, timeout: Optional[fl
     done, pending = await asyncio.wait(ensured, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
 
     if len(pending) != 0:
-        raise asyncio.TimeoutError()
+        raise TimeoutError
 
     return done
 
@@ -795,7 +816,7 @@ def utcnow() -> datetime.datetime:
     :class:`datetime.datetime`
         The current aware datetime in UTC.
     """
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 def valid_icon_size(size: int) -> bool:
@@ -925,9 +946,9 @@ def resolve_template(code: Union[Template, str]) -> str:
     return code
 
 
-_MARKDOWN_ESCAPE_SUBREGEX = '|'.join(r'\{0}(?=([\s\S]*((?<!\{0})\{0})))'.format(c) for c in ('*', '`', '_', '~', '|'))
+_MARKDOWN_ESCAPE_SUBREGEX = '|'.join(rf'\{c}(?=([\s\S]*((?<!\{c})\{c})))' for c in ('*', '`', '_', '~', '|'))
 
-_MARKDOWN_ESCAPE_COMMON = r'^>(?:>>)?\s|\[.+\]\(.+\)|^#{1,3}|^\s*-'
+_MARKDOWN_ESCAPE_COMMON = r'^>(?:>>)?\s|\[.*?\]\(.*?\)|^#{1,3}|^\s*-'
 
 _MARKDOWN_ESCAPE_REGEX = re.compile(rf'(?P<markdown>{_MARKDOWN_ESCAPE_SUBREGEX}|{_MARKDOWN_ESCAPE_COMMON})', re.MULTILINE)
 
@@ -967,7 +988,7 @@ def remove_markdown(text: str, *, ignore_links: bool = True) -> str:
     regex = _MARKDOWN_STOCK_REGEX
     if ignore_links:
         regex = f'(?:{_URL_REGEX}|{regex})'
-    return re.sub(regex, replacement, text, 0, re.MULTILINE)
+    return re.sub(regex, replacement, text, count=0, flags=re.MULTILINE)
 
 
 def escape_markdown(text: str, *, as_needed: bool = False, ignore_links: bool = True) -> str:
@@ -997,7 +1018,7 @@ def escape_markdown(text: str, *, as_needed: bool = False, ignore_links: bool = 
 
     if not as_needed:
 
-        def replacement(match):
+        def replacement(match: re.Match[str]) -> str:
             groupdict = match.groupdict()
             is_url = groupdict.get('url')
             if is_url:
@@ -1007,7 +1028,7 @@ def escape_markdown(text: str, *, as_needed: bool = False, ignore_links: bool = 
         regex = _MARKDOWN_STOCK_REGEX
         if ignore_links:
             regex = f'(?:{_URL_REGEX}|{regex})'
-        return re.sub(regex, replacement, text, 0, re.MULTILINE)
+        return re.sub(regex, replacement, text, count=0, flags=re.MULTILINE)
     else:
         text = re.sub(r'\\', r'\\\\', text)
         return _MARKDOWN_ESCAPE_REGEX.sub(r'\\\1', text)
@@ -1146,7 +1167,7 @@ def evaluate_annotation(
         cache[tp] = evaluated
         return evaluated
 
-    if PY_312 and getattr(tp.__repr__, '__objclass__', None) is typing.TypeAliasType:  # type: ignore
+    if PY_312 and getattr(tp.__repr__, '__objclass__', None) is typing.TypeAliasType:
         temp_locals = dict(**locals, **{t.__name__: t for t in tp.__type_params__})
         annotation = evaluate_annotation(tp.__value__, globals, temp_locals, cache.copy())
         if hasattr(tp, '__args__'):
@@ -1191,7 +1212,7 @@ def evaluate_annotation(
         try:
             return tp.copy_with(evaluated_args)
         except AttributeError:
-            return tp.__origin__[evaluated_args]
+            return tp.__origin__[evaluated_args]  # type: ignore
 
     return tp
 
@@ -1207,10 +1228,9 @@ def resolve_annotation(
     if isinstance(annotation, str):
         annotation = ForwardRef(annotation)
 
-    locals = globalns if localns is None else localns
     if cache is None:
         cache = {}
-    return evaluate_annotation(annotation, globalns, locals, cache)
+    return evaluate_annotation(annotation, globalns, globalns if localns is None else localns, cache)
 
 
 def is_inside_class(func: Callable[..., Any]) -> bool:
@@ -1445,7 +1465,7 @@ if _ZSTD_SOURCE is not None:
         COMPRESSION_TYPE: str = 'zstd-stream'
 
         def __init__(self) -> None:
-            self.decompressor = ZstdDecompressor()
+            self.decompressor = ZstdDecompressor()  # pyright: ignore
             if _ZSTD_SOURCE == 'zstandard':
                 # The default API for zstandard requires a size hint when
                 # the size is not included in the zstandard frame.
@@ -1467,7 +1487,7 @@ else:
 
         def __init__(self) -> None:
             self.buffer: bytearray = bytearray()
-            self.context = zlib.decompressobj()
+            self.context = zlib.decompressobj()  # pyright: ignore
 
         def decompress(self, data: bytes, /) -> str | None:
             self.buffer.extend(data)
@@ -1542,3 +1562,73 @@ class _RawReprMixin:
     def __repr__(self) -> str:
         value = ' '.join(f'{attr}={getattr(self, attr)!r}' for attr in self.__slots__)
         return f'<{self.__class__.__name__} {value}>'
+
+
+_task_cache: set[asyncio.Task[T]] = set()
+
+
+def create_task[T](coro: asyncio._CoroutineLike[T], *, name: str | None = None, context: Context | None = None):
+    t = asyncio.create_task(coro, name=name or coro.__name__, context=context)
+    _task_cache.add(t)
+    t.add_done_callback(_task_cache.discard)
+    return t
+
+
+def _find_y(x: int, z: int) -> Optional[int]:
+    """
+    Finds the integer value of y that satisfies the equation x^y = z.
+
+    Args
+    ----
+    x: The base of the exponentiation.
+    z: The result of the exponentiation.
+
+    Returns
+    -------
+    The integer value of y that satisfies the equation, or None if no such value exists.
+    """
+    # Check if z is 1
+    if z == 1:
+        return 0
+
+    # Initialize y and power
+    y, power = 1, x
+
+    # Loop until power exceeds z or y becomes too large
+    while power <= z and y <= z:
+        if power == z:
+            return y
+        power *= x
+        y += 1
+
+    # No integer solution found
+    return None
+
+
+def _fuzzy_find(query: str, choices: Any, *, score: int = 80):
+    from rapidfuzz import process
+
+    return process.extract(query, choices, limit=None, score_cutoff=score)
+
+
+def _undiscord_username(username: str, repl: str = '[blocked]'):
+    return re.sub(r'(Discord|Clyde|Wumpus)', repl, username, flags=re.IGNORECASE)
+
+
+@overload
+def parse_timestamp(timestamp: None, *, ms: bool = True) -> None: ...
+
+
+@overload
+def parse_timestamp(timestamp: float, *, ms: bool = True) -> datetime.datetime: ...
+
+
+@overload
+def parse_timestamp(timestamp: Optional[float], *, ms: bool = True) -> Optional[datetime.datetime]: ...
+
+
+def parse_timestamp(timestamp: Optional[float], *, ms: bool = True) -> Optional[datetime.datetime]:
+    if timestamp:
+        if ms:
+            timestamp /= 1000
+        return datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)

@@ -43,7 +43,7 @@ from .stage_instance import StageInstance
 from .sticker import GuildSticker
 from .threads import Thread
 from .integrations import PartialIntegration
-from .channel import ForumChannel, StageChannel, ForumTag
+from .channel import ForumChannel, StageChannel, ForumTag, VocalGuildChannel
 from .onboarding import OnboardingPrompt, OnboardingPromptOption
 
 __all__ = (
@@ -70,6 +70,7 @@ if TYPE_CHECKING:
         DefaultReaction as DefaultReactionPayload,
     )
     from .types.invite import Invite as InvitePayload
+    from .types.emoji import PartialEmoji as PartialEmojiPayload
     from .types.role import Role as RolePayload, RoleColours
     from .types.snowflake import Snowflake
     from .types.command import ApplicationCommandPermissions
@@ -105,7 +106,7 @@ def _transform_timestamp(entry: AuditLogEntry, data: Optional[str]) -> Optional[
 
 
 def _transform_color(entry: AuditLogEntry, data: int) -> Colour:
-    return Colour(data)
+    return Colour(int(data))
 
 
 def _transform_snowflake(entry: AuditLogEntry, data: Snowflake) -> int:
@@ -258,6 +259,17 @@ def _transform_onboarding_prompt_options(
     return [OnboardingPromptOption.from_dict(data=option, state=entry._state, guild=entry.guild) for option in data]
 
 
+def _transform_partial_emoji(entry: AuditLogEntry, data: PartialEmojiPayload) -> PartialEmoji:
+    return PartialEmoji(**data)
+
+
+def _transform_status(entry: AuditLogEntry, data: Union[int, str]) -> Union[enums.EventStatus, str]:
+    if entry.action.name.startswith('scheduled_event_'):
+        return enums.try_enum(enums.EventStatus, data)
+    else:
+        return data  # type: ignore  # voice channel status is str
+
+
 E = TypeVar('E', bound=enums.Enum)
 
 
@@ -351,7 +363,7 @@ class AuditLogChanges:
         'communication_disabled_until':          ('timed_out_until', _transform_timestamp),
         'expire_behavior':                       (None, _enum_transformer(enums.ExpireBehaviour)),
         'mfa_level':                             (None, _enum_transformer(enums.MFALevel)),
-        'status':                                (None, _enum_transformer(enums.EventStatus)),
+        'status':                                (None, _transform_status),
         'entity_type':                           (None, _enum_transformer(enums.EntityType)),
         'preferred_locale':                      (None, _enum_transformer(enums.Locale)),
         'image_hash':                            ('cover_image', _transform_cover_image),
@@ -370,6 +382,8 @@ class AuditLogChanges:
         'prompts':                               (None, _transform_onboarding_prompts),
         'default_channel_ids':                   ('default_channels', _transform_channels_or_threads),
         'mode':                                  (None, _enum_transformer(enums.OnboardingMode)),
+        'theme_color':                           (None, _transform_color),
+        'icon_emoji':                            (None, _transform_partial_emoji),
     }
     # fmt: on
 
@@ -634,6 +648,11 @@ class _AuditLogProxyMemberKickOrMemberRoleUpdate(_AuditLogProxy):
     integration_type: Optional[str]
 
 
+class _AuditLogProxyVoiceChannelStatusAction(_AuditLogProxy):
+    channel: VocalGuildChannel
+    status: Optional[str]
+
+
 class AuditLogEntry(Hashable):
     r"""Represents an Audit Log entry.
 
@@ -721,6 +740,7 @@ class AuditLogEntry(Hashable):
             _AuditLogProxyMessageBulkDelete,
             _AuditLogProxyAutoModAction,
             _AuditLogProxyMemberKickOrMemberRoleUpdate,
+            _AuditLogProxyVoiceChannelStatusAction,
             Member, User, None, PartialIntegration,
             Role, Object
         ] = None
@@ -797,13 +817,25 @@ class AuditLogEntry(Hashable):
             elif self.action.name.startswith('app_command'):
                 app_id = int(extra['application_id'])
                 self.extra = self._get_integration_by_app_id(app_id) or Object(app_id, type=PartialIntegration)
+            elif self.action.name.startswith('harmful_link'):
+                channel_id = int(extra['channel_id'])
+                self.extra = _AuditLogProxyMemberMoveOrMessageDelete(
+                    channel=self.guild.get_channel_or_thread(channel_id) or Object(channel_id),
+                    count=0,
+                )
+            elif self.action.name.startswith('voice_channel_status'):
+                channel_id = int(extra['channel_id'])
+                self.extra = _AuditLogProxyVoiceChannelStatusAction(
+                    channel=self.guild.get_channel(channel_id) or Object(channel_id),
+                    status=extra.get('status'),
+                )
 
         # this key is not present when the above is present, typically.
         # It's a list of { new_value: a, old_value: b, key: c }
         # where new_value and old_value are not guaranteed to be there depending
         # on the action type, so let's just fetch it for now and only turn it
         # into meaningful data when requested
-        self._changes = data.get('changes', [])
+        self._changes = data.get('changes', []) or []
 
         self.user_id: Optional[int] = utils._get_as_snowflake(data, 'user_id')
         self.user: Optional[Union[User, Member]] = self._get_member(self.user_id)
@@ -984,3 +1016,6 @@ class AuditLogEntry(Hashable):
 
     def _convert_target_onboarding_prompt(self, target_id: int) -> Object:
         return Object(target_id, type=OnboardingPrompt)
+
+    def _convert_target_voice_channel_status(self, target_id: int) -> Union[abc.GuildChannel, Object]:
+        return self.guild.get_channel(target_id) or Object(id=target_id)

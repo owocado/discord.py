@@ -80,7 +80,7 @@ if TYPE_CHECKING:
         MaybeAwaitableFunc,
     )
     from .core import Command
-    from .hybrid import CommandCallback, ContextT, P, _HybridCommandDecoratorKwargs, _HybridGroupDecoratorKwargs
+    from .hybrid import CommandCallback, P, _HybridCommandDecoratorKwargs, _HybridGroupDecoratorKwargs
     from discord.client import _ClientOptions
     from discord.shard import _AutoShardedClientOptions
 
@@ -153,10 +153,9 @@ def when_mentioned_or(*prefixes: str) -> Callable[[_Bot, Message], List[str]]:
     :func:`.when_mentioned`
     """
 
-    def inner(bot, msg):
+    def inner(bot: _Bot, msg: Message):
         r = list(prefixes)
-        r = when_mentioned(bot, msg) + r
-        return r
+        return when_mentioned(bot, msg) + r
 
     return inner
 
@@ -194,14 +193,14 @@ class BotBase(GroupMixin[None]):
 
         self.__cogs: Dict[str, Cog] = {}
         self.__extensions: Dict[str, types.ModuleType] = {}
-        self._checks: List[UserCheck] = []
-        self._check_once: List[UserCheck] = []
+        self._checks: List[UserCheck[Context[_Bot]]] = []
+        self._check_once: List[UserCheck[Context[_Bot]]] = []
         self._before_invoke: Optional[CoroFunc] = None
         self._after_invoke: Optional[CoroFunc] = None
         self._help_command: Optional[HelpCommand] = None
         self.description: str = inspect.cleandoc(description) if description else ''
         self.owner_id: Optional[int] = options.get('owner_id')
-        self.owner_ids: Optional[Collection[int]] = options.get('owner_ids', set())
+        self.owner_ids: Collection[int] = options.get('owner_ids', set())
         self.strip_after_prefix: bool = options.get('strip_after_prefix', False)
 
         if self.owner_id and self.owner_ids:
@@ -581,7 +580,7 @@ class BotBase(GroupMixin[None]):
         TypeError
             The coroutine passed is not actually a coroutine.
         """
-        if not asyncio.iscoroutinefunction(coro):
+        if not inspect.iscoroutinefunction(coro):
             raise TypeError('The pre-invoke hook must be a coroutine.')
 
         self._before_invoke = coro
@@ -618,7 +617,7 @@ class BotBase(GroupMixin[None]):
         TypeError
             The coroutine passed is not actually a coroutine.
         """
-        if not asyncio.iscoroutinefunction(coro):
+        if not inspect.iscoroutinefunction(coro):
             raise TypeError('The post-invoke hook must be a coroutine.')
 
         self._after_invoke = coro
@@ -654,7 +653,7 @@ class BotBase(GroupMixin[None]):
         """
         name = func.__name__ if name is MISSING else name
 
-        if not asyncio.iscoroutinefunction(func):
+        if not inspect.iscoroutinefunction(func):
             raise TypeError('Listeners must be coroutines')
 
         if name in self.extra_events:

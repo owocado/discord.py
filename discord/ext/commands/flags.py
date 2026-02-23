@@ -70,7 +70,7 @@ except ImportError:
         return namespace.get('__annotations__', {})
 
 
-@dataclass
+@dataclass(slots=True)
 class Flag:
     """Represents a flag parameter for :class:`FlagConverter`.
 
@@ -357,7 +357,7 @@ class FlagsMeta(type):
         if prefix is not MISSING:
             attrs['__commands_flag_prefix__'] = prefix
 
-        case_insensitive = attrs.setdefault('__commands_flag_case_insensitive__', False)
+        case_insensitive = attrs.setdefault('__commands_flag_case_insensitive__', True)
         delimiter = attrs.setdefault('__commands_flag_delimiter__', ':')
         prefix = attrs.setdefault('__commands_flag_prefix__', '')
 
@@ -533,7 +533,7 @@ class FlagConverter(metaclass=FlagsMeta):
         return self
 
     def __repr__(self) -> str:
-        pairs = ' '.join([f'{flag.attribute}={getattr(self, flag.attribute)!r}' for flag in self.get_flags().values()])
+        pairs = ' '.join(f'{flag.attribute}={getattr(self, flag.attribute)!r}' for flag in self.get_flags().values())
         return f'<{self.__class__.__name__} {pairs}>'
 
     @classmethod

@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
     from .context import Context
     from .converter import Converter
+    from .core import Command
     from .cooldowns import BucketType, Cooldown
     from .flags import Flag
     from .parameters import Parameter
@@ -48,6 +49,7 @@ __all__ = (
     'CommandError',
     'MissingRequiredArgument',
     'MissingRequiredAttachment',
+    'MissingRequiredSticker',
     'BadArgument',
     'PrivateMessageOnly',
     'NoPrivateMessage',
@@ -208,6 +210,35 @@ class MissingRequiredAttachment(UserInputError):
         super().__init__(f'{param.displayed_name or param.name} is a required argument that is missing an attachment.')
 
 
+class MissingRequiredSticker(UserInputError):
+    """Exception raised when parsing a command and a parameter
+    that requires a sticker is not given.
+
+    This inherits from :exc:`UserInputError`
+
+    .. versionadded:: 2.5
+
+    Attributes
+    -----------
+    param: :class:`Parameter`
+        The argument that is missing a sticker.
+    """
+
+    def __init__(self, param: Parameter) -> None:
+        from ...sticker import GuildSticker, StandardSticker
+
+        self.param: Parameter = param
+        converter = param.converter
+        if converter == GuildSticker:
+            sticker_type = 'server sticker'
+        elif converter == StandardSticker:
+            sticker_type = 'standard sticker'
+        else:
+            sticker_type = 'sticker'
+
+        super().__init__(f'{param.displayed_name or param.name} is a required argument that is missing a {sticker_type}.')
+
+
 class TooManyArguments(UserInputError):
     """Exception raised when the command was passed too many arguments and its
     :attr:`.Command.ignore_extra` attribute was not set to ``True``.
@@ -324,7 +355,7 @@ class MemberNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'Member "{argument}" not found.')
+        super().__init__(f'Member `{argument}` not found.')
 
 
 class GuildNotFound(BadArgument):
@@ -342,7 +373,7 @@ class GuildNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'Guild "{argument}" not found.')
+        super().__init__(f'Guild `{argument}` not found.')
 
 
 class UserNotFound(BadArgument):
@@ -361,7 +392,7 @@ class UserNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'User "{argument}" not found.')
+        super().__init__(f'User `{argument}` not found.')
 
 
 class MessageNotFound(BadArgument):
@@ -398,7 +429,7 @@ class ChannelNotReadable(BadArgument):
 
     def __init__(self, argument: Union[GuildChannel, Thread]) -> None:
         self.argument: Union[GuildChannel, Thread] = argument
-        super().__init__(f"Can't read messages in {argument.mention}.")
+        super().__init__(f'I cannot read messages in {argument.mention}')
 
 
 class ChannelNotFound(BadArgument):
@@ -416,7 +447,7 @@ class ChannelNotFound(BadArgument):
 
     def __init__(self, argument: Union[int, str]) -> None:
         self.argument: Union[int, str] = argument
-        super().__init__(f'Channel "{argument}" not found.')
+        super().__init__(f'Channel `{argument}` not found.')
 
 
 class ThreadNotFound(BadArgument):
@@ -452,7 +483,7 @@ class BadColourArgument(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'Colour "{argument}" is invalid.')
+        super().__init__(f'Colour `{argument}` is invalid.')
 
 
 BadColorArgument = BadColourArgument
@@ -473,7 +504,7 @@ class RoleNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'Role "{argument}" not found.')
+        super().__init__(f'Role `{argument}` not found.')
 
 
 class BadInviteArgument(BadArgument):
@@ -509,7 +540,7 @@ class EmojiNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'Emoji "{argument}" not found.')
+        super().__init__(f'Emoji `{argument}` not found.')
 
 
 class PartialEmojiConversionFailure(BadArgument):
@@ -528,7 +559,7 @@ class PartialEmojiConversionFailure(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'Couldn\'t convert "{argument}" to PartialEmoji.')
+        super().__init__(f'Couldn’t convert `{argument}` to PartialEmoji.')
 
 
 class GuildStickerNotFound(BadArgument):
@@ -546,7 +577,7 @@ class GuildStickerNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'Sticker "{argument}" not found.')
+        super().__init__(f'Sticker `{argument}` not found.')
 
 
 class ScheduledEventNotFound(BadArgument):
@@ -564,7 +595,7 @@ class ScheduledEventNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'ScheduledEvent "{argument}" not found.')
+        super().__init__(f'ScheduledEvent `{argument}` not found.')
 
 
 class SoundboardSoundNotFound(BadArgument):
@@ -582,7 +613,7 @@ class SoundboardSoundNotFound(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'SoundboardSound "{argument}" not found.')
+        super().__init__(f'SoundboardSound `{argument}` not found.')
 
 
 class BadBoolArgument(BadArgument):
@@ -618,7 +649,7 @@ class BadTimestampArgument(BadArgument):
 
     def __init__(self, argument: str) -> None:
         self.argument: str = argument
-        super().__init__(f'{argument} is not a recognised datetime or timestamp option')
+        super().__init__(f'{argument!r} is not a recognised datetime or timestamp option')
 
 
 class RangeError(BadArgument):
@@ -688,9 +719,13 @@ class CommandInvokeError(CommandError):
         the ``__cause__`` attribute.
     """
 
-    def __init__(self, e: Exception) -> None:
+    def __init__(self, e: Exception, command: Optional[Command[Any, ..., Any]] = None) -> None:
         self.original: Exception = e
-        super().__init__(f'Command raised an exception: {e.__class__.__name__}: {e}')
+        self.command: Optional[Command[Any, ..., Any]] = command
+        if command is not None:
+            super().__init__(f'Command {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
+        else:
+            super().__init__(f'Command raised an exception: {e.__class__.__name__}: {e}')
 
 
 class CommandOnCooldown(CommandError):

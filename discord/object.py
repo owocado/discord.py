@@ -113,5 +113,20 @@ class Object(Hashable):
         """:class:`datetime.datetime`: Returns the snowflake's creation time in UTC."""
         return snowflake_time(self.id)
 
+    @property
+    def worker_id(self) -> int:
+        """:class:`int`: Returns the worker id that made the snowflake."""
+        return (self.id & 0x3E0000) >> 17
+
+    @property
+    def process_id(self) -> int:
+        """:class:`int`: Returns the process id that made the snowflake."""
+        return (self.id & 0x1F000) >> 12
+
+    @property
+    def increment_id(self) -> int:
+        """:class:`int`: Returns the increment id that made the snowflake."""
+        return self.id & 0xFFF
+
 
 OLDEST_OBJECT = Object(id=0)

@@ -60,7 +60,7 @@ MISSING = utils.MISSING
 class AssetMixin:
     __slots__ = ()
     url: str
-    _state: Optional[Any]
+    _state: Optional[ConnectionState]
 
     async def read(self) -> bytes:
         """|coro|
@@ -132,6 +132,7 @@ class AssetMixin:
         filename: Optional[str] = MISSING,
         description: Optional[str] = None,
         spoiler: bool = False,
+        duration: Optional[float] = None,
     ) -> File:
         """|coro|
 
@@ -171,7 +172,13 @@ class AssetMixin:
 
         data = await self.read()
         file_filename = filename if filename is not MISSING else yarl.URL(self.url).name
-        return File(io.BytesIO(data), filename=file_filename, description=description, spoiler=spoiler)
+        return File(
+            io.BytesIO(data),
+            filename=file_filename,
+            description=description,
+            spoiler=spoiler,
+            duration=duration,
+        )
 
 
 class Asset(AssetMixin):
@@ -230,7 +237,7 @@ class Asset(AssetMixin):
         format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/avatars/{user_id}/{avatar}.{format}?size=1024',
+            url=f'{cls.BASE}/avatars/{user_id}/{avatar}.{format}?size=4096',
             key=avatar,
             animated=animated,
         )
@@ -241,7 +248,7 @@ class Asset(AssetMixin):
         format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/guilds/{guild_id}/users/{member_id}/avatars/{avatar}.{format}?size=1024',
+            url=f'{cls.BASE}/guilds/{guild_id}/users/{member_id}/avatars/{avatar}.{format}?size=4096',
             key=avatar,
             animated=animated,
         )
@@ -252,7 +259,7 @@ class Asset(AssetMixin):
         format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/guilds/{guild_id}/users/{member_id}/banners/{banner}.{format}?size=1024',
+            url=f'{cls.BASE}/guilds/{guild_id}/users/{member_id}/banners/{banner}.{format}?size=4096',
             key=banner,
             animated=animated,
         )
@@ -270,7 +277,7 @@ class Asset(AssetMixin):
     def _from_icon(cls, state: _State, object_id: int, icon_hash: str, path: str) -> Self:
         return cls(
             state,
-            url=f'{cls.BASE}/{path}-icons/{object_id}/{icon_hash}.png?size=1024',
+            url=f'{cls.BASE}/{path}-icons/{object_id}/{icon_hash}.png?size=4096',
             key=icon_hash,
             animated=False,
         )
@@ -281,7 +288,7 @@ class Asset(AssetMixin):
     ) -> Self:
         return cls(
             state,
-            url=f'{cls.BASE}/app-icons/{object_id}/{asset_type}.png?size=1024',
+            url=f'{cls.BASE}/app-icons/{object_id}/{asset_type}.png?size=4096',
             key=icon_hash,
             animated=False,
         )
@@ -290,7 +297,7 @@ class Asset(AssetMixin):
     def _from_cover_image(cls, state: _State, object_id: int, cover_image_hash: str) -> Self:
         return cls(
             state,
-            url=f'{cls.BASE}/app-assets/{object_id}/store/{cover_image_hash}.png?size=1024',
+            url=f'{cls.BASE}/app-assets/{object_id}/store/{cover_image_hash}.png?size=4096',
             key=cover_image_hash,
             animated=False,
         )
@@ -299,7 +306,7 @@ class Asset(AssetMixin):
     def _from_scheduled_event_cover_image(cls, state: _State, scheduled_event_id: int, cover_image_hash: str) -> Self:
         return cls(
             state,
-            url=f'{cls.BASE}/guild-events/{scheduled_event_id}/{cover_image_hash}.png?size=1024',
+            url=f'{cls.BASE}/guild-events/{scheduled_event_id}/{cover_image_hash}.png?size=4096',
             key=cover_image_hash,
             animated=False,
         )
@@ -310,7 +317,7 @@ class Asset(AssetMixin):
         format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/{path}/{guild_id}/{image}.{format}?size=1024',
+            url=f'{cls.BASE}/{path}/{guild_id}/{image}.{format}?size=4096',
             key=image,
             animated=animated,
         )
@@ -321,7 +328,7 @@ class Asset(AssetMixin):
         format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/icons/{guild_id}/{icon_hash}.{format}?size=1024',
+            url=f'{cls.BASE}/icons/{guild_id}/{icon_hash}.{format}?size=4096',
             key=icon_hash,
             animated=animated,
         )
@@ -341,7 +348,7 @@ class Asset(AssetMixin):
         format = 'gif' if animated else 'png'
         return cls(
             state,
-            url=f'{cls.BASE}/banners/{user_id}/{banner_hash}.{format}?size=512',
+            url=f'{cls.BASE}/banners/{user_id}/{banner_hash}.{format}?size=4096',
             key=banner_hash,
             animated=animated,
         )
@@ -360,9 +367,53 @@ class Asset(AssetMixin):
         name = 'static.png' if not animated else 'asset.webm'
         return cls(
             state,
-            url=f'{cls.BASE}/assets/collectibles/{asset}{name}',
+            url=f'{cls.BASE}/assets/collectibles/{asset}{name}?size=4096',
             key=asset,
             animated=animated,
+        )
+
+    @classmethod
+    def _from_app_splash(cls, state: _State, object_id: int, splash_hash: str) -> Self:
+        return cls(
+            state,
+            url=f'{cls.BASE}/app-icons/{object_id}/{splash_hash}.png?size=4096',
+            key=splash_hash,
+            animated=False,
+        )
+
+    @classmethod
+    def _from_achievement_icon(cls, state: _State, app_id: int, achievement_id: int, icon_hash: str) -> Self:
+        return cls(
+            state,
+            url=f'{cls.BASE}/app-assets/{app_id}/achievements/{achievement_id}/icons/{icon_hash}.png?size=4096',
+            key=icon_hash,
+            animated=False,
+        )
+
+    @classmethod
+    def _from_primary_guild_banner(cls, state: _State, guild_id: int, banner_hash: str) -> Self:
+        return cls(
+            state,
+            url=f'{cls.BASE}/clan-banners/{guild_id}/{banner_hash}.png?size=4096',
+            key=banner_hash,
+            animated=False,
+        )
+
+    @classmethod
+    def _from_slayer_avatar(cls, state: _State, index: int) -> Self:
+        hashes: Tuple[str, ...] = (
+            'cc4d3c817f9a1b57a4f2',
+            'bea3e879099c0aacba64',
+            'd569b695280979e11ca3',
+            '0afec6e15d7c376edb17',
+            '06c71afa509013e91173',
+            '15a9b7ce7525b2fbe72f',
+        )
+        return cls(
+            state,
+            url=f'https://discord.com/assets/{hashes[index]}.png',
+            key=str(index),
+            animated=False,
         )
 
     def __str__(self) -> str:
@@ -385,6 +436,11 @@ class Asset(AssetMixin):
     def url(self) -> str:
         """:class:`str`: Returns the underlying URL of the asset."""
         return self._url
+
+    @property
+    def proxy_url(self) -> str:
+        """:class:`str`: Returns the media.discordapp.net proxy URL."""
+        return self._url.replace('cdn.discordapp.com', 'media.discordapp.net')
 
     @property
     def key(self) -> str:
@@ -441,9 +497,8 @@ class Asset(AssetMixin):
             if self._animated:
                 if format not in VALID_ASSET_FORMATS:
                     raise ValueError(f'format must be one of {VALID_ASSET_FORMATS}')
-            else:
-                if static_format is MISSING and format not in VALID_STATIC_FORMATS:
-                    raise ValueError(f'format must be one of {VALID_STATIC_FORMATS}')
+            elif static_format is MISSING and format not in VALID_STATIC_FORMATS:
+                raise ValueError(f'format must be one of {VALID_STATIC_FORMATS}')
             url = url.with_path(f'{path}.{format}')
 
         if static_format is not MISSING and not self._animated:
@@ -452,14 +507,13 @@ class Asset(AssetMixin):
             url = url.with_path(f'{path}.{static_format}')
 
         if size is not MISSING:
-            if not utils.valid_icon_size(size):
-                raise ValueError('size must be a power of 2 between 16 and 4096')
+            #  if not utils.valid_icon_size(size):
+                #  raise ValueError('size must be a power of 2 between 16 and 4096')
             url = url.with_query(size=size)
         else:
             url = url.with_query(url.raw_query_string)
 
-        url = str(url)
-        return self.__class__(state=self._state, url=url, key=self._key, animated=self._animated)
+        return self.__class__(state=self._state, url=str(url), key=self._key, animated=self._animated)
 
     def with_size(self, size: int, /) -> Self:
         """Returns a new asset with the specified size.
@@ -483,8 +537,8 @@ class Asset(AssetMixin):
         :class:`Asset`
             The new updated asset.
         """
-        if not utils.valid_icon_size(size):
-            raise ValueError('size must be a power of 2 between 16 and 4096')
+        #  if not utils.valid_icon_size(size):
+            #  raise ValueError('size must be a power of 2 between 16 and 4096')
 
         url = str(yarl.URL(self._url).with_query(size=size))
         return self.__class__(state=self._state, url=url, key=self._key, animated=self._animated)

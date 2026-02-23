@@ -160,6 +160,52 @@ class Colour:
         """:class:`int`: Returns the blue component of the colour."""
         return self._get_byte(0)
 
+    def to_cmyk(self) -> tuple[float, float, float, float]:
+        """Tuple[:class:`float`, :class:`float`, :class:`float`]: Returns an (c, m, y, k) tuple representing the colour."""
+        r, g, b = self.to_rgb()
+        cmyk_scale = 100
+        if (r == 0) and (g == 0) and (b == 0):
+            # black
+            return 0, 0, 0, cmyk_scale
+
+        # rgb [0,255] -> cmy [0,1]
+        c = 1 - (r / 255.0)
+        m = 1 - (g / 255.0)
+        y = 1 - (b / 255.0)
+        # extract out k [0,1]
+        min_cmy = min(c, m, y)
+        c = (c - min_cmy) / (1 - min_cmy)
+        m = (m - min_cmy) / (1 - min_cmy)
+        y = (y - min_cmy) / (1 - min_cmy)
+        k = min_cmy
+        # rescale to the range [0,cmyk_scale]
+        return c * cmyk_scale, m * cmyk_scale, y * cmyk_scale, k * cmyk_scale
+
+    def to_hsv(self):
+        """Tuple[:class:`int`, :class:`int`, :class:`int`]: Returns an (h, s, v) tuple representing the colour."""
+        # R, G, B values are divided by 255
+        # to change the range from 0..255 to 0..1:
+        r, g, b = self.r / 255.0, self.g / 255.0, self.b / 255.0
+        # h, s, v = hue, saturation, value
+        max_val = max(r, g, b)
+        min_val = min(r, g, b)
+        diff = max_val - min_val
+
+        # Calculate Value
+        v = max_val
+        # Calculate Saturation
+        s = 0 if max_val == 0 else diff / max_val
+        # Calculate Hue
+        if diff == 0:
+            h = 0
+        elif max_val == r:
+            h = 60 * (((g - b) / diff) % 6)
+        elif max_val == g:
+            h = 60 * (((b - r) / diff) + 2)
+        else:  # max_val == b
+            h = 60 * (((r - g) / diff) + 4)
+        return round(h), round(s * 100), round(v * 100)
+
     def to_rgb(self) -> Tuple[int, int, int]:
         """Tuple[:class:`int`, :class:`int`, :class:`int`]: Returns an (r, g, b) tuple representing the colour."""
         return (self.r, self.g, self.b)
@@ -202,6 +248,12 @@ class Colour:
 
         if value[0] == '#':
             return parse_hex_number(value[1:])
+
+        if value == 'random':
+            return cls.random()
+
+        if len(value) == 6 and re.match(r'^(?:[0-9a-fA-F]{2}){3}$', value):
+            return parse_hex_number(value)
 
         if value[0:2] == '0x':
             rest = value[2:]

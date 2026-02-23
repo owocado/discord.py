@@ -31,7 +31,7 @@ from .asset import Asset
 from .enums import EventStatus, EntityType, PrivacyLevel, try_enum
 from .mixins import Hashable
 from .object import Object, OLDEST_OBJECT
-from .utils import parse_time, _get_as_snowflake, _bytes_to_base64_data, MISSING
+from .utils import parse_time, _get_as_snowflake, _bytes_to_base64_data, MISSING, _from_json, _to_json
 
 if TYPE_CHECKING:
     from .types.scheduled_event import (
@@ -125,6 +125,7 @@ class ScheduledEvent(Hashable):
         'channel_id',
         'creator_id',
         'location',
+        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, data: GuildScheduledEventPayload) -> None:
@@ -154,6 +155,7 @@ class ScheduledEvent(Hashable):
 
         self.end_time: Optional[datetime] = parse_time(data.get('scheduled_end_time'))
         self.channel_id: Optional[int] = _get_as_snowflake(data, 'channel_id')
+        self._data = _to_json(data)
 
         metadata = data.get('entity_metadata')
         self._unroll_metadata(metadata)
@@ -179,12 +181,17 @@ class ScheduledEvent(Hashable):
     @property
     def channel(self) -> Optional[Union[VoiceChannel, StageChannel]]:
         """Optional[Union[:class:`VoiceChannel`, :class:`StageChannel`]]: The channel this scheduled event is in."""
+        if self.guild is None:
+            return None
         return self.guild.get_channel(self.channel_id)  # type: ignore
 
     @property
     def url(self) -> str:
         """:class:`str`: The url for the scheduled event."""
         return f'https://discord.com/events/{self.guild_id}/{self.id}'
+
+    def to_dict(self) -> GuildScheduledEventPayload:
+        return _from_json(self._data)
 
     async def __modify_status(self, status: EventStatus, reason: Optional[str], /) -> ScheduledEvent:
         payload = {'status': status.value}

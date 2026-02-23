@@ -60,6 +60,8 @@ class ExponentialBackoff(Generic[T]):
         number in between may be returned.
     """
 
+    __slots__: tuple[str, ...] = ('_base', '_exp', '_max', '_reset_time', '_last_invocation', '_randfunc')
+
     def __init__(self, base: int = 1, *, integral: T = False):
         self._base: int = base
 
@@ -73,6 +75,9 @@ class ExponentialBackoff(Generic[T]):
         rand.seed()
 
         self._randfunc: Callable[..., Union[int, float]] = rand.randrange if integral else rand.uniform
+
+    def __repr__(self):
+        return f'<ExponentialBackoff base={self._base} exp={self._exp} max={self._max}>'
 
     @overload
     def delay(self: ExponentialBackoff[Literal[False]]) -> float: ...

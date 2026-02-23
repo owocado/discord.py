@@ -37,16 +37,18 @@ from .asset import Asset
 from .utils import MISSING
 from .user import BaseUser, ClientUser, User, _UserTag
 from .permissions import Permissions
-from .enums import Status
+from .enums import Status, MemberJoinType, try_enum
 from .errors import ClientException
 from .colour import Colour
 from .object import Object
 from .flags import MemberFlags
 from .presences import ClientStatus
+from .primary_guild import AvatarDecoration, DisplayNameStyle, NamePlate, PrimaryGuild
 
 __all__ = (
     'VoiceState',
     'Member',
+    'MemberSearch',
 )
 
 T = TypeVar('T', bound=type)
@@ -63,6 +65,7 @@ if TYPE_CHECKING:
         MemberWithUser as MemberWithUserPayload,
         Member as MemberPayload,
         UserWithMember as UserWithMemberPayload,
+        MemberSearch as MemberSearchPayload,
     )
     from .types.gateway import GuildMemberUpdateEvent
     from .types.user import User as UserPayload, AvatarDecorationData
@@ -74,7 +77,6 @@ if TYPE_CHECKING:
         GuildVoiceState as GuildVoiceStatePayload,
         VoiceState as VoiceStatePayload,
     )
-    from .primary_guild import PrimaryGuild
     from .collectible import Collectible
 
     VocalGuildChannel = Union[VoiceChannel, StageChannel]
@@ -188,16 +190,16 @@ def flatten_user(cls: T) -> T:
             # However I'm not sure how I feel about "functions" returning properties
             # It probably breaks something in Sphinx.
             # probably a member function by now
-            def generate_function(x):
+            def generate_function(x: str):
                 # We want sphinx to properly show coroutine functions as coroutines
                 if inspect.iscoroutinefunction(value):
 
-                    async def general(self, *args, **kwargs):  # type: ignore
+                    async def general(self: Member, *args: Any, **kwargs: Any):  # type: ignore
                         return await getattr(self._user, x)(*args, **kwargs)
 
                 else:
 
-                    def general(self, *args, **kwargs):
+                    def general(self: Member, *args: Any, **kwargs: Any):
                         return getattr(self._user, x)(*args, **kwargs)
 
                 general.__name__ = x
@@ -208,6 +210,46 @@ def flatten_user(cls: T) -> T:
             setattr(cls, attr, func)
 
     return cls
+
+
+class MemberSearch:
+    """Represents a fetched member from member search.
+
+    .. versionadded:: 2.4
+
+    Attributes
+    ----------
+    member: :class:`Member`
+        The member associated with this search.
+    invite_code: Optional[:class:`str`]
+        The Invite code this user joined with.
+    join_type: :class:`JoinType`
+        The join source type.
+    inviter: Optional[:class:`User`]
+        The inviter, or `None` if not cached or
+        not present.
+    """
+
+    __slots__ = ('member', 'invite_code', 'join_type', 'inviter')
+
+    def __init__(self, *, data: MemberSearchPayload, guild: Guild, state: ConnectionState) -> None:
+        self.member: Member = Member(data=data.get('member'), guild=guild, state=state)
+        self.invite_code: Optional[str] = data.get('source_invite_code')
+        self.join_type: MemberJoinType = try_enum(MemberJoinType, data.get('join_source_type'))
+        inviter_id = utils._get_as_snowflake(data, 'inviter_id')
+        if inviter_id is not None:
+            self.inviter = state.get_user(inviter_id) or Object(inviter_id)
+        else:
+            self.inviter: Optional[Union[Object, User]] = None
+
+    def __repr__(self) -> str:
+        inner = (
+            ('invite', self.invite_code),
+            ('join_type', self.join_type),
+            ('member', self.member),
+            ('inviter', self.inviter),
+        )
+        return f'<{self.__class__.__name__} {" ".join(f"%s=%r" % t for t in inner)}'
 
 
 @flatten_user
@@ -271,6 +313,11 @@ class Member(discord.abc.Messageable, _UserTag):
         Model which holds information about the status of the member on various clients/platforms via presence updates.
 
         .. versionadded:: 2.5
+    unusual_dm_activity_until: Optional[:class:`datetime.datetime`]
+        An aware datetime object that specifies the date and time in UTC that the member's unusual DM activity will expire.
+        This will be set to ``None`` if the user does not have unusual DM activity.
+
+        .. versionadded:: 2.6
     """
 
     __slots__ = (
@@ -289,7 +336,11 @@ class Member(discord.abc.Messageable, _UserTag):
         '_avatar',
         '_banner',
         '_flags',
-        '_avatar_decoration_data',
+        'avatar_decoration_data',
+        'unusual_dm_activity_until',
+        'nameplate',
+        'display_name_style',
+        'bio',
     )
 
     if TYPE_CHECKING:
@@ -301,7 +352,7 @@ class Member(discord.abc.Messageable, _UserTag):
         system: bool
         created_at: datetime.datetime
         default_avatar: Asset
-        avatar: Optional[Asset]
+        avatar: Asset
         dm_channel: Optional[DMChannel]
         create_dm: Callable[[], Awaitable[DMChannel]]
         mutual_guilds: List[Guild]
@@ -311,8 +362,8 @@ class Member(discord.abc.Messageable, _UserTag):
         accent_colour: Optional[Colour]
         avatar_decoration: Optional[Asset]
         avatar_decoration_sku_id: Optional[int]
-        primary_guild: PrimaryGuild
-        collectibles: List[Collectible]
+        #  primary_guild: PrimaryGuild
+        #  collectibles: List[Collectible]
 
     def __init__(self, *, data: MemberWithUserPayload, guild: Guild, state: ConnectionState):
         self._state: ConnectionState = state
@@ -328,22 +379,45 @@ class Member(discord.abc.Messageable, _UserTag):
         self._avatar: Optional[str] = data.get('avatar')
         self._banner: Optional[str] = data.get('banner')
         self._permissions: Optional[int]
-        self._flags: int = data['flags']
-        self._avatar_decoration_data: Optional[AvatarDecorationData] = data.get('avatar_decoration_data')
+        self._flags: int = data.get('flags') or 0
+
+        try:
+            deco = data['avatar_decoration_data']
+            self.avatar_decoration_data = AvatarDecoration(**deco) if deco else None
+        except Exception:
+            self.avatar_decoration_data: Optional[AvatarDecoration] = None
+
         try:
             self._permissions = int(data['permissions'])  # pyright: ignore[reportTypedDictNotRequiredAccess]
         except KeyError:
             self._permissions = None
 
         self.timed_out_until: Optional[datetime.datetime] = utils.parse_time(data.get('communication_disabled_until'))
+        self.unusual_dm_activity_until: Optional[datetime.datetime] = utils.parse_time(data.get('unusual_dm_activity_until'))
+        self.bio: str = data.get('bio', '')
+
+        try:
+            c = data['collectibles']
+            self.nameplate = NamePlate(**c['nameplate']) if c is not None else None
+        except Exception:
+            self.nameplate: Optional[NamePlate] = None
+
+        try:
+            dns = data['display_name_styles']
+            self.display_name_style = DisplayNameStyle(**dns) if dns is not None else None
+        except Exception:
+            self.display_name_style: Optional[DisplayNameStyle] = None
 
     def __str__(self) -> str:
         return str(self._user)
 
+    def __int__(self) -> int:
+        return self.id
+
     def __repr__(self) -> str:
         return (
             f'<Member id={self._user.id} name={self._user.name!r} global_name={self._user.global_name!r}'
-            f' bot={self._user.bot} nick={self.nick!r} guild={self.guild!r}>'
+            f' bot={self._user.bot} nick={self.nick!r} guild={self.guild!r} joined_at={self.joined_at!r}>'
         )
 
     def __eq__(self, other: object) -> bool:
@@ -377,7 +451,8 @@ class Member(discord.abc.Messageable, _UserTag):
         self.nick = data.get('nick', None)
         self.pending = data.get('pending', False)
         self.timed_out_until = utils.parse_time(data.get('communication_disabled_until'))
-        self._flags = data.get('flags', 0)
+        self._flags = data.get('flags', 0) or 0
+        self.unusual_dm_activity_until = utils.parse_time(data.get('unusual_dm_activity_until'))
 
     @classmethod
     def _try_upgrade(cls, *, data: UserWithMemberPayload, guild: Guild, state: ConnectionState) -> Union[User, Self]:
@@ -408,7 +483,10 @@ class Member(discord.abc.Messageable, _UserTag):
         self._state = member._state
         self._avatar = member._avatar
         self._banner = member._banner
-        self._avatar_decoration_data = member._avatar_decoration_data
+        self.avatar_decoration_data = member.avatar_decoration_data
+        self.unusual_dm_activity_until = member.unusual_dm_activity_until
+        self.nameplate = member.nameplate
+        self.display_name_style = member.display_name_style
 
         # Reference will not be copied unless necessary by PRESENCE_UPDATE
         # See below
@@ -416,8 +494,7 @@ class Member(discord.abc.Messageable, _UserTag):
         return self
 
     async def _get_channel(self) -> DMChannel:
-        ch = await self.create_dm()
-        return ch
+        return await self.create_dm()
 
     def _update(self, data: GuildMemberUpdateEvent) -> None:
         # the nickname change is optional,
@@ -438,7 +515,26 @@ class Member(discord.abc.Messageable, _UserTag):
         self._avatar = data.get('avatar')
         self._banner = data.get('banner')
         self._flags = data.get('flags', 0)
-        self._avatar_decoration_data = data.get('avatar_decoration_data')
+
+        try:
+            deco = data['avatar_decoration_data']
+            self.avatar_decoration_data = AvatarDecoration(**deco) if deco else None
+        except Exception:
+            self.avatar_decoration_data = None
+
+        try:
+            c = data['collectibles']
+            self.nameplate = NamePlate(**c['nameplate']) if c is not None else None
+        except Exception:
+            self.nameplate: Optional[NamePlate] = None
+
+        try:
+            dns = data['display_name_styles']
+            self.display_name_style = DisplayNameStyle(**dns) if dns is not None else None
+        except Exception:
+            self.display_name_style: Optional[DisplayNameStyle] = None
+
+        self.unusual_dm_activity_until = utils.parse_time(data.get('unusual_dm_activity_until'))
 
     def _presence_update(self, raw: RawPresenceUpdateEvent, user: UserPayload) -> Optional[Tuple[User, User]]:
         self.activities = raw.activities
@@ -455,12 +551,15 @@ class Member(discord.abc.Messageable, _UserTag):
             u._avatar,
             u.global_name,
             u._public_flags,
-            u._avatar_decoration_data['sku_id'] if u._avatar_decoration_data is not None else None,
-            u._primary_guild,
+            u.avatar_decoration_data.sku_id if u.avatar_decoration_data is not None else None,
+            u.avatar_decoration_data.expires_at if u.avatar_decoration_data is not None else None,
         )
 
-        decoration_payload = user.get('avatar_decoration_data')
-        primary_guild_payload = user.get('primary_guild', None)
+        try:
+            deco = user['avatar_decoration_data']
+            avatar_decoration_data = AvatarDecoration(**deco) if deco else None
+        except Exception:
+            avatar_decoration_data: Optional[AvatarDecoration] = None
         # These keys seem to always be available
         modified = (
             user['username'],
@@ -468,10 +567,33 @@ class Member(discord.abc.Messageable, _UserTag):
             user['avatar'],
             user.get('global_name'),
             user.get('public_flags', 0),
-            decoration_payload['sku_id'] if decoration_payload is not None else None,
-            primary_guild_payload,
+            avatar_decoration_data.sku_id if avatar_decoration_data is not None else None,
+            avatar_decoration_data.expires_at if avatar_decoration_data is not None else None,
         )
-        if original != modified:
+        try:
+            guild = user['primary_guild']
+            primary_guild = PrimaryGuild(**guild) if guild else None
+        except Exception:
+            primary_guild = None
+
+        try:
+            c = user['collectibles']
+            nameplate = NamePlate(**c['nameplate']) if c is not None else None
+        except Exception:
+            nameplate: Optional[NamePlate] = None
+
+        try:
+            dns = user['display_name_styles']
+            display_name_style = DisplayNameStyle(**dns) if dns is not None else None
+        except Exception:
+            display_name_style: Optional[DisplayNameStyle] = None
+
+        if (
+            original != modified
+            or u.primary_guild != primary_guild
+            or u.nameplate != nameplate
+            or u.display_name_style != display_name_style
+        ):
             to_return = User._copy(self._user)
             (
                 u.name,
@@ -479,17 +601,19 @@ class Member(discord.abc.Messageable, _UserTag):
                 u._avatar,
                 u.global_name,
                 u._public_flags,
-                u._avatar_decoration_data,
-                u._primary_guild,
+                u.avatar_decoration_data,
+                u.primary_guild,
             ) = (
                 user['username'],
                 user['discriminator'],
                 user['avatar'],
                 user.get('global_name'),
-                user.get('public_flags', 0),
-                decoration_payload,
-                primary_guild_payload,
+                user.get('public_flags') or 0,
+                avatar_decoration_data,
+                primary_guild,
             )
+            u.nameplate = nameplate
+            u.display_name_style = display_name_style
             # Signal to dispatch on_user_update
             return to_return, u
 
@@ -525,6 +649,16 @@ class Member(discord.abc.Messageable, _UserTag):
     def web_status(self) -> Status:
         """:class:`Status`: The member's status on the web client, if applicable."""
         return self.client_status.web_status
+
+    @property
+    def embedded_status(self) -> Status:
+        """:class:`Status`: The member's status on the embedded client (PlayStation, Xbox), if applicable."""
+        return self.client_status.embedded_status
+
+    @property
+    def vr_status(self) -> Status:
+        """:class:`Status`: The member's status on the VR client, if applicable."""
+        return self.client_status.vr_status
 
     def is_on_mobile(self) -> bool:
         """A helper function that determines if a member is active on a mobile device.
@@ -649,6 +783,8 @@ class Member(discord.abc.Messageable, _UserTag):
         """
         return self.guild_banner or self._user.banner
 
+    banner = display_banner
+
     @property
     def guild_banner(self) -> Optional[Asset]:
         """Optional[:class:`Asset`]: Returns an :class:`Asset` for the guild banner
@@ -727,12 +863,16 @@ class Member(discord.abc.Messageable, _UserTag):
         .. versionchanged:: 2.0
             Member timeouts are taken into consideration.
         """
+        if not self.guild.get_member(self.id):
+            return self.resolved_permissions or discord.Permissions._dm_permissions()
 
         if self.guild.owner_id == self.id:
             return Permissions.all()
 
         base = Permissions.none()
         for r in self.roles:
+            if not r:
+                continue
             base.value |= r.permissions.value
 
         if base.administrator:
@@ -771,6 +911,45 @@ class Member(discord.abc.Messageable, _UserTag):
         .. versionadded:: 2.2
         """
         return MemberFlags._from_value(self._flags)
+
+    @property
+    def primary_guild(self) -> Optional[PrimaryGuild]:
+        """Optional[:class:`PrimaryGuild`]: Returns the member's primary guild, if available.
+
+        .. versionadded:: 2.6
+        """
+        return self._user.primary_guild
+
+    clan = primary_guild
+
+    @property
+    def avatar_decoration_sku_id(self) -> Optional[int]:
+        """Optional[:class:`int`]: Returns the SKU ID of the avatar decoration the user has.
+
+        If the user has not set an avatar decoration, ``None`` is returned.
+
+        .. versionadded:: 2.4
+        """
+        deco = self.avatar_decoration_data
+        return deco._sku_id if deco is not None else None
+
+    @property
+    def _avatar_decoration_data(self):
+        if self.avatar_decoration_data is None:
+            return None
+        return self.avatar_decoration_data.to_dict()
+
+    @property
+    def clan(self) -> Optional[PrimaryGuild]:
+        """:class:`PrimaryGuild`: Returns the user's primary guild.
+
+        .. versionadded:: 2.6"""
+        return self._user.primary_guild
+
+    @property
+    def jump_url(self) -> str:
+        """:class:`str`: Returns a URL that allows the client to jump to the user."""
+        return f'https://discord.com/users/{self.id}'
 
     async def ban(
         self,
@@ -977,7 +1156,7 @@ class Member(discord.abc.Messageable, _UserTag):
                 await http.edit_my_voice_state(guild_id, voice_state_payload)
             else:
                 if not suppress:
-                    voice_state_payload['request_to_speak_timestamp'] = datetime.datetime.utcnow().isoformat()
+                    voice_state_payload['request_to_speak_timestamp'] = utils.utcnow().isoformat()
                 await http.edit_voice_state(guild_id, self.id, voice_state_payload)
 
         if voice_channel is not MISSING:
@@ -992,7 +1171,7 @@ class Member(discord.abc.Messageable, _UserTag):
             else:
                 if timed_out_until.tzinfo is None:
                     raise TypeError(
-                        'timed_out_until must be an aware datetime. Consider using discord.utils.utcnow() or datetime.datetime.now().astimezone() for local time.'
+                        'timed_out_until must be an aware datetime. Consider using discord.utils.utcnow() for local time.'
                     )
                 payload['communication_disabled_until'] = timed_out_until.isoformat()
 
@@ -1038,7 +1217,7 @@ class Member(discord.abc.Messageable, _UserTag):
 
         payload = {
             'channel_id': self.voice.channel.id,
-            'request_to_speak_timestamp': datetime.datetime.utcnow().isoformat(),
+            'request_to_speak_timestamp': utils.utcnow().isoformat(),
         }
 
         if self._state.self_id != self.id:
@@ -1256,3 +1435,86 @@ class Member(discord.abc.Messageable, _UserTag):
         if self.timed_out_until is not None:
             return utils.utcnow() < self.timed_out_until
         return False
+
+    def has_unusual_dm_activity(self) -> bool:
+        """Returns whether this member has unusual DM activity.
+
+        .. versionadded:: 2.5
+
+        Returns
+        --------
+        :class:`bool`
+            ``True`` if the member has unusual DM activity. ``False`` otherwise.
+        """
+        if self.unusual_dm_activity_until is not None:
+            return utils.utcnow() < self.unusual_dm_activity_until
+        return False
+
+    def is_guest(self) -> bool:
+        """Returns whether this member is a guest who joined via guest invites."""
+        return self.flags.guest
+
+    async def safety_metadata(self) -> Optional[MemberSearch]:
+        r"""|coro|
+
+        Fetches the safety information for this member.
+
+        You must have __any__ of the following permissions:
+        - :attr:`Permissions.administrator`
+        - :attr:`Permissions.manage_guild`
+        - :attr:`Permissions.manage_roles`
+        - :attr:`Permissions.manage_nicknames`
+        - :attr:`Permissions.ban_members`
+        - :attr:`Permissions.moderate_members`
+        - :attr:`Permissions.kick_members`
+
+        .. versionadded:: 2.5
+
+        Raises
+        ------
+        Forbidden
+            You do not have permission to view member safety
+            information.
+        HTTPException
+            Fetching the information failed.
+
+        Returns
+        -------
+        Optional[:class:`MemberSearch`]
+            The member safety information, or `None` if there
+            isn't.
+        """
+        data = await self._state.http.get_member_supplemental(self.guild.id, user_id=self.id)
+        if not data.get('members'):
+            return None
+        return MemberSearch(state=self._state, guild=self.guild, data=data['members'][0])
+
+    def to_dict(self) -> MemberWithUserPayload:
+        plate = self.nameplate
+        dns = self.display_name_style
+        to_iso8601: Callable[[datetime.datetime | None], str | None] = lambda x: x.isoformat() if x is not None else None
+        ret: MemberWithUserPayload = {
+            'avatar': self._avatar,
+            'avatar_decoration_data': self._avatar_decoration_data,
+            'banner': self._banner,
+            'communication_disabled_until': to_iso8601(self.timed_out_until),
+            'flags': self._flags,
+            'joined_at': to_iso8601(self.joined_at),
+            'nick': self.nick,
+            'pending': self.pending,
+            'permissions': self._permissions or 0,
+            'premium_since': to_iso8601(self.premium_since),
+            'roles': list(map(str, self._roles)),
+            'unusual_dm_activity_until': to_iso8601(self.unusual_dm_activity_until),
+            'collectibles': plate.to_dict() if plate is not None else None,
+            'display_name_styles': dns.to_dict() if dns is not None else None,
+            'user': self._user.to_dict(),
+            'mute': False,
+            'deaf': False,
+        }
+        ret['presence'] = self.client_status.to_dict()
+        if self.activities:
+            ret['activities'] = [ac.to_dict() for ac in self.activities]
+        if self.bio:
+            ret['bio'] = self.bio
+        return ret

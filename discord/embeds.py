@@ -46,7 +46,7 @@ class EmbedProxy:
         return len(self.__dict__)
 
     def __repr__(self) -> str:
-        inner = ', '.join((f'{k}={getattr(self, k)!r}' for k in dir(self) if not k.startswith('_')))
+        inner = ', '.join(f'{k}={getattr(self, k)!r}' for k in dir(self) if not k.startswith('_'))
         return f'EmbedProxy({inner})'
 
     def __getattr__(self, attr: str) -> None:
@@ -75,7 +75,15 @@ class EmbedMediaProxy(EmbedProxy):
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-    from .types.embed import Embed as EmbedData, EmbedType
+    from .types.embed import (
+        Embed as EmbedData,
+        EmbedAuthor as EmbedAuthorPayload,
+        EmbedField as EmbedFieldPayload,
+        EmbedFooter as EmbedFooterPayload,
+        EmbedMedia as EmbedMediaPayload,
+        EmbedProvider as EmbedProviderPayload,
+        EmbedType,
+    )
 
     T = TypeVar('T')
 
@@ -178,6 +186,16 @@ class Embed:
         '_flags',
     )
 
+    if TYPE_CHECKING:
+        _colour: Optional[Colour]
+        _author: EmbedAuthorPayload
+        _fields: List[EmbedFieldPayload]
+        _footer: EmbedFooterPayload
+        _image: EmbedMediaPayload
+        _provider: EmbedProviderPayload
+        _thumbnail: EmbedMediaPayload
+        _video: EmbedMediaPayload
+
     def __init__(
         self,
         *,
@@ -208,8 +226,21 @@ class Embed:
         if timestamp is not None:
             self.timestamp = timestamp
 
+    def __repr__(self) -> str:
+        attrs = (
+            ('author', self.author),
+            ('fields', self.fields),
+            ('footer', self.footer),
+            ('image', self.image),
+            ('thumbnail', self.thumbnail),
+            ('title', self.title),
+            ('url', self.url),
+        )
+        inner = ' '.join(f'{key}={value!r}' for key, value in attrs if bool(value))
+        return f'<Embed length={len(self)} type={self.type!r} flags={self.flags!r} color={self.color!r} {inner}>'
+
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> Self:
+    def from_dict(cls, data: EmbedData) -> Self:
         """Converts a :class:`dict` to a :class:`Embed` provided it is in the
         format that Discord expects it to be in.
 
@@ -217,7 +248,7 @@ class Embed:
 
         Parameters
         -----------
-        data: :class:`dict`
+        data: :class:`EmbedData`
             The dictionary to convert into an embed.
         """
         # we are bypassing __init__ here since it doesn't apply here
@@ -226,10 +257,10 @@ class Embed:
         # fill in the basic fields
 
         self.title = data.get('title', None)
-        self.type = data.get('type', None)
+        self.type = data.get('type') or 'rich'
         self.description = data.get('description', None)
         self.url = data.get('url', None)
-        self._flags = data.get('flags', 0)
+        self._flags = data.get('flags') or 0
 
         if self.title is not None:
             self.title = str(self.title)
@@ -499,6 +530,21 @@ class Embed:
 
         return self
 
+    def remove_thumbnail(self) -> Self:
+        """Clears embed's thumbnail information.
+
+        This function returns the class instance to allow for fluent-style
+        chaining.
+
+        .. versionadded:: 2.6
+        """
+        try:
+            del self._thumbnail
+        except AttributeError:
+            pass
+
+        return self
+
     @property
     def video(self) -> _EmbedMediaProxy:
         """Returns an ``EmbedProxy`` denoting the video contents.
@@ -609,7 +655,7 @@ class Embed:
             Whether the field should be displayed inline.
         """
 
-        field = {
+        field: EmbedFieldPayload = {
             'inline': inline,
             'name': str(name),
             'value': str(value),
@@ -642,7 +688,7 @@ class Embed:
             Whether the field should be displayed inline.
         """
 
-        field = {
+        field: EmbedFieldPayload = {
             'inline': inline,
             'name': str(name),
             'value': str(value),
@@ -780,5 +826,8 @@ class Embed:
 
         if self.title:
             result['title'] = self.title
+
+        if self.flags and self.flags.value:
+            result['flags'] = self.flags.value
 
         return result  # type: ignore # This payload is equivalent to the EmbedData type

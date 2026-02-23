@@ -32,9 +32,10 @@ from .mixins import Hashable
 from .abc import Messageable, GuildChannel, _purge_helper
 from .enums import ChannelType, try_enum
 from .errors import ClientException
-from .flags import ChannelFlags
+from .flags import ChannelFlags, ThreadMemberFlags
 from .permissions import Permissions
-from .utils import MISSING, parse_time, _get_as_snowflake, _unique
+from .utils import MISSING, parse_time, _get_as_snowflake, _unique, _from_json, _to_json
+from .object import Object
 
 __all__ = (
     'Thread',
@@ -58,6 +59,9 @@ if TYPE_CHECKING:
     from .abc import Snowflake, SnowflakeTime
     from .role import Role
     from .state import ConnectionState
+    from .user import ClientUser, User
+    from .webhook import Webhook
+    from .permissions import PermissionOverwrite
 
     ThreadChannelType = Literal[ChannelType.news_thread, ChannelType.public_thread, ChannelType.private_thread]
 
@@ -156,9 +160,13 @@ class Thread(Messageable, Hashable):
         'auto_archive_duration',
         'archive_timestamp',
         'total_message_sent',
+        'topic',
         '_created_at',
         '_flags',
         '_applied_tags',
+        '_last_pin',
+        '_member_ids',
+        '_data',
     )
 
     def __init__(self, *, guild: Guild, state: ConnectionState, data: ThreadPayload) -> None:
@@ -172,7 +180,7 @@ class Thread(Messageable, Hashable):
 
     def __repr__(self) -> str:
         return (
-            f'<Thread id={self.id!r} name={self.name!r} parent={self.parent}'
+            f'<Thread id={self.id!r} name={self.name!r} parent={self.parent!r}'
             f' owner_id={self.owner_id!r} locked={self.locked} archived={self.archived}>'
         )
 
@@ -186,14 +194,18 @@ class Thread(Messageable, Hashable):
         self.name: str = data['name']
         self._type: ThreadChannelType = try_enum(ChannelType, data['type'])  # type: ignore
         self.last_message_id: Optional[int] = _get_as_snowflake(data, 'last_message_id')
-        self.slowmode_delay: int = data.get('rate_limit_per_user', 0)
-        self.message_count: int = data['message_count']
-        self.member_count: int = data['member_count']
-        self.total_message_sent: int = data.get('total_message_sent', 0)
-        self._flags: int = data.get('flags', 0)
+        self.slowmode_delay: int = data.get('rate_limit_per_user', 0) or 0
+        self.message_count: int = data.get('message_count') or 0
+        self.member_count: int = data.get('member_count') or 0
+        self.total_message_sent: int = data.get('total_message_sent') or 0
+        self._flags: int = data.get('flags', 0) or 0
         # SnowflakeList is sorted, but this would not be proper for applied tags, where order actually matters.
-        self._applied_tags: array.array[int] = array.array('Q', map(int, data.get('applied_tags', [])))
+        self._applied_tags: array.array[int] = array.array('Q', map(int, data.get('applied_tags', []) or []))
+        self._last_pin = parse_time(data.get('last_pin_timestamp'))
+        self._member_ids: array.array[int] = array.array('Q', map(int, data.get('member_ids_preview') or []))
+        self.topic: Optional[str] = data.get('topic')
         self._unroll_metadata(data['thread_metadata'])
+        self._data: bytes = _to_json(data)
 
         self.me: Optional[ThreadMember]
         try:
@@ -218,9 +230,11 @@ class Thread(Messageable, Hashable):
         except KeyError:
             pass
 
-        self.slowmode_delay = data.get('rate_limit_per_user', 0)
-        self._flags: int = data.get('flags', 0)
-        self._applied_tags: array.array[int] = array.array('Q', map(int, data.get('applied_tags', [])))
+        self.slowmode_delay = data.get('rate_limit_per_user', 0) or 0
+        self._flags = data.get('flags', 0) or 0
+        self._applied_tags = array.array('Q', map(int, data.get('applied_tags', []) or []))
+        self._last_pin = parse_time(data.get('last_pin_timestamp'))
+        self._member_ids = array.array('Q', map(int, data.get('member_ids_preview') or []))
 
         try:
             self._unroll_metadata(data['thread_metadata'])
@@ -243,9 +257,11 @@ class Thread(Messageable, Hashable):
         return ChannelFlags._from_value(self._flags)
 
     @property
-    def owner(self) -> Optional[Member]:
+    def owner(self) -> Union[Member, Object]:
         """Optional[:class:`Member`]: The member this thread belongs to."""
-        return self.guild.get_member(self.owner_id)
+        if self.guild is None:
+            return Object(self.owner_id, type=Member)
+        return self.guild.get_member(self.owner_id) or Object(self.owner_id, type=Member)
 
     @property
     def mention(self) -> str:
@@ -374,6 +390,31 @@ class Thread(Messageable, Hashable):
         """
         return self._created_at
 
+    @property
+    def _overwrites(self):
+        parent = self.parent
+        if parent is None:
+            raise ClientException('Parent channel not found')
+        return parent._overwrites
+
+    def overwrites_for(self, obj: Union[Role, User, Object], /) -> PermissionOverwrite:
+        """Returns this thread's parent channel-specific overwrites for a member or a role.
+
+        Parameters
+        -----------
+        obj: Union[:class:`~discord.Role`, :class:`~discord.abc.User`, :class:`~discord.Object`]
+            The role or user denoting whose overwrite to get.
+
+        Returns
+        ---------
+        :class:`~discord.PermissionOverwrite`
+            The permission overwrites for this object.
+        """
+        parent = self.parent
+        if parent is None:
+            raise ClientException('Parent channel not found')
+        return parent.overwrites_for(obj)
+
     def is_private(self) -> bool:
         """:class:`bool`: Whether the thread is a private thread.
 
@@ -445,6 +486,9 @@ class Thread(Messageable, Hashable):
             base.value &= ~denied.value
 
         return base
+
+    def to_dict(self) -> ThreadPayload:
+        return _from_json(self._data)
 
     async def delete_messages(self, messages: Iterable[Snowflake], /, *, reason: Optional[str] = None) -> None:
         """|coro|
@@ -578,6 +622,29 @@ class Thread(Messageable, Hashable):
             bulk=bulk,
             reason=reason,
         )
+
+    async def webhooks(self) -> List[Webhook]:
+        """|coro|
+
+        Gets the list of webhooks from this thread's parent channel.
+
+        You must have :attr:`~.Permissions.manage_webhooks` to do this.
+
+        Raises
+        -------
+        Forbidden
+            You don't have permissions to get the webhooks.
+
+        Returns
+        --------
+        List[:class:`Webhook`]
+            The webhooks for this thread's parent channel.
+        """
+
+        from .webhook import Webhook
+
+        data = await self._state.http.channel_webhooks(self.parent_id)
+        return [Webhook.from_state(d, state=self._state) for d in data]
 
     async def edit(
         self,
@@ -946,7 +1013,7 @@ class ThreadMember(Hashable):
         'id',
         'thread_id',
         'joined_at',
-        'flags',
+        '_flags',
         '_state',
         'parent',
     )
@@ -957,7 +1024,7 @@ class ThreadMember(Hashable):
         self._from_data(data)
 
     def __repr__(self) -> str:
-        return f'<ThreadMember id={self.id} thread_id={self.thread_id} joined_at={self.joined_at!r}>'
+        return f'<ThreadMember id={self.id} thread_id={self.thread_id} joined_at={self.joined_at!r} flags={self._flags}>'
 
     def _from_data(self, data: ThreadMemberPayload) -> None:
         self.id: int
@@ -973,9 +1040,17 @@ class ThreadMember(Hashable):
             self.thread_id = self.parent.id
 
         self.joined_at: datetime = parse_time(data['join_timestamp'])
-        self.flags: int = data['flags']
+        self._flags: int = data['flags']
 
     @property
     def thread(self) -> Thread:
         """:class:`Thread`: The thread this member belongs to."""
         return self.parent
+
+    @property
+    def flags(self) -> ThreadMemberFlags:
+        """:class:`ThreadMemberFlags`: The flags associated with this thread member.
+
+        .. versionadded:: 2.6
+        """
+        return ThreadMemberFlags._from_value(self._flags)

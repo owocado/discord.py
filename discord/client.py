@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import inspect
 import logging
 from typing import (
     TYPE_CHECKING,
@@ -57,7 +58,7 @@ from .widget import Widget
 from .guild import Guild, GuildPreview
 from .emoji import Emoji
 from .channel import _threaded_channel_factory, PartialMessageable
-from .enums import ChannelType, EntitlementOwnerType
+from .enums import ChannelType, EntitlementOwnerType, Platform
 from .mentions import AllowedMentions
 from .errors import *
 from .enums import Status
@@ -121,7 +122,8 @@ if TYPE_CHECKING:
     from .audit_logs import AuditLogEntry
     from .poll import PollAnswer
     from .subscription import Subscription
-    from .flags import MemberCacheFlags
+    from .flags import MemberCacheFlags, ApplicationFlags, Intents
+    from .threads import Thread
 
     class _ClientOptions(TypedDict, total=False):
         max_messages: Optional[int]
@@ -143,6 +145,7 @@ if TYPE_CHECKING:
         http_trace: aiohttp.TraceConfig
         max_ratelimit_timeout: Optional[float]
         connector: Optional[aiohttp.BaseConnector]
+        platform: Platform
 
 
 # fmt: off
@@ -288,6 +291,10 @@ class Client:
         behavior, such as setting a dns resolver or sslcontext.
 
         .. versionadded:: 2.5
+    platform: Optional[:class:`.Platform`]
+        A platform to start your presence with upon logging on to Discord.
+
+        .. versionadded:: 2.7
 
     Attributes
     -----------
@@ -299,7 +306,7 @@ class Client:
         self.loop: asyncio.AbstractEventLoop = _loop
         # self.ws is set in the connect method
         self.ws: DiscordWebSocket = None  # type: ignore
-        self._listeners: Dict[str, List[Tuple[asyncio.Future, Callable[..., bool]]]] = {}
+        self._listeners: Dict[str, List[Tuple[asyncio.Future[None], Callable[..., bool]]]] = {}
         self.shard_id: Optional[int] = options.get('shard_id')
         self.shard_count: Optional[int] = options.get('shard_count')
 
@@ -328,6 +335,7 @@ class Client:
         }
 
         self._enable_debug_events: bool = options.pop('enable_debug_events', False)
+        self._platform: Optional[Platform] = options.pop('platform', None)
         self._connection: ConnectionState[Self] = self._get_state(intents=intents, **options)
         self._connection.shard_count = self.shard_count
         self._closing_task: Optional[asyncio.Task[None]] = None
@@ -389,7 +397,7 @@ class Client:
         return False
 
     @property
-    def user(self) -> Optional[ClientUser]:
+    def user(self) -> ClientUser:
         """Optional[:class:`.ClientUser`]: Represents the connected client. ``None`` if not logged in."""
         return self._connection.user
 
@@ -516,10 +524,10 @@ class Client:
         event_name: str,
         *args: Any,
         **kwargs: Any,
-    ) -> asyncio.Task:
+    ) -> asyncio.Task[None]:
         wrapped = self._run_event(coro, event_name, *args, **kwargs)
         # Schedules the task
-        return self.loop.create_task(wrapped, name=f'discord.py: {event_name}')
+        return utils.create_task(wrapped, name=f'discord.py: {event_name}')
 
     def dispatch(self, event: str, /, *args: Any, **kwargs: Any) -> None:
         _log.debug('Dispatching event %s', event)
@@ -673,8 +681,8 @@ class Client:
         token = token.strip()
 
         data = await self.http.static_login(token)
-        self._connection.user = ClientUser(state=self._connection, data=data)
-        self._application = await self.application_info()
+        self._connection.user = ClientUser(state=self._connection, data=data['bot'])  # type: ignore
+        self._application = AppInfo(self._connection, data)
         if self._connection.application_id is None:
             self._connection.application_id = self._application.id
 
@@ -714,7 +722,7 @@ class Client:
         """
 
         backoff = ExponentialBackoff()
-        ws_params = {
+        ws_params: dict[str, Any] = {
             'initial': True,
             'shard_id': self.shard_id,
         }
@@ -738,7 +746,7 @@ class Client:
                 GatewayNotFound,
                 ConnectionClosed,
                 aiohttp.ClientError,
-                asyncio.TimeoutError,
+                TimeoutError,
             ) as exc:
                 self.dispatch('disconnect')
                 if not reconnect:
@@ -2094,7 +2102,7 @@ class Client:
             The coroutine passed is not actually a coroutine.
         """
 
-        if not asyncio.iscoroutinefunction(coro):
+        if not inspect.iscoroutinefunction(coro):
             raise TypeError('event registered must be a coroutine function')
 
         setattr(self, coro.__name__, coro)
@@ -2486,6 +2494,7 @@ class Client:
         *,
         with_counts: bool = True,
         with_expiration: bool = True,
+        with_permissions: bool = True,
         scheduled_event_id: Optional[int] = None,
     ) -> Invite:
         """|coro|
@@ -2550,6 +2559,7 @@ class Client:
             resolved.code,
             with_counts=with_counts,
             guild_scheduled_event_id=scheduled_event_id,
+            with_permissions=with_permissions,
         )
         return Invite.from_incomplete(state=self._connection, data=data)
 
@@ -2946,6 +2956,7 @@ class Client:
                 user_id=user.id if user else None,
                 guild_id=guild.id if guild else None,
                 exclude_ended=exclude_ended,
+                exclude_deleted=exclude_deleted,
             )
 
             if data:

@@ -97,7 +97,7 @@ def resolve_datetime(dt: datetime.datetime) -> datetime.datetime:
         yesterday = dt - datetime.timedelta(days=1)
         # utcoffset shouldn't return None since these are aware instances
         # If it returns None then the timezone implementation was broken from the get go
-        return dt + (tomorrow.utcoffset() - yesterday.utcoffset())  # type: ignore
+        return dt + (tomorrow.utcoffset() - yesterday.utcoffset())  # pyright: ignore
     elif is_ambiguous(dt):
         return dt.replace(fold=1)
     else:
@@ -114,7 +114,7 @@ class SleepHandle:
         self.handle = loop.call_later(relative_delta, self._wrapped_set_result, self.future)
 
     @staticmethod
-    def _wrapped_set_result(future: asyncio.Future) -> None:
+    def _wrapped_set_result(future: asyncio.Future[None]) -> None:
         if not future.done():
             future.set_result(None)
 
@@ -184,6 +184,9 @@ class Loop(Generic[LF]):
         if not inspect.iscoroutinefunction(self.coro):
             raise TypeError(f'Expected coroutine function, not {type(self.coro).__name__!r}.')
 
+    def __repr__(self):
+        return f'<Loop name={self._name!r} count={self.count} next_iteration={self.next_iteration!r} coro={self.coro!r}>'
+
     async def _call_loop_function(self, name: str, *args: Any, **kwargs: Any) -> None:
         coro = getattr(self, '_' + name)
         if coro is None:
@@ -252,7 +255,7 @@ class Loop(Generic[LF]):
 
                     retry_after = backoff.delay()
                     _log.exception(
-                        'Handling exception in internal background task %s. Retrying in %.2fs',
+                        'Handling exception in internal background task %r. Retrying in %.2fs',
                         self.coro.__qualname__,
                         retry_after,
                     )
@@ -358,7 +361,7 @@ class Loop(Generic[LF]):
         """
         if self._task is MISSING:
             return None
-        elif self._task and self._task.done() or self._stop_next_iteration:
+        elif (self._task and self._task.done()) or self._stop_next_iteration:
             return None
         return self._next_iteration
 

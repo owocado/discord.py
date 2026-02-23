@@ -443,6 +443,8 @@ class Context(discord.abc.Messageable, Generic[BotT]):
 
         .. versionadded:: 2.3
         """
+        if self.interaction:
+            return self.interaction.filesize_limit
         return self.guild.filesize_limit if self.guild is not None else discord.utils.DEFAULT_FILE_SIZE_LIMIT_BYTES
 
     @discord.utils.cached_property
@@ -1116,7 +1118,7 @@ class Context(discord.abc.Messageable, Generic[BotT]):
                 view=view,
                 suppress_embeds=suppress_embeds,
                 silent=silent,
-                poll=poll,
+                poll=MISSING if poll is None else poll,
             )  # type: ignore # The overloads don't support Optional but the implementation does
 
         # Convert the kwargs from None to MISSING to appease the remaining implementations

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from .activity import ActivityTypes
     from .guild import Guild
     from .state import ConnectionState
-    from .types.activity import ClientStatus as ClientStatusPayload, PartialPresenceUpdate
+    from .types.activity import ClientStatus as ClientStatusPayload, PartialPresenceUpdate, StatusType
 
 
 __all__ = (
@@ -52,15 +52,17 @@ class ClientStatus:
     .. versionadded:: 2.5
     """
 
-    __slots__ = ('_status', 'desktop', 'mobile', 'web')
+    __slots__ = ('_status', 'desktop', 'mobile', 'web', 'embedded', 'vr')
 
-    def __init__(self, *, status: str = MISSING, data: ClientStatusPayload = MISSING) -> None:
-        self._status: str = status or 'offline'
+    def __init__(self, *, status: str = MISSING, data: ClientStatusPayload = MISSING):
+        self._status = status or 'offline'
 
         data = data or {}
-        self.desktop: Optional[str] = data.get('desktop')
-        self.mobile: Optional[str] = data.get('mobile')
-        self.web: Optional[str] = data.get('web')
+        self.desktop: Optional[StatusType] = data.get('desktop')
+        self.mobile: Optional[StatusType] = data.get('mobile')
+        self.web: Optional[StatusType] = data.get('web')
+        self.embedded: Optional[StatusType] = data.get('embedded')
+        self.vr: Optional[StatusType] = data.get('vr')
 
     def __repr__(self) -> str:
         attrs = [
@@ -68,6 +70,8 @@ class ClientStatus:
             ('desktop', self.desktop),
             ('mobile', self.mobile),
             ('web', self.web),
+            ('embedded', self.embedded),
+            ('vr', self.vr),
         ]
         inner = ' '.join('%s=%r' % t for t in attrs)
         return f'<{self.__class__.__name__} {inner}>'
@@ -78,6 +82,8 @@ class ClientStatus:
         self.desktop = data.get('desktop')
         self.mobile = data.get('mobile')
         self.web = data.get('web')
+        self.embedded = data.get('embedded')
+        self.vr = data.get('vr')
 
     @classmethod
     def _copy(cls, client_status: Self, /) -> Self:
@@ -88,6 +94,8 @@ class ClientStatus:
         self.desktop = client_status.desktop
         self.mobile = client_status.mobile
         self.web = client_status.web
+        self.embedded = client_status.embedded
+        self.vr = client_status.vr
 
         return self
 
@@ -116,9 +124,26 @@ class ClientStatus:
         """:class:`Status`: The user's status on the web client, if applicable."""
         return try_enum(Status, self.web or 'offline')
 
+    @property
+    def embedded_status(self) -> Status:
+        """:class:`Status`: The member's status on the embedded client (PlayStation, Xbox), if applicable."""
+        return try_enum(Status, self.embedded or 'offline')
+
+    @property
+    def vr_status(self) -> Status:
+        """:class:`Status`: The member's status on the VR client, if applicable."""
+        return try_enum(Status, self.vr or 'offline')
+
     def is_on_mobile(self) -> bool:
         """:class:`bool`: A helper function that determines if a user is active on a mobile device."""
         return self.mobile is not None
+
+    def is_on_vr(self) -> bool:
+        """:class:`bool`: A helper function that determines if a user is active on a VR device."""
+        return self.vr is not None
+
+    def to_dict(self) -> ClientStatusPayload:
+        return {'desktop': self.desktop, 'embedded': self.embedded, 'mobile': self.mobile, 'vr': self.web, 'web': self.web}
 
 
 class RawPresenceUpdateEvent(_RawReprMixin):
@@ -141,11 +166,23 @@ class RawPresenceUpdateEvent(_RawReprMixin):
         if they are listening to a song with a title longer than ``128`` characters. See :issue:`1738` for more information.
     """
 
-    __slots__ = ('user_id', 'guild_id', 'guild', 'client_status', 'activities')
+    __slots__ = ('user_id', 'guild_id', 'guild', 'client_status', 'activities', 'processed_at_timestamp')
 
-    def __init__(self, *, data: PartialPresenceUpdate, state: ConnectionState) -> None:
-        self.user_id: int = int(data['user']['id'])
+    def __init__(self, *, data: PartialPresenceUpdate, state: ConnectionState):
+        self.user_id = int(data['user']['id'])
         self.client_status: ClientStatus = ClientStatus(status=data['status'], data=data['client_status'])
         self.activities: Tuple[ActivityTypes, ...] = tuple(create_activity(d, state) for d in data['activities'])
         self.guild_id: Optional[int] = _get_as_snowflake(data, 'guild_id')
         self.guild: Optional[Guild] = state._get_guild(self.guild_id)
+        self.processed_at_timestamp: int | None = data.get('processed_at_timestamp')
+
+    def __repr__(self):
+        attrs = (
+            ('user_id', self.user_id),
+            ('client_status', self.client_status),
+            ('activities', self.activities),
+            ('guild_id', self.guild_id),
+            ('guild', self.guild),
+        )
+        inner = ' '.join('%s=%r' % t for t in attrs)
+        return f'<{self.__class__.__name__} {inner}>'
