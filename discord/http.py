@@ -561,16 +561,24 @@ class HTTPClient:
             self.__session = MISSING
 
     async def ws_connect(self, url: str, *, compress: int = 0) -> aiohttp.ClientWebSocketResponse:
-        return await self.__session.ws_connect(
-            url,
-            timeout=aiohttp.ClientWSTimeout(ws_receive=30.0),
-            autoclose=False,
-            headers={'User-Agent': self.user_agent},
-            proxy=self.proxy,
-            proxy_auth=self.proxy_auth,
-            compress=compress,
-            max_msg_size=0,
-        )
+        try:
+            timeout: Any = aiohttp.ClientWSTimeout(ws_close=30.0)  # pyright: ignore[reportCallIssue]
+        except (AttributeError, TypeError):
+            timeout = 30.0
+
+        kwargs = {
+            'proxy_auth': self.proxy_auth,
+            'proxy': self.proxy,
+            'max_msg_size': 0,
+            'timeout': timeout,
+            'autoclose': False,
+            'headers': {
+                'User-Agent': self.user_agent,
+            },
+            'compress': compress,
+        }
+
+        return await self.__session.ws_connect(url, **kwargs)
 
     def _try_clear_expired_ratelimits(self) -> None:
         if len(self._buckets) < 256:
