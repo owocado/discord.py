@@ -108,6 +108,7 @@ class File:
         'duration',
         '_waveform',
         'voice',
+        'size',
     )
 
     def __init__(
@@ -120,6 +121,7 @@ class File:
         voice: bool = MISSING,
         duration: Optional[float] = None,
         waveform: Optional[list[int]] = None,
+        size: Optional[int] = None,
     ):
         if isinstance(fp, io.IOBase):
             if not (fp.seekable() and fp.readable()):
@@ -149,12 +151,13 @@ class File:
         if spoiler is MISSING:
             spoiler = filename_spoiler
 
+        self.size = size
         self.spoiler: bool = spoiler
         self.description: Optional[str] = description
         self.duration: Optional[float] = duration
         if waveform is not None:
             if len(waveform) > 256:
-                raise ValueError('Waveforms have a maximum of 256 values')
+                raise ValueError(f'Waveforms must have a maximum of 256 values, not {len(waveform)}')
             elif max(waveform) > 255:
                 raise ValueError('Maximum value of ints is 255 for waveforms')
             elif min(waveform) < 0:
@@ -169,7 +172,7 @@ class File:
             raise TypeError('Voice messages must have a duration')
 
     def __repr__(self) -> str:
-        return f'<File filename={self.filename!r}>'
+        return f'<File filename={self.filename!r} size={self.size}>'
 
     @property
     def filename(self) -> str:
@@ -266,8 +269,8 @@ class File:
             num_samples = len(decoded) // 2
 
             # https://docs.python.org/3/library/struct.html#byte-order-size-and-alignment
-            format = '<' + 'h' * num_samples
-            samples: tuple[int] = struct.unpack(format, decoded)
+            fmt = '<' + 'h' * num_samples
+            samples: tuple[int] = struct.unpack(fmt, decoded)
 
             waveform.extend(samples)
 

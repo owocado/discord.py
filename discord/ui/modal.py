@@ -31,16 +31,16 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, ClassVar, List
 
 from ..utils import MISSING, find
-from .._types import ClientT
 from .item import Item
 from .view import BaseView
 from .select import BaseSelect
 from .text_input import TextInput
-from ..interactions import Namespace
+from discord.app_commands.namespace import Namespace
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from .._types import ClientT
     from ..interactions import Interaction
     from ..types.interactions import (
         ModalSubmitComponentInteractionData as ModalSubmitComponentInteractionDataPayload,
@@ -120,7 +120,7 @@ class Modal(BaseView):
 
         cls.__modal_children_items__ = children
 
-    def _init_children(self) -> List[Item]:
+    def _init_children(self) -> List[Item[Any]]:
         children = []
         for name, item in self.__modal_children_items__.items():
             item = deepcopy(item)
@@ -211,7 +211,7 @@ class Modal(BaseView):
 
             allow = await self.interaction_check(interaction)
             if not allow:
-                return
+                return None
 
             await self.on_submit(interaction)
         except Exception as e:
@@ -222,7 +222,7 @@ class Modal(BaseView):
             self.stop()
 
     def to_components(self) -> List[Dict[str, Any]]:
-        def key(item: Item) -> int:
+        def key(item: Item[Any]) -> int:
             return item._rendered_row or item.row or 0
 
         children = sorted(self._children, key=key)
@@ -259,15 +259,18 @@ class Modal(BaseView):
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        payload = {
+        return {
             'custom_id': self.custom_id,
             'title': self.title,
             'components': self.to_components(),
         }
 
-        return payload
-
     def add_item(self, item: Item[Any]) -> Self:
         if len(self._children) >= 5:
             raise ValueError('maximum number of children exceeded (5)')
         return super().add_item(item)
+
+    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
+        if len(self._children) >= 5:
+            raise ValueError('maximum number of children exceeded (5)')
+        return super().insert_item_at(position, item)

@@ -100,7 +100,7 @@ class CommandInvokeError(AppCommandError):
     def __init__(self, command: Union[Command[Any, ..., Any], ContextMenu], e: Exception) -> None:
         self.original: Exception = e
         self.command: Union[Command[Any, ..., Any], ContextMenu] = command
-        super().__init__(f'Command {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
+        super().__init__(f'Command {command.name!r} errored: {e.__class__.__name__}: {e}')
 
 
 class AutocompleteError(AppCommandError):
@@ -125,7 +125,7 @@ class AutocompleteError(AppCommandError):
         self.original: Exception = e
         self.command: Union[Command[Any, ..., Any], Group] = command
         self.interaction: Interaction = interaction
-        super().__init__(f'Autocomplete for {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
+        super().__init__(f'Autocomplete for {command.name!r} errored: {e.__class__.__name__}: {e}')
 
 
 class TransformerError(AppCommandError):

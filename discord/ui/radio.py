@@ -234,13 +234,12 @@ class RadioGroup(Item[V]):
 
     @classmethod
     def from_component(cls, component: RadioGroupComponent) -> Self:
-        self = cls(
+        return cls(
             id=component.id,
             custom_id=component.custom_id,
             options=component.options,
             required=component.required,
         )
-        return self
 
     def is_dispatchable(self) -> bool:
         return False

@@ -54,7 +54,7 @@ class ClientStatus:
 
     __slots__ = ('_status', 'desktop', 'mobile', 'web', 'embedded', 'vr')
 
-    def __init__(self, *, status: str = MISSING, data: ClientStatusPayload = MISSING):
+    def __init__(self, *, status: str = MISSING, data: ClientStatusPayload = MISSING) -> None:
         self._status = status or 'offline'
 
         data = data or {}
@@ -168,8 +168,8 @@ class RawPresenceUpdateEvent(_RawReprMixin):
 
     __slots__ = ('user_id', 'guild_id', 'guild', 'client_status', 'activities', 'processed_at_timestamp')
 
-    def __init__(self, *, data: PartialPresenceUpdate, state: ConnectionState):
-        self.user_id = int(data['user']['id'])
+    def __init__(self, *, data: PartialPresenceUpdate, state: ConnectionState) -> None:
+        self.user_id: int = int(data['user']['id'])
         self.client_status: ClientStatus = ClientStatus(status=data['status'], data=data['client_status'])
         self.activities: Tuple[ActivityTypes, ...] = tuple(create_activity(d, state) for d in data['activities'])
         self.guild_id: Optional[int] = _get_as_snowflake(data, 'guild_id')

@@ -88,13 +88,12 @@ if TYPE_CHECKING:
     SectionComponentType = Union['TextDisplay']
     MessageComponentType = Union[
         ActionRowChildComponentType,
-        SectionComponentType,
+        'TextDisplay',
         'ActionRow',
         'SectionComponent',
         'ThumbnailComponent',
         'MediaGalleryComponent',
         'FileComponent',
-        'SectionComponent',
         'Component',
     ]
     OptionPayload = Union[SelectOptionPayload, RadioGroupOptionPayload, CheckboxGroupOptionPayload]
@@ -114,7 +113,6 @@ __all__ = (
     'MediaGalleryItem',
     'MediaGalleryComponent',
     'FileComponent',
-    'SectionComponent',
     'Container',
     'TextDisplay',
     'SeparatorComponent',
@@ -155,6 +153,9 @@ class Component:
     __slots__: Tuple[str, ...] = ()
 
     __repr_info__: ClassVar[Tuple[str, ...]]
+
+    def __len__(self):
+        return 0
 
     def __repr__(self) -> str:
         attrs = ' '.join(f'{key}={getattr(self, key)!r}' for key in self.__repr_info__)
@@ -273,7 +274,7 @@ class ActionRow(Component):
         self.id: Optional[int] = data.get('id')
         self.children: List[ActionRowChildComponentType] = []
 
-        for component_data in data.get('components', []):
+        for component_data in data.get('components', []) or []:
             component = _component_factory(component_data)
 
             if component is not None:
@@ -461,11 +462,11 @@ class SelectMenu(Component):
         self.min_values: int = data.get('min_values', 1)
         self.max_values: int = data.get('max_values', 1)
         self.required: bool = data.get('required', False)
-        self.options: List[SelectOption] = [SelectOption.from_dict(option) for option in data.get('options', [])]
+        self.options: List[SelectOption] = [SelectOption.from_dict(option) for option in data.get('options', []) or []]
         self.disabled: bool = data.get('disabled', False)
-        self.channel_types: List[ChannelType] = [try_enum(ChannelType, t) for t in data.get('channel_types', [])]
+        self.channel_types: List[ChannelType] = [try_enum(ChannelType, t) for t in data.get('channel_types', []) or []]
         self.default_values: List[SelectDefaultValue] = [
-            SelectDefaultValue.from_dict(d) for d in data.get('default_values', [])
+            SelectDefaultValue.from_dict(d) for d in data.get('default_values', []) or []
         ]
         self.id: Optional[int] = data.get('id')
 
@@ -492,7 +493,7 @@ class SelectMenu(Component):
         return payload
 
 
-class SelectOption(BaseOption):
+class SelectOption:
     """Represents a select menu's option.
 
     These can be created by users.
@@ -530,8 +531,13 @@ class SelectOption(BaseOption):
         Whether this option is selected by default.
     """
 
-    __slots__: Tuple[str, ...] = BaseOption.__slots__ + ('_emoji',)
-    __repr_info__ = BaseOption.__repr_info__ + ('emoji',)
+    __slots__: Tuple[str, ...] = (
+        'label',
+        'value',
+        'description',
+        '_emoji',
+        'default',
+    )
 
     def __init__(
         self,
@@ -542,9 +548,18 @@ class SelectOption(BaseOption):
         emoji: Optional[Union[str, Emoji, PartialEmoji]] = None,
         default: bool = False,
     ) -> None:
-        super().__init__(label=label, value=value, description=description, default=default)
+        self.label: str = label
+        self.value: str = label if value is MISSING else value
+        self.description: Optional[str] = description
 
         self.emoji = emoji
+        self.default: bool = default
+
+    def __repr__(self) -> str:
+        return (
+            f'<SelectOption label={self.label!r} value={self.value!r} description={self.description!r} '
+            f'emoji={self.emoji!r} default={self.default!r}>'
+        )
 
     def __str__(self) -> str:
         if self.emoji:
@@ -574,7 +589,7 @@ class SelectOption(BaseOption):
             self._emoji = None
 
     @classmethod
-    def from_dict(cls, data: SelectOptionPayload) -> Self:
+    def from_dict(cls, data: SelectOptionPayload) -> SelectOption:
         try:
             emoji = PartialEmoji.from_dict(data['emoji'])  # pyright: ignore[reportTypedDictNotRequiredAccess]
         except KeyError:
@@ -584,17 +599,27 @@ class SelectOption(BaseOption):
             label=data['label'],
             value=data['value'],
             description=data.get('description'),
-            default=data.get('default', False),
             emoji=emoji,
+            default=data.get('default', False),
         )
 
     def to_dict(self) -> SelectOptionPayload:
-        payload: SelectOptionPayload = super().to_dict()  # type: ignore
+        payload: SelectOptionPayload = {
+            'label': self.label,
+            'value': self.value,
+            'default': self.default,
+        }
 
         if self.emoji:
             payload['emoji'] = self.emoji.to_dict()
 
+        if self.description:
+            payload['description'] = self.description
+
         return payload
+
+    def copy(self) -> SelectOption:
+        return self.__class__.from_dict(self.to_dict())
 
 
 class TextInput(Component):
@@ -836,7 +861,7 @@ class SectionComponent(Component):
     __repr_info__ = __slots__
 
     def __init__(self, data: SectionComponentPayload, state: Optional[ConnectionState]) -> None:
-        self.children: List[SectionComponentType] = []
+        self.children: List[TextDisplay] = []
         self.accessory: Component = _component_factory(data['accessory'], state)  # type: ignore
         self.id: Optional[int] = data.get('id')
 
@@ -844,6 +869,9 @@ class SectionComponent(Component):
             component = _component_factory(component_data, state)
             if component is not None:
                 self.children.append(component)  # type: ignore # should be the correct type here
+
+    def __len__(self):
+        return sum(len(x) for x in self.children)
 
     @property
     def type(self) -> Literal[ComponentType.section]:
@@ -905,12 +933,15 @@ class ThumbnailComponent(Component):
         self.spoiler: bool = data.get('spoiler', False)
         self.id: Optional[int] = data.get('id')
 
+    def __len__(self):
+        return 0
+
     @property
     def type(self) -> Literal[ComponentType.thumbnail]:
         return ComponentType.thumbnail
 
     def to_dict(self) -> ThumbnailComponentPayload:
-        payload = {
+        payload: ThumbnailComponentPayload = {
             'media': self.media.to_dict(),
             'description': self.description,
             'spoiler': self.spoiler,
@@ -950,6 +981,9 @@ class TextDisplay(Component):
     def __init__(self, data: TextComponentPayload) -> None:
         self.content: str = data['content']
         self.id: Optional[int] = data.get('id')
+
+    def __len__(self):
+        return len(self.content)
 
     @property
     def type(self) -> Literal[ComponentType.text_display]:
@@ -1022,7 +1056,7 @@ class UnfurledMediaItem(AssetMixin):
         self.content_type: Optional[str] = None
         self._flags: int = 0
         self.placeholder: Optional[str] = None
-        self.loading_state: Optional[MediaItemLoadingState] = None
+        self.loading_state: MediaItemLoadingState = MediaItemLoadingState.unknown
         self.attachment_id: Optional[int] = None
         self._state: Optional[ConnectionState] = None
 
@@ -1054,9 +1088,15 @@ class UnfurledMediaItem(AssetMixin):
     def __repr__(self) -> str:
         return f'<UnfurledMediaItem url={self.url}>'
 
-    def to_dict(self):
+    def to_dict(self) -> UnfurledMediaItemPayload:
         return {
             'url': self.url,
+            'proxy_url': self.proxy_url or '',
+            'height': self.height,
+            'width': self.width,
+            'content_type': self.content_type or '',
+            'placeholder': self.placeholder or '',
+            'loading_state': self.loading_state.value,
         }
 
 
@@ -1105,7 +1145,7 @@ class MediaGalleryItem:
         self._state: Optional[ConnectionState] = None
 
     def __repr__(self) -> str:
-        return f'<MediaGalleryItem media={self.media!r}>'
+        return f'<MediaGalleryItem media={self.media!r} spoiler={self.spoiler} description={self.description!r}>'
 
     @property
     def media(self) -> UnfurledMediaItem:
@@ -1146,6 +1186,7 @@ class MediaGalleryItem:
         payload: MediaGalleryItemPayload = {
             'media': self.media.to_dict(),  # type: ignore
             'spoiler': self.spoiler,
+            'description': self.description,
         }
 
         if self.description:
@@ -1181,6 +1222,12 @@ class MediaGalleryComponent(Component):
     def __init__(self, data: MediaGalleryComponentPayload, state: Optional[ConnectionState]) -> None:
         self.items: List[MediaGalleryItem] = MediaGalleryItem._from_gallery(data['items'], state)
         self.id: Optional[int] = data.get('id')
+
+    def __len__(self):
+        return 0
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} id={self.id} items={self.items!r}>'
 
     @property
     def type(self) -> Literal[ComponentType.media_gallery]:
@@ -1236,8 +1283,15 @@ class FileComponent(Component):
         self.media: UnfurledMediaItem = UnfurledMediaItem._from_data(data['file'], state)
         self.spoiler: bool = data.get('spoiler', False)
         self.id: Optional[int] = data.get('id')
-        self.name: Optional[str] = data.get('name')
-        self.size: Optional[int] = data.get('size')
+        self.name: str = data.get('name') or ''
+        self.size: int = data.get('size') or 0
+
+    def __len__(self):
+        return 0
+
+    @property
+    def file(self):
+        return self.media
 
     @property
     def type(self) -> Literal[ComponentType.file]:
@@ -1291,6 +1345,9 @@ class SeparatorComponent(Component):
         self.spacing: SeparatorSpacing = try_enum(SeparatorSpacing, data.get('spacing', 1))
         self.visible: bool = data.get('divider', True)
         self.id: Optional[int] = data.get('id')
+
+    def __len__(self):
+        return 0
 
     @property
     def type(self) -> Literal[ComponentType.separator]:
@@ -1360,6 +1417,9 @@ class Container(Component):
         if colour is not None:
             self._colour = Colour(colour)
 
+    def __len__(self):
+        return sum(len(x) for x in self.children)
+
     @property
     def accent_colour(self) -> Optional[Colour]:
         """Optional[:class:`Colour`]: The container's accent colour."""
@@ -1375,12 +1435,10 @@ class Container(Component):
         payload: ContainerComponentPayload = {
             'type': self.type.value,
             'spoiler': self.spoiler,
+            'id': self.id,
             'components': [c.to_dict() for c in self.children],  # pyright: ignore[reportAssignmentType]
+            'accent_color': self._colour.value if self._colour else None,
         }
-        if self.id is not None:
-            payload['id'] = self.id
-        if self._colour:
-            payload['accent_color'] = self._colour.value
         return payload
 
 

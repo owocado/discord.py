@@ -607,7 +607,7 @@ class Member(discord.abc.Messageable, _UserTag):
                 user['discriminator'],
                 user['avatar'],
                 user.get('global_name'),
-                user.get('public_flags') or 0,
+                user.get('public_flags', 0),
                 avatar_decoration_data,
                 primary_guild,
             )

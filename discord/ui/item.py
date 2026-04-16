@@ -28,7 +28,6 @@ import copy
 from typing import Any, Callable, Coroutine, Dict, Generic, Optional, TYPE_CHECKING, Union, Tuple, Type, TypeVar
 
 from ..interactions import Interaction
-from .._types import ClientT
 
 # fmt: off
 __all__ = (
@@ -46,10 +45,11 @@ if TYPE_CHECKING:
     from .container import Container
     from .dynamic import DynamicItem
     from ..app_commands.namespace import ResolveKey
+    from .._types import ClientT
 
 I = TypeVar('I', bound='Item[Any]')
 V = TypeVar('V', bound='BaseView', covariant=True)
-ContainerType = Union['BaseView', 'ActionRow', 'Container']
+ContainerType = Union['BaseView', 'ActionRow[Any]', 'Container[Any]']
 C = TypeVar('C', bound=ContainerType, covariant=True)
 ItemCallbackType = Callable[[V, Interaction[Any], I], Coroutine[Any, Any, Any]]
 ContainedItemCallbackType = Callable[[C, Interaction[Any], I], Coroutine[Any, Any, Any]]
@@ -108,7 +108,7 @@ class Item(Generic[V]):
         # only called upon edit and we're mainly interested during initial creation time.
         self._provided_custom_id: bool = False
         self._id: Optional[int] = None
-        self._parent: Optional[Item] = None
+        self._parent: Optional[Item[V]] = None
 
     def to_component_dict(self) -> Dict[str, Any]:
         raise NotImplementedError
@@ -141,7 +141,7 @@ class Item(Generic[V]):
             return self._provided_custom_id
         return True
 
-    def _swap_item(self, base: Item, new: DynamicItem, custom_id: str) -> None:
+    def _swap_item(self, base: Item[V], new: DynamicItem[V], custom_id: str) -> None:
         raise ValueError
 
     def __repr__(self) -> str:

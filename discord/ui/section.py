@@ -46,7 +46,8 @@ __all__ = ('Section',)
 class Section(Item[V]):
     r"""Represents a UI section.
 
-    This is a top-level layout component that can only be used on :class:`LayoutView`.
+    This is a top-level layout component that can only be used on :class:`LayoutView`,
+    or :class:`Container`.
 
     .. versionadded:: 2.6
 
@@ -73,7 +74,7 @@ class Section(Item[V]):
 
     def __init__(
         self,
-        *children: Union[Item[V], str],
+        *children: Union[TextDisplay[V], str],
         accessory: Item[V],
         id: Optional[int] = None,
     ) -> None:
@@ -124,7 +125,7 @@ class Section(Item[V]):
     def _is_v2(self) -> bool:
         return True
 
-    def _swap_item(self, base: Item, new: DynamicItem, custom_id: str) -> None:
+    def _swap_item(self, base: Item[V], new: DynamicItem[V], custom_id: str) -> None:
         if self.accessory.is_dispatchable() and getattr(self.accessory, 'custom_id', None) == custom_id:
             self.accessory = new  # type: ignore
 

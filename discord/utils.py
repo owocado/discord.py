@@ -1571,3 +1571,73 @@ if sys.version_info >= (3, 12):
     _iscoroutinefunction = inspect.iscoroutinefunction
 else:
     _iscoroutinefunction = asyncio.iscoroutinefunction
+
+
+_task_cache: set[asyncio.Task[T]] = set()
+
+
+def create_task[T](coro: asyncio._CoroutineLike[T], *, name: str | None = None, context: Context | None = None):
+    t = asyncio.create_task(coro, name=name or coro.__name__, context=context)
+    _task_cache.add(t)
+    t.add_done_callback(_task_cache.discard)
+    return t
+
+
+def _find_y(x: int, z: int) -> Optional[int]:
+    """
+    Finds the integer value of y that satisfies the equation x^y = z.
+
+    Args
+    ----
+    x: The base of the exponentiation.
+    z: The result of the exponentiation.
+
+    Returns
+    -------
+    The integer value of y that satisfies the equation, or None if no such value exists.
+    """
+    # Check if z is 1
+    if z == 1:
+        return 0
+
+    # Initialize y and power
+    y, power = 1, x
+
+    # Loop until power exceeds z or y becomes too large
+    while power <= z and y <= z:
+        if power == z:
+            return y
+        power *= x
+        y += 1
+
+    # No integer solution found
+    return None
+
+
+def _fuzzy_find(query: str, choices: Any, *, score: int = 80):
+    from rapidfuzz import process
+
+    return process.extract(query, choices, limit=None, score_cutoff=score)
+
+
+def _undiscord_username(username: str, repl: str = '[blocked]'):
+    return re.sub(r'(Discord|Clyde|Wumpus)', repl, username, flags=re.IGNORECASE)
+
+
+@overload
+def parse_timestamp(timestamp: None, *, ms: bool = True) -> None: ...
+
+
+@overload
+def parse_timestamp(timestamp: float, *, ms: bool = True) -> datetime.datetime: ...
+
+
+@overload
+def parse_timestamp(timestamp: Optional[float], *, ms: bool = True) -> Optional[datetime.datetime]: ...
+
+
+def parse_timestamp(timestamp: Optional[float], *, ms: bool = True) -> Optional[datetime.datetime]:
+    if timestamp:
+        if ms:
+            timestamp /= 1000
+        return datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)

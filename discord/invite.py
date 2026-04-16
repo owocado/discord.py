@@ -278,6 +278,17 @@ class PartialInviteGuild:
         'stickers',
         'premium_tier',
         'roles',
+        'afk_timeout',
+        'max_presences',
+        'max_members',
+        'max_video_channel_users',
+        'max_stage_video_users',
+        'owner_configured_nsfw_level',
+        'embed_enabled',
+        'widget_enabled',
+        '_afk_channel_id',
+        '_embed_channel_id',
+        '_widget_channel_id',
         '_sticker_count',
         '_discovery_splash',
         '_home_header',
@@ -299,7 +310,7 @@ class PartialInviteGuild:
         self.name: str = data['name']
         self.features: List[GuildFeature] = data.get('features', []) or []
         self._icon: Optional[str] = data.get('icon') or data.get('icon_hash')
-        self._banner: Optional[str] = data.get('banner')
+        self._banner: Optional[str] = data.get('banner') or data.get('banner_hash')
         self._splash: Optional[str] = data.get('splash')
         self.verification_level: VerificationLevel = try_enum(VerificationLevel, data.get('verification_level'))
         self.description: Optional[str] = data.get('description')
@@ -314,12 +325,27 @@ class PartialInviteGuild:
         self.preferred_locale: Locale = try_enum(Locale, data.get('preferred_locale', 'en-US'))
         self.primary_category_id: Optional[int] = data.get('primary_category_id')
         self.emoji_count: int = data.get('emoji_count') or 0
+        self.afk_timeout: int = data.get('afk_timeout', 0)
+        self.max_presences: Optional[int] = data.get('max_presences')
+        self.max_members: Optional[int] = data.get('max_members')
+        self.max_video_channel_users: Optional[int] = data.get('max_video_channel_users')
+        self.max_stage_video_users: Optional[int] = data.get('max_stage_video_channel_users')
         self.roles: List[Role] = []
+        self.embed_enabled: bool = data.get('embed_enabled', False)
+        self.widget_enabled: bool = data.get('widget_enabled', False)
+        self._embed_channel_id: Optional[int] = utils._get_as_snowflake(data, 'embed_channel_id')
+        self._widget_channel_id: Optional[int] = utils._get_as_snowflake(data, 'widget_channel_id')
+        self._afk_channel_id: Optional[int] = utils._get_as_snowflake(data, 'afk_channel_id')
         self._sticker_count: int = data.get('sticker_count') or 0
-        self._discovery_splash: Optional[str] = data.get('discovery_splash')
+        self._discovery_splash: Optional[str] = data.get('discovery_splash') or data.get('custom_banner_hash')
         self._home_header: Optional[str] = data.get('home_header')
         self._system_channel_flags: int = data.get('system_channel_flags', 0)
         self._data = utils._to_json(data)
+
+        try:
+            self.owner_configured_nsfw_level = try_enum(NSFWLevel, data['owner_configured_content_level'])
+        except KeyError:
+            self.owner_configured_nsfw_level: Optional[NSFWLevel] = None
 
         try:
             from .emoji import Emoji
@@ -550,6 +576,7 @@ class Invite(Hashable):
     """
 
     __slots__ = (
+        'id',
         'max_age',
         'code',
         'guild',
@@ -587,12 +614,15 @@ class Invite(Hashable):
         channel: Optional[Union[PartialInviteChannel, GuildChannel]] = None,
     ):
         self._state: ConnectionState = state
+        self.id: Optional[int] = utils._get_as_snowflake(data, 'id')
         self.type: InviteType = try_enum(InviteType, data.get('type', 0))
         self.max_age: Optional[int] = data.get('max_age')
         self.code: str = data['code']
         self.guild: Optional[Union[PartialInviteGuild, Guild]] = self._resolve_guild(data.get('guild'), guild)
         self.revoked: Optional[bool] = data.get('revoked')
         self.created_at: Optional[datetime.datetime] = parse_time(data.get('created_at'))
+        if not self.created_at and self.id:
+            self.created_at = utils.snowflake_time(self.id)
         self.temporary: Optional[bool] = data.get('temporary')
         self.uses: Optional[int] = data.get('uses')
         self.max_uses: Optional[int] = data.get('max_uses')
@@ -732,11 +762,6 @@ class Invite(Hashable):
 
     def __hash__(self) -> int:
         return hash(self.code)
-
-    @property
-    def id(self) -> str:
-        """:class:`str`: Returns the proper code portion of the invite."""
-        return self.code
 
     @property
     def url(self) -> str:

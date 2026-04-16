@@ -72,7 +72,7 @@ __all__ = (
 if TYPE_CHECKING:
     from typing_extensions import TypeAlias, TypeGuard, Self
 
-    from .view import BaseView
+    from .view import BaseView, LayoutView
     from .action_row import ActionRow
     from ..types.components import SelectMenu as SelectMenuPayload
     from ..types.interactions import SelectMessageComponentInteractionData
@@ -103,7 +103,7 @@ if TYPE_CHECKING:
         Thread,
     ]
 
-S = TypeVar('S', bound='Union[BaseView, ActionRow]', covariant=True)
+S = TypeVar('S', bound='Union[BaseView, ActionRow[LayoutView]]', covariant=True)
 V = TypeVar('V', bound='BaseView', covariant=True)
 BaseSelectT = TypeVar('BaseSelectT', bound='BaseSelect[Any]')
 SelectT = TypeVar('SelectT', bound='Select[Any]')
@@ -1212,7 +1212,7 @@ def select(
             raise TypeError('select function must be a coroutine function')
         callback_cls = getattr(cls, '__origin__', cls)
         if not issubclass(callback_cls, BaseSelect):
-            supported_classes = ', '.join(['ChannelSelect', 'MentionableSelect', 'RoleSelect', 'Select', 'UserSelect'])
+            supported_classes = 'ChannelSelect, MentionableSelect, RoleSelect, Select, UserSelect'
             raise TypeError(f'cls must be one of {supported_classes} or a subclass of one of them, not {cls.__name__}.')
 
         func.__discord_ui_model_type__ = callback_cls
@@ -1231,7 +1231,7 @@ def select(
             func.__discord_ui_model_kwargs__['channel_types'] = channel_types
         if not issubclass(callback_cls, Select):
             cls_to_type: Dict[
-                Type[BaseSelect],
+                Type[BaseSelect[Any]],
                 Literal[
                     ComponentType.user_select,
                     ComponentType.channel_select,

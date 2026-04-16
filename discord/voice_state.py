@@ -226,8 +226,8 @@ class VoiceConnectionState:
         self._connected = threading.Event()
         self._state_event = asyncio.Event()
         self._disconnected = asyncio.Event()
-        self._runner: Optional[asyncio.Task] = None
-        self._connector: Optional[asyncio.Task] = None
+        self._runner: Optional[asyncio.Task[None]] = None
+        self._connector: Optional[asyncio.Task[None]] = None
         self._socket_reader = SocketReader(self)
         self._socket_reader.start()
 

@@ -723,9 +723,9 @@ class CommandInvokeError(CommandError):
         self.original: Exception = e
         self.command: Optional[Command[Any, ..., Any]] = command
         if command is not None:
-            super().__init__(f'Command {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
+            super().__init__(f'Command {command.name!r} errored: {e.__class__.__name__}: {e}')
         else:
-            super().__init__(f'Command raised an exception: {e.__class__.__name__}: {e}')
+            super().__init__(f'Command errored: {e.__class__.__name__}: {e}')
 
 
 class CommandOnCooldown(CommandError):

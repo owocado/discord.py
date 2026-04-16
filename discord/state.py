@@ -1811,8 +1811,20 @@ class ConnectionState(Generic[ClientT]):
     def parse_guild_join_request_update(self, data: gw.GuildJoinRequestUpdate):
         self.dispatch('guild_join_request_update', data)
 
-    def parse_guild_applied_boosts_update(self, data: gw.GuildBoostUpdateEvent):
+    def parse_guild_applied_boost_update(self, data: gw.GuildBoostUpdateEvent):
         self.dispatch('guild_boost_update', data)
+
+    def parse_guild_applied_boosts_update(self, data: gw.GuildBoostUpdateEvent):
+        self.dispatch('guild_boosts_update', data)
+
+    def parse_guild_powerup_entitlements_create(self, data: Any):
+        self.dispatch('guild_powerup_create', data)
+
+    def parse_guild_powerup_entitlements_delete(self, data: Any):
+        self.dispatch('guild_powerup_delete', data)
+
+    def parse_game_server_update(self, data: gw.GuildBoostUpdateEvent):
+        self.dispatch('game_server_update', data)
 
     def _get_reaction_user(self, channel: MessageableChannel, user_id: int) -> Optional[Union[User, Member]]:
         if isinstance(channel, (TextChannel, Thread, VoiceChannel)):

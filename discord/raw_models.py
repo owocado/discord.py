@@ -50,6 +50,7 @@ if TYPE_CHECKING:
         TypingStartEvent,
         GuildMemberRemoveEvent,
         PollVoteActionEvent,
+        VoiceChannelStatusUpdate,
     )
     from .types.command import GuildApplicationCommandPermissions
     from .message import Message
@@ -79,6 +80,7 @@ __all__ = (
     'RawMemberRemoveEvent',
     'RawAppCommandPermissionsUpdateEvent',
     'RawPollVoteActionEvent',
+    'RawVoiceChannelStatusUpdateEvent',
 )
 
 
@@ -108,6 +110,10 @@ class RawMessageDeleteEvent(_RawReprMixin):
         except KeyError:
             self.guild_id: Optional[int] = None
 
+    @property
+    def jump_url(self) -> str:
+        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.message_id}'
+
 
 class RawBulkMessageDeleteEvent(_RawReprMixin):
     """Represents the event payload for a :func:`on_raw_bulk_message_delete` event.
@@ -127,7 +133,7 @@ class RawBulkMessageDeleteEvent(_RawReprMixin):
     __slots__ = ('message_ids', 'channel_id', 'guild_id', 'cached_messages')
 
     def __init__(self, data: BulkMessageDeleteEvent) -> None:
-        self.message_ids: Set[int] = {int(x) for x in data.get('ids', [])}
+        self.message_ids: Set[int] = {int(x) for x in data.get('ids', []) or []}
         self.channel_id: int = int(data['channel_id'])
         self.cached_messages: List[Message] = []
 
@@ -174,6 +180,10 @@ class RawMessageUpdateEvent(_RawReprMixin):
         self.cached_message: Optional[Message] = None
 
         self.guild_id: Optional[int] = message.guild.id if message.guild else None
+
+    @property
+    def jump_url(self) -> str:
+        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.message_id}'
 
 
 class RawReactionActionEvent(_RawReprMixin):
@@ -260,6 +270,10 @@ class RawReactionActionEvent(_RawReprMixin):
         """
         return self.burst_colours
 
+    @property
+    def jump_url(self) -> str:
+        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.message_id}'
+
 
 class RawReactionClearEvent(_RawReprMixin):
     """Represents the payload for a :func:`on_raw_reaction_clear` event.
@@ -284,6 +298,10 @@ class RawReactionClearEvent(_RawReprMixin):
             self.guild_id: Optional[int] = int(data['guild_id'])  # pyright: ignore[reportTypedDictNotRequiredAccess]
         except KeyError:
             self.guild_id: Optional[int] = None
+
+    @property
+    def jump_url(self) -> str:
+        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.message_id}'
 
 
 class RawReactionClearEmojiEvent(_RawReprMixin):
@@ -314,6 +332,10 @@ class RawReactionClearEmojiEvent(_RawReprMixin):
             self.guild_id: Optional[int] = int(data['guild_id'])  # pyright: ignore[reportTypedDictNotRequiredAccess]
         except KeyError:
             self.guild_id: Optional[int] = None
+
+    @property
+    def jump_url(self) -> str:
+        return f'https://discord.com/channels/{self.guild_id or "@me"}/{self.channel_id}/{self.message_id}'
 
 
 class RawIntegrationDeleteEvent(_RawReprMixin):
@@ -471,7 +493,7 @@ class RawTypingEvent(_RawReprMixin):
         self.channel_id: int = int(data['channel_id'])
         self.user_id: int = int(data['user_id'])
         self.user: Optional[Union[User, Member]] = None
-        self.timestamp: datetime.datetime = datetime.datetime.fromtimestamp(data['timestamp'], tz=datetime.timezone.utc)
+        self.timestamp: datetime.datetime = datetime.datetime.fromtimestamp(data['timestamp'], tz=datetime.UTC)
         self.guild_id: Optional[int] = _get_as_snowflake(data, 'guild_id')
 
 
@@ -516,7 +538,7 @@ class RawAppCommandPermissionsUpdateEvent(_RawReprMixin):
 
     __slots__ = ('target_id', 'application_id', 'guild', 'permissions')
 
-    def __init__(self, *, data: GuildApplicationCommandPermissions, state: ConnectionState):
+    def __init__(self, *, data: GuildApplicationCommandPermissions, state: ConnectionState) -> None:
         self.target_id: int = int(data['id'])
         self.application_id: int = int(data['application_id'])
         self.guild: Guild = state._get_or_create_unavailable_guild(int(data['guild_id']))
@@ -553,3 +575,29 @@ class RawPollVoteActionEvent(_RawReprMixin):
         self.message_id: int = int(data['message_id'])
         self.guild_id: Optional[int] = _get_as_snowflake(data, 'guild_id')
         self.answer_id: int = int(data['answer_id'])
+
+
+class RawVoiceChannelStatusUpdateEvent(_RawReprMixin):
+    """Represents the payload for a :func:`on_raw_voice_channel_status_update` event.
+
+    .. versionadded:: 2.4
+
+    Attributes
+    ----------
+    channel_id: :class:`int`
+        The id of the voice channel whose status was updated.
+    guild_id: :class:`int`
+        The id of the guild the voice channel is in.
+    status: Optional[:class:`str`]
+        The newly updated status of the voice channel. ``None`` if no status is set.
+    cached_status: Optional[:class:`str`]
+        The cached status, if the voice channel is found in the internal channel cache otherwise :attr:`utils.MISSING`.
+        Represents the status before it is modified. ``None`` if no status was set.
+    """
+
+    __slots__ = ('channel_id', 'guild_id', 'status', 'cached_status')
+
+    def __init__(self, data: VoiceChannelStatusUpdate) -> None:
+        self.channel_id: int = int(data['id'])
+        self.guild_id: int = int(data['guild_id'])
+        self.status: Optional[str] = data.get('status') or None

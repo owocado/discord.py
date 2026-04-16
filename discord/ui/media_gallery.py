@@ -27,7 +27,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Literal, Optional, TypeVar, Union
 
 from .item import Item
-from ..enums import ComponentType
 from ..utils import MISSING
 from ..file import File
 from ..components import (
@@ -39,6 +38,7 @@ from ..components import (
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from ..enums import ComponentType
     from .view import LayoutView
 
 V = TypeVar('V', bound='LayoutView', covariant=True)
@@ -51,7 +51,8 @@ class MediaGallery(Item[V]):
 
     Can contain up to 10 :class:`.MediaGalleryItem`\s.
 
-    This is a top-level layout component that can only be used on :class:`LayoutView`.
+    This is a top-level layout component that can only be used on :class:`LayoutView`,
+    or :class:`Container`.
 
     .. versionadded:: 2.6
 

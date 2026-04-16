@@ -103,6 +103,8 @@ if TYPE_CHECKING:
 
 MISSING: Any = utils.MISSING
 
+_log = logging.getLogger(__name__)
+
 
 class Interaction(Generic[ClientT]):
     """Represents a Discord interaction.
@@ -268,7 +270,7 @@ class Interaction(Generic[ClientT]):
         if self.channel is None and raw_ch_type is not None:
             factory, ch_type = _threaded_channel_factory(raw_ch_type)  # type is never None
             if factory is None:
-                logging.info('Unknown channel type {type} for channel ID {id}.'.format_map(raw_channel))
+                _log.warning('Unknown channel type for raw channel: %s', raw_channel)
             else:
                 if ch_type in (ChannelType.group, ChannelType.private):
                     self.channel = factory(me=self._client.user, data=raw_channel, state=self._state)  # type: ignore

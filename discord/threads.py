@@ -230,9 +230,9 @@ class Thread(Messageable, Hashable):
         except KeyError:
             pass
 
-        self.slowmode_delay = data.get('rate_limit_per_user', 0) or 0
-        self._flags = data.get('flags', 0) or 0
-        self._applied_tags = array.array('Q', map(int, data.get('applied_tags', []) or []))
+        self.slowmode_delay = data.get('rate_limit_per_user', 0)
+        self._flags = data.get('flags', 0)
+        self._applied_tags = array.array('Q', map(int, data.get('applied_tags', [])))
         self._last_pin = parse_time(data.get('last_pin_timestamp'))
         self._member_ids = array.array('Q', map(int, data.get('member_ids_preview') or []))
 

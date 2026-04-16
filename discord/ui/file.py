@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, Literal, Optional, TypeVar, Union
 
 from .item import Item
 from ..components import FileComponent, UnfurledMediaItem
-from ..enums import ComponentType
 from ..utils import MISSING
 from ..file import File as SendableFile
 
@@ -37,6 +36,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from .view import LayoutView
+    from ..enums import ComponentType
 
 V = TypeVar('V', bound='LayoutView', covariant=True)
 
@@ -46,7 +46,8 @@ __all__ = ('File',)
 class File(Item[V]):
     """Represents a UI file component.
 
-    This is a top-level layout component that can only be used on :class:`LayoutView`.
+    This is a top-level layout component that can only be used on :class:`LayoutView`,
+    or :class:`Container`.
 
     .. versionadded:: 2.6
 

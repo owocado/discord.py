@@ -27,7 +27,6 @@ from typing import ClassVar, Dict, Generic, Optional, Tuple, Type, TypeVar, TYPE
 import re
 
 from .item import Item
-from .._types import ClientT
 
 __all__ = ('DynamicItem',)
 
@@ -35,6 +34,8 @@ BaseT = TypeVar('BaseT', bound='Item[Any]', covariant=True)
 
 if TYPE_CHECKING:
     from typing_extensions import TypeVar, Self
+
+    from .._types import ClientT
     from ..interactions import Interaction
     from ..components import Component
     from ..enums import ComponentType

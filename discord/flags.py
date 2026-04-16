@@ -624,6 +624,15 @@ class MessageFlags(BaseFlags):
         """:class:`bool`: Returns ``True`` if the message was triggered by the social layer integration."""
         return 65536
 
+    @flag_value
+    def hidden_suspended_user(self):
+        return 131072
+
+    @flag_value
+    def first_booster(self):
+        """:class:`bool`: Returns ``True`` if the message author is first booster."""
+        return 262144
+
 
 @fill_with_flags()
 class PublicUserFlags(BaseFlags):
@@ -2531,6 +2540,14 @@ class AttachmentFlags(BaseFlags):
         """
         return 1 << 5
 
+    @flag_value
+    def contains_gore_content(self):
+        return 1 << 6
+
+    @flag_value
+    def contains_self_harm_content(self):
+        return 1 << 7
+
 
 @fill_with_flags()
 class RoleFlags(BaseFlags):
@@ -2795,6 +2812,10 @@ class EmbedFlags(BaseFlags):
     def contains_gore(self):
         """:class:`bool`: Returns ``True`` if the embed contains gore content."""
         return 1 << 6
+
+    @flag_value
+    def contains_self_harm_content(self):
+        return 1 << 7
 
 
 @fill_with_flags()

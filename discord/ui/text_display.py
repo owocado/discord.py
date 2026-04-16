@@ -27,13 +27,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, Optional, TypeVar
 
 from .item import Item
-from ..components import TextDisplay as TextDisplayComponent
 from ..enums import ComponentType
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     from .view import LayoutView
+    from ..components import TextDisplay as TextDisplayComponent
 
 V = TypeVar('V', bound='LayoutView', covariant=True)
 
@@ -62,6 +62,9 @@ class TextDisplay(Item[V]):
         super().__init__()
         self.content: str = content
         self.id = id
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} id={self.id} content={self.content!r}>'
 
     def to_component_dict(self):
         base = {

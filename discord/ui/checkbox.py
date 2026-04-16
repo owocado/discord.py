@@ -266,7 +266,7 @@ class CheckboxGroup(Item[V]):
 
     @classmethod
     def from_component(cls, component: CheckboxGroupComponent) -> Self:
-        self = cls(
+        return cls(
             id=component.id,
             custom_id=component.custom_id,
             options=component.options,
@@ -274,7 +274,6 @@ class CheckboxGroup(Item[V]):
             min_values=component.min_values,
             max_values=component.max_values,
         )
-        return self
 
     def is_dispatchable(self) -> bool:
         return False
@@ -380,12 +379,11 @@ class Checkbox(Item[V]):
 
     @classmethod
     def from_component(cls, component: CheckboxComponent) -> Self:
-        self = cls(
+        return cls(
             id=component.id,
             custom_id=component.custom_id,
             default=component.default,
         )
-        return self
 
     def is_dispatchable(self) -> bool:
         return False

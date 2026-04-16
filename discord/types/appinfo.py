@@ -250,3 +250,21 @@ class GameSupplemental(TypedDict):
     websites: List[GameWebsite]
     publisher_names: List[str]
     developer_names: List[str]
+
+
+class DetectableApplication(TypedDict):
+    aliases: list[str]
+    cover_image_hash: str | None
+    executables: List[ApplicationExecutable]
+    hook: bool
+    icon_hash: str | None
+    id: Snowflake
+    linked_applications: list[LinkedGame]
+    name: str
+    overlay: bool
+    overlay_compatibility_hook: bool
+    overlay_methods: int
+    overlay_warn: bool
+    themes: list[str]
+    third_party_skus: list[ThirdPartySKU]
+

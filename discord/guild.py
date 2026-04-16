@@ -456,11 +456,16 @@ class Guild(Hashable):
         'premium_progress_bar_enabled',
         '_safety_alerts_channel_id',
         'max_stage_video_users',
+        'owner_configured_nsfw_level',
+        'embed_enabled',
+        '_embed_channel_id',
         '_incidents_data',
         '_soundboard_sounds',
         '_home_header',
         '_sticker_count',
         'moderator_reporting',
+        'badge',
+        'tag',
         '_data',
     )
 
@@ -601,8 +606,8 @@ class Guild(Hashable):
         )
         self.explicit_content_filter: ContentFilter = try_enum(ContentFilter, guild.get('explicit_content_filter', 0))
         self.afk_timeout: int = guild.get('afk_timeout', 0)
-        self._icon: Optional[str] = guild.get('icon')
-        self._banner: Optional[str] = guild.get('banner')
+        self._icon: Optional[str] = guild.get('icon') or guild.get('icon_hash')
+        self._banner: Optional[str] = guild.get('banner') or guild.get('banner_hash')
         self.unavailable: bool = guild.get('unavailable', False)
         self.id: int = int(guild['id'])
         self._roles: Dict[int, Role] = {}
@@ -652,7 +657,14 @@ class Guild(Hashable):
         self._sticker_count: Optional[int] = guild.get('sticker_count')
         self._home_header: Optional[str] = guild.get('home_header')
         self.moderator_reporting: Optional[ModeratorReporting] = guild.get('moderator_reporting')
+        self.embed_enabled: bool = guild.get('embed_enabled', False)
+        self._embed_channel_id: Optional[int] = utils._get_as_snowflake(guild, 'embed_channel_id')
         self._data: bytes = utils._to_json(guild)
+
+        try:
+            self.owner_configured_nsfw_level = try_enum(NSFWLevel, guild['owner_configured_content_level'])
+        except KeyError:
+            self.owner_configured_nsfw_level: Optional[NSFWLevel] = None
 
         if 'channels' in guild:
             channels = guild['channels']
@@ -699,6 +711,10 @@ class Guild(Hashable):
             for s in guild['soundboard_sounds']:
                 soundboard_sound = SoundboardSound(guild=self, data=s, state=self._state)
                 self._add_soundboard_sound(soundboard_sound)
+
+        profile = guild.get('profile')
+        self.badge = profile.get('badge') if profile else None
+        self.tag = profile.get('tag') if profile else None
 
     def to_dict(self) -> GuildPayload:
         return utils._from_json(self._data)
@@ -3836,9 +3852,7 @@ class Guild(Hashable):
             fields['name'] = name
 
         data = await self._state.http.create_role(self.id, reason=reason, **fields)
-        role = Role(guild=self, data=data, state=self._state)
-
-        return role
+        return Role(guild=self, data=data, state=self._state)
 
     async def edit_role_positions(self, positions: Mapping[Snowflake, int], *, reason: Optional[str] = None) -> List[Role]:
         """|coro|

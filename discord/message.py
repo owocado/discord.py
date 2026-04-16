@@ -429,7 +429,7 @@ class Attachment(Hashable):
         data = await self.read(use_cached=use_cached)
         file_filename = filename if filename is not MISSING else self.filename
         file_description = description if description is not MISSING else self.description
-        return File(io.BytesIO(data), filename=file_filename, description=file_description, spoiler=spoiler)
+        return File(io.BytesIO(data), filename=file_filename, description=file_description, spoiler=spoiler, size=self.size)
 
     def to_dict(self) -> AttachmentPayload:
         return utils._from_json(self._data)
@@ -1405,7 +1405,7 @@ class PartialMessage(Hashable):
             The newly edited message.
         """
 
-        if content is not MISSING:
+        if content is not MISSING or view is not MISSING:
             previous_allowed_mentions = self._state.allowed_mentions
         else:
             previous_allowed_mentions = None
@@ -2225,9 +2225,7 @@ class Message(PartialMessage, Hashable):
         self._state: ConnectionState = state
         self.webhook_id: Optional[int] = utils._get_as_snowflake(data, 'webhook_id')
         self.reactions: List[Reaction] = [Reaction(message=self, data=d) for d in data.get('reactions', []) or []]
-        self.attachments: List[Attachment] = [
-            Attachment(data=a, state=self._state) for a in data.get('attachments', []) or []
-        ]
+        self.attachments: List[Attachment] = [Attachment(data=a, state=self._state) for a in data.get('attachments', []) or []]
         self.embeds: List[Embed] = [Embed.from_dict(a) for a in data.get('embeds', []) or []]
         self.activity: Optional[MessageActivityPayload] = data.get('activity')
         self._edited_timestamp: Optional[datetime.datetime] = utils.parse_time(data.get('edited_timestamp'))
@@ -2630,8 +2628,8 @@ class Message(PartialMessage, Hashable):
 
         def repl(match: re.Match[str]) -> str:
             typ = match[1]
-            id = int(match[2])
-            return transforms[typ](id)
+            _id = int(match[2])
+            return transforms[typ](_id)
 
         result = re.sub(r'<(@[!&]?|#)([0-9]{17,19})>', repl, self.content)
 
@@ -2928,6 +2926,11 @@ class Message(PartialMessage, Hashable):
         # Fallback for unknown message types
         return ''
 
+    @property
+    def snapshots(self):
+        """List[:class:`MessageSnapshot`]: Alias for Message.message_snapshots attribute for convenience."""
+        return self.message_snapshots
+
     async def edit(
         self,
         *,
@@ -3024,8 +3027,7 @@ class Message(PartialMessage, Hashable):
         :class:`Message`
             The newly edited message.
         """
-
-        if content is not MISSING:
+        if content is not MISSING or view is not MISSING:
             previous_allowed_mentions = self._state.allowed_mentions
         else:
             previous_allowed_mentions = None

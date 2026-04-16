@@ -225,8 +225,7 @@ class AsyncWebhookAdapter:
                         if response.status == 403:
                             raise Forbidden(response, data)
                         elif response.status == 404:
-                            fmt = 'Webhook ID %s is unknown, not found.'
-                            _log.warning(fmt, webhook_id)
+                            _log.warning('Webhook ID %s is unknown, not found.', webhook_id)
                             raise NotFound(response, data)
                         else:
                             raise HTTPException(response, data)
@@ -380,7 +379,7 @@ class AsyncWebhookAdapter:
             message_id=message_id,
         )
         params = {'with_components': int(with_components)}
-        if thread_id is not None:
+        if thread_id:
             params['thread_id'] = thread_id
         return self.request(
             route,
@@ -1620,8 +1619,8 @@ class Webhook(BaseWebhook):
             # If this thread is created via thread_name then the channel_id would not be the same as the webhook's channel_id
             # which would be the forum channel.
             if self.channel_id != channel_id:
-                type = ChannelType.public_thread if isinstance(channel, ForumChannel) else channel.type if channel else None
-                channel = PartialMessageable(state=self._state, guild_id=guild_id, id=channel_id, type=type)  # type: ignore
+                typ = ChannelType.public_thread if isinstance(channel, ForumChannel) else channel.type if channel else None
+                channel = PartialMessageable(state=self._state, guild_id=guild_id, id=channel_id, type=typ)  # type: ignore
             else:
                 channel = self.channel or PartialMessageable(state=self._state, guild_id=guild_id, id=channel_id)  # type: ignore
         else:
@@ -2118,6 +2117,7 @@ class Webhook(BaseWebhook):
         if view:
             if not hasattr(view, '__discord_ui_view__'):
                 raise TypeError(f'expected view parameter to be of type View or LayoutView, not {view.__class__.__name__}')
+
             if isinstance(self._state, _WebhookState) and view.is_dispatchable():
                 raise ValueError('Webhook views with interactable components require an associated state with the webhook')
 

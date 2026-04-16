@@ -60,6 +60,11 @@ class ModeratorReporting(TypedDict):
     moderator_report_channel_id: str
 
 
+class Profile(TypedDict):
+    badge: Optional[str]
+    tag: Optional[str]
+
+
 DefaultMessageNotificationLevel = Literal[0, 1]
 ExplicitContentFilterLevel = Literal[0, 1, 2]
 MFALevel = Literal[0, 1]
@@ -120,6 +125,7 @@ class _BaseGuildPreview(UnavailableGuild):
     sticker_count: Optional[int]
     approximate_member_count: int
     approximate_presence_count: int
+    profile: NotRequired[Profile]
 
 
 class _GuildPreviewUnique(TypedDict):
@@ -178,9 +184,14 @@ class Guild(_BaseGuildPreview):
     max_members: NotRequired[int]
     premium_subscription_count: NotRequired[int]
     max_video_channel_users: NotRequired[int]
+    max_stage_video_channel_users: NotRequired[int]
     soundboard_sounds: NotRequired[List[SoundboardSound]]
     home_header: Optional[str]
     moderator_reporting: NotRequired[Optional[ModeratorReporting]]
+    embed_enabled: NotRequired[bool]
+    embed_channel_id: NotRequired[Optional[Snowflake]]
+    owner_configured_content_level: NotRequired[int]
+    premium_progress_bar_enabled_user_updated_at: NotRequired[Optional[str]]
 
 
 class InviteGuild(TypedDict, total=False):
@@ -198,6 +209,7 @@ class InviteGuild(TypedDict, total=False):
     premium_subscription_count: int
     premium_tier: int
     welcome_screen: WelcomeScreen
+    owner_configured_content_level: NotRequired[int]
 
 
 class GuildWithCounts(Guild, _GuildPreviewUnique): ...

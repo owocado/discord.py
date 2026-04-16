@@ -457,8 +457,8 @@ def _get_context_menu_parameter(func: ContextMenuCallback) -> Tuple[str, Any, Ap
         raise TypeError(msg)
 
     resolved = resolve_annotation(parameter.annotation, func.__globals__, func.__globals__, {})
-    type = _context_menu_annotation(resolved)
-    return (parameter.name, resolved, type)
+    typ = _context_menu_annotation(resolved)
+    return (parameter.name, resolved, typ)
 
 
 def mark_overrideable(func: F) -> F:
@@ -2538,7 +2538,7 @@ def check(predicate: Check) -> Callable[[T], T]:
             if not hasattr(func, '__discord_app_commands_checks__'):
                 func.__discord_app_commands_checks__ = []  # type: ignore # Runtime attribute assignment
 
-            func.__discord_app_commands_checks__.append(predicate)  # type: ignore # Runtime attribute assignment
+            func.__discord_app_commands_checks__.append(predicate)  # type: ignore # Runtime attribute access
 
         return func
 
