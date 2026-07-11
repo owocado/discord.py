@@ -84,6 +84,7 @@ from .subscription import Subscription
 
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from .abc import PrivateChannel, MessageableChannel
     from .guild import GuildChannel
     from .http import HTTPClient
@@ -111,6 +112,9 @@ if TYPE_CHECKING:
 
 
 class ChunkRequest:
+
+    __slots__ = ('guild_id', 'shard_id', 'resolver', 'loop', 'cache', 'nonce', 'buffer', 'waiters')
+
     def __init__(
         self,
         guild_id: int,
@@ -126,11 +130,11 @@ class ChunkRequest:
         self.loop: asyncio.AbstractEventLoop = loop
         self.cache: bool = cache
         self.nonce: str = os.urandom(16).hex()
-        self.buffer: List[Member] = []
-        self.waiters: List[asyncio.Future[List[Member]]] = []
+        self.buffer: dict[int, Member] = {}
+        self.waiters: List[asyncio.Future[dict[int, Member]]] = []
 
     def add_members(self, members: List[Member]) -> None:
-        self.buffer.extend(members)
+        self.buffer.update((m.id, m) for m in members)
         if self.cache:
             guild = self.resolver(self.guild_id)
             if guild is None:
@@ -138,19 +142,19 @@ class ChunkRequest:
 
             for member in members:
                 existing = guild.get_member(member.id)
-                if existing is None or existing.joined_at is None:
+                if existing is None or (existing and existing.joined_at is None):
                     guild._add_member(member)
 
-    async def wait(self) -> List[Member]:
-        future = self.loop.create_future()
+    async def wait(self) -> dict[int, Member]:
+        future: asyncio.Future[dict[int, Member]] = self.loop.create_future()
         self.waiters.append(future)
         try:
             return await future
         finally:
             self.waiters.remove(future)
 
-    def get_future(self) -> asyncio.Future[List[Member]]:
-        future = self.loop.create_future()
+    def get_future(self) -> asyncio.Future[dict[int, Member]]:
+        future: asyncio.Future[dict[int, Member]] = self.loop.create_future()
         self.waiters.append(future)
         return future
 
@@ -294,7 +298,7 @@ class ConnectionState(Generic[ClientT]):
         # Purposefully don't call `clear` because users rely on cache being available post-close
 
     def clear(self, *, views: bool = True) -> None:
-        self.user: ClientUser = None
+        self.user: ClientUser = utils.MISSING
         self._users: weakref.WeakValueDictionary[int, User] = weakref.WeakValueDictionary()
         self._emojis: Dict[int, Emoji] = {}
         self._stickers: Dict[int, GuildSticker] = {}
@@ -314,7 +318,7 @@ class ConnectionState(Generic[ClientT]):
             self._messages: Optional[Deque[Message]] = None
 
     def process_chunk_requests(self, guild_id: int, nonce: Optional[str], members: List[Member], complete: bool) -> None:
-        removed = []
+        removed: list[int | str] = []
         for key, request in self._chunk_requests.items():
             if request.guild_id == guild_id and request.nonce == nonce:
                 request.add_members(members)
@@ -378,7 +382,7 @@ class ConnectionState(Generic[ClientT]):
 
     def _update_references(self, ws: DiscordWebSocket) -> None:
         for vc in self.voice_clients:
-            vc.main_ws = ws  # type: ignore # Silencing the unknown attribute (ok at runtime).
+            vc.main_ws = ws  # pyright: ignore # Silencing the unknown attribute (ok at runtime).
 
     def store_user(self, data: Union[UserPayload, PartialUserPayload], *, cache: bool = True) -> User:
         # this way is 300% faster than `dict.setdefault`.
@@ -583,7 +587,7 @@ class ConnectionState(Generic[ClientT]):
 
     async def query_members(
         self, guild: Guild, query: Optional[str], limit: int, user_ids: Optional[List[int]], cache: bool, presences: bool
-    ) -> List[Member]:
+    ) -> Iterable[Member]:
         guild_id = guild.id
         ws = self._get_websocket(guild_id)
         if ws is None:
@@ -597,14 +601,16 @@ class ConnectionState(Generic[ClientT]):
             await ws.request_chunks(
                 guild_id, query=query, limit=limit, user_ids=user_ids, presences=presences, nonce=request.nonce
             )
-            return await asyncio.wait_for(request.wait(), timeout=30.0)
+            ret = await asyncio.wait_for(request.wait(), timeout=30.0)
         except asyncio.TimeoutError:
             _log.warning('Timed out waiting for chunks with query %r and limit %d for guild_id %d', query, limit, guild_id)
             raise
+        else:
+            return ret.values()
 
     async def _delay_ready(self) -> None:
         try:
-            states: List[Tuple[Guild, asyncio.Future[List[Member]]]] = []
+            states: List[Tuple[Guild, asyncio.Future[Iterable[Member]]]] = []
             while True:
                 # this snippet of code is basically waiting N seconds
                 # until the last GUILD_CREATE was sent
@@ -688,7 +694,7 @@ class ConnectionState(Generic[ClientT]):
             self._messages.append(message)
         # we ensure that the channel is either a TextChannel, VoiceChannel, or Thread
         if channel and channel.__class__ in (TextChannel, VoiceChannel, Thread, StageChannel):
-            channel.last_message_id = message.id  # type: ignore
+            channel.last_message_id = message.id  # pyright: ignore
 
     def parse_message_delete(self, data: gw.MessageDeleteEvent) -> None:
         raw = RawMessageDeleteEvent(data)
@@ -1266,16 +1272,16 @@ class ConnectionState(Generic[ClientT]):
         return guild.id not in self._guilds
 
     @overload
-    async def chunk_guild(self, guild: Guild, *, wait: Literal[True] = ..., cache: Optional[bool] = ...) -> List[Member]: ...
+    async def chunk_guild(self, guild: Guild, *, wait: Literal[True] = ..., cache: Optional[bool] = ...) -> Iterable[Member]: ...
 
     @overload
     async def chunk_guild(
         self, guild: Guild, *, wait: Literal[False] = ..., cache: Optional[bool] = ...
-    ) -> asyncio.Future[List[Member]]: ...
+    ) -> asyncio.Future[Iterable[Member]]: ...
 
     async def chunk_guild(
         self, guild: Guild, *, wait: bool = True, cache: Optional[bool] = None
-    ) -> Union[List[Member], asyncio.Future[List[Member]]]:
+    ) -> Union[Iterable[Member], asyncio.Future[Iterable[Member]]]:
         cache = cache or self.member_cache_flags.joined
         request = self._chunk_requests.get(guild.id)
         if request is None:
@@ -1285,7 +1291,8 @@ class ConnectionState(Generic[ClientT]):
             await self.chunker(guild.id, nonce=request.nonce)
 
         if wait:
-            return await request.wait()
+            ret = await request.wait()
+            return ret.values()
         return request.get_future()
 
     def _chunk_timeout(self, guild: Guild) -> float:
@@ -1949,7 +1956,7 @@ class AutoShardedConnectionState(ConnectionState[ClientT]):
 
     async def _delay_shard_ready(self, shard_id: int) -> None:
         try:
-            states: List[Tuple[Guild, asyncio.Future[List[Member]]]] = []
+            states: List[Tuple[Guild, asyncio.Future[Iterable[Member]]]] = []
             while True:
                 # this snippet of code is basically waiting N seconds
                 # until the last GUILD_CREATE was sent

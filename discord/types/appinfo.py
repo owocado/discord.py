@@ -139,11 +139,18 @@ class ThirdPartySKU(TypedDict):
         'gog',  # GOG.com
         'epic',  # Epic Games Store
         'google_play',  # Google Play Store
-        'xbox',
         'igdb',
         'gop',  # Gameopedia
         'gdco',
         'playstation',  # PlayStation Store
+        'microsoft', #  Microsoft Store     |
+        'glyph', #  Glyph.net           |
+        'nvidia_gdn_app', #  NVIDIA Cloud Gaming |
+        'roblox', #  Roblox Game         |
+        'xbox', #  Xbox Store          |
+        'xbox_title', #  Xbox Title          |
+        'xbox_game_pass', #  Xbox Game Pass      |
+        'opencritic'
     ]
 
 

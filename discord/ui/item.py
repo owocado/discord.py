@@ -70,7 +70,7 @@ class _ItemCallback:
         return self.callback(self.parent, interaction, self.item)
 
 
-class Item(Generic[V]):
+class Item[V]:
     """Represents the base UI item that all UI components inherit from.
 
     The current UI items supported are:

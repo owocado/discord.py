@@ -96,6 +96,7 @@ if TYPE_CHECKING:
         use_external_apps: BoolOrNoneT
         pin_messages: BoolOrNoneT
         bypass_slowmode: BoolOrNoneT
+        manage_official_messages: BoolOrNoneT
 
     class _PermissionsKwargs(_BasePermissionsKwargs[bool]): ...
 
@@ -900,6 +901,10 @@ class Permissions(BaseFlags):
         """
         return 1 << 52
 
+    @flag_value
+    def manage_official_messages(self):
+        return 1 << 53
+
 
 def _augment_from_permissions(cls):
     cls.VALID_NAMES = set(Permissions.VALID_FLAGS)
@@ -1028,6 +1033,7 @@ class PermissionOverwrite:
         use_external_apps: Optional[bool]
         pin_messages: Optional[bool]
         bypass_slowmode: Optional[bool]
+        manage_official_messages: Optional[bool]
 
     def __init__(self, **kwargs: Unpack[_PermissionOverwriteKwargs]) -> None:
         self._values: Dict[str, Optional[bool]] = {}

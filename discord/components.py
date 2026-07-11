@@ -1435,9 +1435,7 @@ class Container(Component):
         payload: ContainerComponentPayload = {
             'type': self.type.value,
             'spoiler': self.spoiler,
-            'id': self.id,
             'components': [c.to_dict() for c in self.children],  # pyright: ignore[reportAssignmentType]
-            'accent_color': self._colour.value if self._colour else None,
         }
         if self.id is not None:
             payload['id'] = self.id

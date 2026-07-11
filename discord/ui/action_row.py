@@ -160,7 +160,7 @@ class ActionRow(Item[V]):
 
         for func in self.__action_row_children_items__:
             item: Item[V] = func.__discord_ui_model_type__(**func.__discord_ui_model_kwargs__)
-            item.callback = _ItemCallback(func, self, item)  # type: ignore
+            item.callback = _ItemCallback(func, self, item)  # pyright: ignore
             item._parent = self
             setattr(self, func.__name__, item)
             children.append(item)
@@ -278,47 +278,6 @@ class ActionRow(Item[V]):
         item._parent = self
         self._weight += item.width
         self._children.append(item)
-
-        return self
-
-    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
-        """Insert an item to this action row.
-
-        This function returns the class instance to allow for fluent-style
-        chaining.
-
-        Parameters
-        ----------
-        position: int
-            The position at which to add the item. `0` to insert at the beginning.
-        item: :class:`Item`
-            The item to add to the action row.
-
-        Raises
-        ------
-        TypeError
-            An :class:`Item` was not passed.
-        ValueError
-            Maximum number of children has been exceeded (5)
-            or (40) for the entire view.
-        """
-
-        if (self._weight + item.width) > 5:
-            raise ValueError(f'maximum number of children exceeded (expected 5, not {self._weight + item.width})')
-
-        if len(self._children) >= 5:
-            raise ValueError(f'maximum number of children exceeded (expected 5, got {len(self._children)})')
-
-        if not isinstance(item, Item):
-            raise TypeError(f'expected Item not {item.__class__.__name__}')
-
-        if self._view:
-            self._view._add_count(1)
-
-        item._update_view(self.view)
-        item._parent = self
-        self._weight += item.width
-        self._children.insert(position, item)
 
         return self
 
@@ -646,4 +605,45 @@ class ActionRow(Item[V]):
         self = cls(id=component.id)
         for cmp in component.children:
             self.add_item(_component_to_item(cmp, self))
+        return self
+
+    def insert_item_at(self, position: int, item: Item[Any]) -> Self:
+        """Insert an item to this action row.
+
+        This function returns the class instance to allow for fluent-style
+        chaining.
+
+        Parameters
+        ----------
+        position: int
+            The position at which to add the item. `0` to insert at the beginning.
+        item: :class:`Item`
+            The item to add to the action row.
+
+        Raises
+        ------
+        TypeError
+            An :class:`Item` was not passed.
+        ValueError
+            Maximum number of children has been exceeded (5)
+            or (40) for the entire view.
+        """
+
+        if not isinstance(item, Item):
+            raise TypeError(f'expected Item not {item.__class__.__name__}')
+
+        if (self._weight + item.width) > 5:
+            raise ValueError(f'maximum number of children exceeded (expected 5, not {self._weight + item.width})')
+
+        if len(self._children) >= 5:
+            raise ValueError(f'maximum number of children exceeded (expected 5, got {len(self._children)})')
+
+        if self._view:
+            self._view._add_count(1)
+
+        item._update_view(self.view)
+        item._parent = self
+        self._weight += item.width
+        self._children.insert(position, item)
+
         return self

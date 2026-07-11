@@ -329,7 +329,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between sending messages
         in this channel. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
     nsfw: :class:`bool`
         If the channel is marked as "not safe for work" or "age restricted".
     default_auto_archive_duration: :class:`int`
@@ -1074,9 +1074,7 @@ class TextChannel(discord.abc.Messageable, discord.abc.GuildChannel, Hashable):
         endpoint = self.guild._state.http.get_public_archived_threads
 
         if joined:
-
-            def update_before(data: ThreadPayload):
-                return data['id']
+            update_before = lambda data: data['id']
 
             endpoint = self.guild._state.http.get_joined_private_archived_threads
         elif private:
@@ -1577,7 +1575,7 @@ class VoiceChannel(VocalGuildChannel):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between sending messages
         in this channel. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
 
         .. versionadded:: 2.2
     status: Optional[:class:`str`]
@@ -1820,7 +1818,7 @@ class StageChannel(VocalGuildChannel):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between sending messages
         in this channel. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
 
         .. versionadded:: 2.2
     """
@@ -2490,7 +2488,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
     slowmode_delay: :class:`int`
         The number of seconds a member must wait between creating threads
         in this forum. A value of ``0`` denotes that it is disabled.
-        Bots and users with :attr:`~discord.Permissions.bypass_slowmode` bypass slowmode.
+        Bots and users with :attr:`~Permissions.bypass_slowmode` bypass slowmode.
     nsfw: :class:`bool`
         If the forum is marked as "not safe for work" or "age restricted".
     default_auto_archive_duration: :class:`int`
@@ -2536,6 +2534,9 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         'default_sort_order',
         'icon_emoji',
         '_available_tags',
+        '_theme_color',
+        '_last_pin',
+        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[ForumChannelPayload, MediaChannelPayload]):

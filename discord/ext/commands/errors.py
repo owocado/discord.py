@@ -1191,7 +1191,7 @@ class TooManyFlags(FlagError):
     def __init__(self, flag: Flag, values: List[str]) -> None:
         self.flag: Flag = flag
         self.values: List[str] = values
-        super().__init__(f'Too many flag values, expected {flag.max_args} but received {len(values)}.')
+        super().__init__(f'Too many flag values for flag `{flag.name}`, expected {flag.max_args} but received {len(values)}.')
 
 
 class BadFlagArgument(FlagError):

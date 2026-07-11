@@ -418,11 +418,11 @@ class SystemChannelFlags(BaseFlags):
 
         .. versionadded:: 2.7
         """
-        return 256
+        return 1 << 8
 
     @flag_value
     def voice_session_notifications(self):
-        return 512
+        return 1 << 9
 
 
 @fill_with_flags()
@@ -622,16 +622,20 @@ class MessageFlags(BaseFlags):
     @flag_value
     def sent_by_social_layer_integration(self):
         """:class:`bool`: Returns ``True`` if the message was triggered by the social layer integration."""
-        return 65536
+        return 1 << 16
 
     @flag_value
     def hidden_suspended_user(self):
-        return 131072
+        return 1 << 17
 
     @flag_value
     def first_booster(self):
         """:class:`bool`: Returns ``True`` if the message author is first booster."""
-        return 262144
+        return 1 << 18
+
+    @flag_value
+    def guild_official(self):
+        return 1 << 19
 
 
 @fill_with_flags()
@@ -1875,9 +1879,14 @@ class ApplicationFlags(BaseFlags):
         return 1 << 33
 
     @flag_value
-    def disable_relationship_access(self):
-        """:class:`bool`: Returns ``True`` if the application cannot access relationship information."""
+    def disable_relationships_access(self):
+        """:class:`bool`: Returns ``True`` if the application cannot access relationships information."""
         return 1 << 34
+
+    @flag_value
+    def storefront_eligible(self):
+        """:class:`bool`: Returns ``True`` if the application can create storefront listings."""
+        return 1 << 35
 
 
 @fill_with_flags()
@@ -2043,6 +2052,19 @@ class ChannelFlags(BaseFlags):
         .. versionadded:: 2.6
         """
         return 1 << 19
+
+    @flag_value
+    def spoiler_channel(self):
+        """:class:`bool`: Returns ``True`` if this channel is marked as spoiler channel."""
+        return 1 << 21
+
+    @flag_value
+    def game_invites_channel(self):
+        return 1 << 22
+
+    @flag_value
+    def has_only_system_messages(self):
+        return 1 << 23
 
 
 class ArrayFlags(BaseFlags):

@@ -59,7 +59,9 @@ class _BaseGuildChannel(_BaseChannel):
 
 
 class PartialRecipient(TypedDict):
+    id: Snowflake
     username: str
+    avatar: str | None
 
 
 class PartialChannel(_BaseChannel):
@@ -144,9 +146,6 @@ class ThreadChannel(_BaseChannel, total=False):
     total_message_sent: int
     thread_metadata: ThreadMetadata
     member: NotRequired[ThreadMember]
-    owner_id: NotRequired[Snowflake]
-    rate_limit_per_user: NotRequired[int]
-    last_message_id: NotRequired[Optional[Snowflake]]
     last_pin_timestamp: NotRequired[str]
     flags: NotRequired[int]
     applied_tags: NotRequired[List[Snowflake]]

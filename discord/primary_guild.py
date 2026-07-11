@@ -125,6 +125,10 @@ class PrimaryGuild(msgspec.Struct, kw_only=True):
         return int(self.identity_guild_id) if self.identity_guild_id else None
 
     @property
+    def id(self):
+        return int(self.identity_guild_id) if self.identity_guild_id else None
+
+    @property
     def enabled(self) -> bool | None:
         return self.identity_enabled
 

@@ -368,7 +368,8 @@ class Attachment(Hashable):
             The contents of the attachment.
         """
         url = self.proxy_url if use_cached else self.url
-        return await self._http.get_from_cdn(url)
+        resp = await self._http.get_from_cdn(url)
+        return resp.ret
 
     async def to_file(
         self,
@@ -2942,7 +2943,6 @@ class Message(PartialMessage, Hashable):
         delete_after: Optional[float] = None,
         allowed_mentions: Optional[AllowedMentions] = MISSING,
         view: Optional[Union[View, LayoutView]] = MISSING,
-        suppress: bool = MISSING,
         suppress_embeds: bool = MISSING,
     ) -> Message:
         """|coro|

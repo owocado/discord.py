@@ -85,6 +85,16 @@ class _GuildLimit(NamedTuple):
     filesize: int
 
 
+class Recipient(NamedTuple):
+    id: int
+    username: str
+    avatar: str | None
+
+    @property
+    def mention(self):
+        return f'<@{self.id}>'
+
+
 class InviteUsersJob:
     """Represents the status of an invite's target users job.
 
@@ -169,11 +179,9 @@ class PartialInviteChannel:
         self.id: int = int(data['id'])
         self.name: str = data['name']
         self.type: ChannelType = try_enum(ChannelType, data['type'])
-        self.recipients: List[str] = (
-            [user['username'] for user in data.get('recipients') or []]
-            if self.type in (ChannelType.private, ChannelType.group)
-            else []
-        )
+        self.recipients: List[Recipient] = []
+        for user in data.get('recipients', []):
+            self.recipients.append(Recipient(id=int(user['id']), username=user['username'], avatar=user['avatar']))
         self.guild_id = guild_id
         self._icon: Optional[str] = data.get('icon')
 
@@ -181,10 +189,10 @@ class PartialInviteChannel:
         if self.name:
             return self.name
 
+        recipients = self.recipients
         if self.type == ChannelType.group:
-            users = ', '.join(self.recipients) if self.recipients else 'Unknown users'
-            return f'Group DM with {users}'
-        return f'DM with {self.recipients[0] if self.recipients else "Unknown User"}'
+            return f'Group DM with {len(recipients)} users'
+        return f'DM with {recipients[0].username if recipients else "Unknown User"}'
 
     def __repr__(self) -> str:
         return f'<PartialInviteChannel id={self.id} name={self.name!r} type={self.type!r}>'

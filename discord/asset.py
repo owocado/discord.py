@@ -84,7 +84,8 @@ class AssetMixin:
         if self._state is None:
             raise DiscordException('Invalid state (no ConnectionState provided)')
 
-        return await self._state.http.get_from_cdn(self.url)
+        resp = await self._state.http.get_from_cdn(self.url)
+        return resp.ret
 
     async def save(self, fp: Union[str, bytes, os.PathLike[Any], io.BufferedIOBase], *, seek_begin: bool = True) -> int:
         """|coro|
@@ -169,8 +170,10 @@ class AssetMixin:
         :class:`File`
             The asset as a file suitable for sending.
         """
+        if self._state is None:
+            raise DiscordException('Invalid state (no ConnectionState found on client)')
 
-        data = await self.read()
+        data, size, _ = await self._state.http.get_from_cdn(self.url)
         file_filename = filename if filename is not MISSING else yarl.URL(self.url).name
         return File(
             io.BytesIO(data),
@@ -178,6 +181,7 @@ class AssetMixin:
             description=description,
             spoiler=spoiler,
             duration=duration,
+            size=size,
         )
 
 

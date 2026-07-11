@@ -119,7 +119,7 @@ class BaseUser(_UserTag):
         )
 
     def __str__(self) -> str:
-        if self.discriminator == '0':
+        if self.discriminator in ('0', '0000'):
             return self.name
         return f'{self.name}#{self.discriminator}'
 

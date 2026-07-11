@@ -214,7 +214,7 @@ class AppInfo:
 
         self.primary_sku_id: Optional[int] = utils._get_as_snowflake(data, 'primary_sku_id')
         self.slug: Optional[str] = data.get('slug')
-        self._flags: int = data.get('flags', 0)
+        self._flags: int = utils._get_as_snowflake(data, 'flags_new') or 0
         self._cover_image: Optional[str] = data.get('cover_image')
         self.terms_of_service_url: Optional[str] = data.get('terms_of_service_url')
         self.privacy_policy_url: Optional[str] = data.get('privacy_policy_url')
@@ -579,11 +579,11 @@ class PartialAppInfo:
         self.id: int = int(data['id'])
         self.name: str = data['name']
         self._icon: Optional[str] = data.get('icon')
-        self._flags: int = data.get('flags', 0)
+        self._flags: int = utils._get_as_snowflake(data, 'flags_new') or 0
         self._cover_image: Optional[str] = data.get('cover_image')
         self.description: str = data['description']
         self.rpc_origins: List[str] = data.get('rpc_origins', []) or []
-        self.verify_key: str = data['verify_key']
+        self.verify_key: str = data.get('verify_key', '')
         self.terms_of_service_url: Optional[str] = data.get('terms_of_service_url')
         self.privacy_policy_url: Optional[str] = data.get('privacy_policy_url')
         self.approximate_guild_count: int = data.get('approximate_guild_count', 0)
