@@ -1439,6 +1439,10 @@ class Container(Component):
             'components': [c.to_dict() for c in self.children],  # pyright: ignore[reportAssignmentType]
             'accent_color': self._colour.value if self._colour else None,
         }
+        if self.id is not None:
+            payload['id'] = self.id
+        if self._colour is not None:
+            payload['accent_color'] = self._colour.value
         return payload
 
 

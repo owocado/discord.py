@@ -202,6 +202,9 @@ class ActionRow(Item[V]):
     def _swap_item(self, base: Item[V], new: DynamicItem[Any], custom_id: str) -> None:
         child_index = self._children.index(base)
         self._children[child_index] = new  # type: ignore
+        base._detach_view()
+        new._update_view(self.view)
+        new._parent = self
 
     @property
     def width(self):
@@ -259,14 +262,14 @@ class ActionRow(Item[V]):
             or (40) for the entire view.
         """
 
+        if not isinstance(item, Item):
+            raise TypeError(f'expected Item not {item.__class__.__name__}')
+
         if (self._weight + item.width) > 5:
             raise ValueError(f'maximum number of children exceeded (expected 5, not {self._weight + item.width})')
 
         if len(self._children) >= 5:
             raise ValueError(f'maximum number of children exceeded (expected 5, got {len(self._children)})')
-
-        if not isinstance(item, Item):
-            raise TypeError(f'expected Item not {item.__class__.__name__}')
 
         if self._view:
             self._view._add_count(1)
@@ -339,6 +342,7 @@ class ActionRow(Item[V]):
             if self._view:
                 self._view._add_count(-1)
             self._weight -= item.width
+            item._detach_view()
 
         return self
 
@@ -370,6 +374,8 @@ class ActionRow(Item[V]):
         """
         if self._view:
             self._view._add_count(-len(self._children))
+        for item in self._children:
+            item._detach_view()
         self._children.clear()
         self._weight = 0
         return self
@@ -407,7 +413,7 @@ class ActionRow(Item[V]):
 
             Buttons with a URL or a SKU cannot be created with this function.
             Consider creating a :class:`Button` manually and adding it via
-            :meth:`ActionRow.add_item` instead. This is beacuse these buttons
+            :meth:`ActionRow.add_item` instead. This is because these buttons
             cannot have a callback associated with them since Discord does not
             do any processing with them.
 
@@ -418,7 +424,7 @@ class ActionRow(Item[V]):
             Can only be up to 80 characters.
         custom_id: Optional[:class:`str`]
             The ID of the button that gets received during an interaction.
-            It is recommended to not set this parameters to prevent conflicts.
+            It is recommended to not set this parameter to prevent conflicts.
             Can only be up to 100 characters.
         style: :class:`.ButtonStyle`
             The style of the button. Defaults to :attr:`.ButtonStyle.grey`.

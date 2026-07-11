@@ -2536,9 +2536,6 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
         'default_sort_order',
         'icon_emoji',
         '_available_tags',
-        '_theme_color',
-        '_last_pin',
-        '_data',
     )
 
     def __init__(self, *, state: ConnectionState, guild: Guild, data: Union[ForumChannelPayload, MediaChannelPayload]):
@@ -2668,7 +2665,7 @@ class ForumChannel(discord.abc.GuildChannel, Hashable):
 
     @property
     def flags(self) -> ChannelFlags:
-        """:class:`ChannelFlags`: The flags associated with this thread.
+        """:class:`ChannelFlags`: The flags associated with this forum.
 
         .. versionadded:: 2.1
         """
